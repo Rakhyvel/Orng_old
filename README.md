@@ -86,8 +86,10 @@ typesExample::Module = (
     aReal: Real = 4.0
     aLetter: Char = '4'
     allFour: Bool = true
+    theWordFour: String = "four"
 )
 ```
+#### Addresses
 Address types can be made from other types by adding a `&` in front.
 ```
 addressesExample::Module = (
@@ -95,24 +97,54 @@ addressesExample::Module = (
     addrOfAddrOfInt: &&Int
 )
 ```
+#### Arrays
 Static arrays can be made by adding `[x]` where x is a constant time integer expression. Arrays are contiguous chunks of memory, not pointers like in C. Arrays know their length.
 ```
 staticArrayExample::Module = (
-    fourChars: [4]Char
+    fourChars: [4]Char = ['a', 'b', 'c', 'd']
     chessBoard: [8][8]Char // An array of arrays
 )
 ```
-Dynamic arrays are pointers to arrays. They can either point to arrays of a known length, or arrays of any length.
+Dynamic arrays are pointers to arrays. They can either point to arrays of a known length, or arrays of any length. Strings are pointers to an array of characters.
 ```
 dynamicArrayExample::Module = (
     integerArrayAddr: &[10]Int  // A memory address of 10 integers
     anySizeArray: []Real        // A pointer to an array of reals of any size
+    name: []Char                // Equivalent to the built-in String type
 )
 ```
+#### Function types
 Function types domain of parameters and a co-domain separated by the `->` token. Their values are equivalent to function pointers.
 ```
 functionTypeExample::Module = (
-    sqrt: (x:Real)->Real // This function takes a real input and produces a real output
+    sqrt::(x:Real)->Real // This function takes a real input and returns a real output
+    proc::()->() // This function takes in nothing and returns nothing
+    curry::(x:Int)->(y:Int)->Int // Currying is not actually supported, but functions can return other function
+    getMousePos::()->(x:Int, y:Int) // Functions can return multiple values
+)
+```
+#### Type definitions
+Orange uses *structural type inference*, meaning that types are the same if their underlying structure is the same.
+```
+typedefExample::Module = (
+    MyOwnInt::Type = Int // Define a type using the Type type
+    x: MyOwnInt = 5     // Works perfectly fine! MyOwnInt condenses down to Int
+)
+```
+#### Structs
+Structs are defined using the typedef syntax
+```
+structExample::Module = (
+    Vector::Type = (
+        x:Int
+        y:Int
+    )
+    Position::Type = (
+        x:Int
+        y:Int
+    )
+    v:Vector
+    p:Position = v // Ok because Vector and Position share the same structure
 )
 ```
 ### Blocks
