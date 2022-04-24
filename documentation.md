@@ -117,11 +117,50 @@ otherModule::Module = (
     }
 )
 ```
-Struct fields are always public, though it is still syntactically correct to mark them as public if you really want to.
+Struct fields are implicitly public. It is still syntactically correct to mark them as public if you really want to.
 ## Primitive types
+There are 14 primitive types in Orange.
+| Type    | C Equivalent | Description                                                                                                       |
+|---------|--------------|-------------------------------------------------------------------------------------------------------------------|
+| ()      | void         | 0 bit type                                                                                                        |
+| Int8    | int8_t       | 8 bit signed integer                                                                                              |
+| Char    | char         | a character on the system (usually 8 bits)                                                                        |
+| Int16   | int16_t      | 16 bit signed integer                                                                                             |
+| Int32   | int32_t      | 32 bit signed integer                                                                                             |
+| Int     | int32_t      | shorthand for Int32                                                                                               |
+| Int64   | int64_t      | 64 bit signed integer                                                                                             |
+| Real32  | float        | 32 bit floating point number                                                                                      |
+| Real    | float        | shorthand for Real32                                                                                              |
+| Real64  | double       | 64 bit floating point number                                                                                      |
+| Type    | -            | a type in Orange                                                                                                  |
+| Enum    | unsigned int | a list of values enumerated                                                                                       |
+| Module  | -            | a namespace and singleton list of variable definitions                                                            |
+| Package | -            | a namespace, root node in program symbol tree, and a singleton list of compile-time constant variable definitions |
+There are no unsigned integer types because no one seems to truly understand how unsigned integer arithmetic works.
+
+All types must start with a capital letter, except for the `()` type.
+## Constant types
+Types can be declared constant by adding a `:` in front of their type declaration. 
+```
+// Value of constants cannot be changed
+pi::Real = 3.14159
+
+// Address this points to cannot be changed
+// Memory at this address can be changed
+constPtr::&Int = null
+
+// Address this points to CAN be changed
+// Memory at this address CANNOT be changed
+freePtr: &:Int = null
+
+// Neither address, nor memory can be changed
+constConstptr::&:Int = null
+```
 ## Structs
+
 ## Arrays
 ## Enums
+## Unions
 ## Functions
 ## Operators
 ## if
@@ -129,7 +168,7 @@ Struct fields are always public, though it is still syntactically correct to mar
 ## switch
 ## new/free
 ## defer
-## Constants and comptime evaluation
+## Compile-time evaluation
 ## Errors, errdefer, try, catch
 ## Optionals, orelse
 ## Generics
