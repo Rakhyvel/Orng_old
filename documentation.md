@@ -170,7 +170,7 @@ b: SomeOneElsesIntType = 6
 a = b // Ok! 
 ```
 ## Structs
-Structs are collections of definitions, similar to modules. Unlike modules, they can have instances created.
+Structs are collections of definitions, similar to modules. Unlike modules, they can have multiple instances created.
 
 ```
 position: (x:Real, y:Real)
