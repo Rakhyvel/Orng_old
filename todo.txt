@@ -1,0 +1,292 @@
+x Surjective to C
+	x different widths of ints, floats, etc
+		x Int8 ~ Char
+		x Int16
+		x Int32 ~ Int
+		x Int64
+		x Nat8 ~ Bool
+		x Nat16
+		x Nat32 ~ Nat
+		x Nat64
+		x Real32 ~ Real
+		x Real64
+	x main function
+	x void type, make it so that generator collects anonymous structs from variable symbol types
+	x floating point
+	x extern symbol modifier
+	x public symbol modifier
+	x hexadecimal and binary representation
+	x negation
+	x increment/decrement
+	x sizeof, addrof
+	x dereference
+	x bitwise or, xor, and, shift left/right, not
+	x <op>=
+	x ternary operator
+	x casting
+	x break, continue
+	x switch case
+	x for loop
+	x do while loop
+	x Array struct type with length
+	x New main function type to take a char array array
+	x null
+	x struct membership, check to see if symbol is addr
+	x struct literals
+	x varadic paramlist, array struct type with length
+	x enum
+	x assert <condition>
+- Only produce correct, human readable output, or give error
+	x Validate ASTs
+	x validate types
+	x for loop defs are within the block scope
+	x smallest common set for math operation getType
+	x break/continue must be in loop
+	x add checks to see if symbol is comptime for things like dots
+	x pull all common functionality into their own functions
+	x re-add return, change function return type to be the type of what's being returned (no more pascal stuff)
+		x check that all paths in a function return the correct value
+	x &= and |= should be polymorphic on bools and ints
+	x pull symbols into program tuple, pass to generator to generate
+		x collect symbols / types and such
+	x Sanitize error messages to not conain any % or \
+	x Tokens and AST nodes store the position in the line that they occured on
+		x "position" struct that holds filename, line, start, end for Tokens, and ASTs
+	x Expand line buffer if full
+	x print types got in error msg
+		x vsprintf or something
+	x difference between stack and heap arrays
+		x array size will be ignored in declaration
+		x array literals
+			x all elements types must match 
+			Orange:	x : Int[] = [1, 2, 3]
+			C:		struct struct_3 x = (struct struct_3){(int[]){1, 2, 3}, 3};
+		x new keyword which
+			x callocates size of a non-array type
+			x callocates an array struct with size
+		x free keyword which
+			x frees a regular pointer
+			x frees an array
+	x type inference
+	x do "." instead of "->" if "&" operator is a parent
+- std library
+	- package and build system:
+		x check if orange directory is created, create it if not
+		x take in single compile directory instead
+		x read and parse MANIFEST file
+		x for each package, read in MANIFEST file from directory, parse as usual
+			x add Package data type, symbol type
+			x package identifer must be the same as the package directory
+		x for each package, read in dependent packages if they're not already included, check for cycles
+			x give an error if the package name can't be found
+			x give an error if cycles are detected
+				x search through depen 'tree' shouldn't give same package
+		x for each package, read in any includes, add to a set of includes
+		x for each package, read in orange files from packages, parse, validate, generate
+			x validate that modules don't interact with modules in packages that their own parent doesn't depend on
+		x error messages should just print out package/module instead of full filename
+		x for first package, read in "outname" field, set that as the filename for the output file
+		- restrict symbols
+			x a list of aliases
+				x <alias_ident> = <symbol_expr>
+				x OR <alias_ident> (which is <alias_ident> = <alias_ident>)
+			x when searching:
+				x if identifier matches to an alias, return the aliases symbol (pre-determined)
+				x if symbol from parent is not in the allowed symbols, return some error (tell user its rejected)
+				x give error2 showing rejecting bracket
+			x restrict blocks
+	x function pointers (non-compiletime known symbols with function types)
+	x std library -[]
+	x util library -[std]
+		x Arraylist
+		x Linkedlist
+		x Vector
+	x SDL hooks -[]
+	- also write a ECS and GUI for apps
+	- put these all on github (should be really easy!)
+	x package/module convention is all lowercase, to disambiguiate types and modules
+		x enforce that file symbol and filename are the same for modules
+		x enforce package name and package symbol are the same for packages
+		x enforce against symbol shadowing
+		x types must start with an uppercase letter
+	x ability to alias modules, REMOVE ALIASES! 
+	x only idents and dots allowed in restrictions
+	x type inference for module, packages, and types
+	x move restriction to before the symbol
+	x change MANIFEST files to <pkg name>.orng files
+	- doc generation
+		- packages:
+			- package docstring
+			- what includes does this package have?
+			- what other packages does this package depend on
+			- public build symbols?
+			- position?
+		- modules:
+			- docstring
+			- what are the public functions, variables, types, and maybe even other modules in this module
+			- what other modules does this module see
+			- position?
+		- types:
+			- docstring
+			- what is its type?
+			- is it external? What is it's extern name?
+			- position?
+			- orange definition (with CFG highlighting!)
+		- variables:
+			- docstring
+			- what is its type?
+			- is it external? What is it's extern name?
+			- position?
+			- orange definition (with CFG highlighting!)
+		- functions:
+			- docstring
+				- what are the parameters
+				- what does it return
+			- what is its type?
+			- is it external? What is it's extern name?
+			- position?
+			- orange definition (with CFG highlighting!)
+		- call graph visualization?
+- fix varargs once and for all!
+x ; to add multiple statements on one line
+x for loop uses ; instead of , 
+x 'else' for when a loop wasn't broken out of
+x inner functions
+x only generate reachable symbols
+x defer & errdefer
+	orng			c
+	# start	block   bool defer_0 = 0;
+	defer <code>	defer_0 = 1;
+	# end	block	if (defer_0) <code>
+x arrays
+	x arrays are nothing more than a struct with a length field and data
+	x pointers to structs can achieve length polymorphism
+	ex:
+	x arr:Int[5]				# an array of 5 integers
+	x arr = [1, 2, 3, 4, 5]	# simple struct copy
+	x arr2:Int[4]&			# a pointer to an array of fixed size
+	x arr2 = &arr				# error! type mismatch because size mismatch
+	x arr3:Int[]				# a pointer to an array of any size
+	x arr3 = &arr				# works! length information is stored in arr, this is fine
+	x String::Type = Char[]		# strings are POINTERS to an array of characters
+x General cleanup
+	x flip type syntax to better reflect array indexing
+		x arr:Char[5][4]; arr[4][3] # fails arr[3][4] # works
+		x arr:[5][4]Char; arr[4][3] # works
+	x remove assert, should be something in stdlib.debug, along with panic, log, warn etc
+	x Give me the paramlist def of the function for parameter/argument error2s
+	x Calculate reachability for structs!!
+	x Inner functions should not be able to see symbols in their parent function scope, should be scoped just inside nearest module
+	x fix bug where `new [3][]Int` generates garbage new function call
+	x Positions have start line & span, end line & span
+	x error messages can print this out
+	x AST nodes combine positions of their tokens
+	x C array type for array struct data field type
+		x when the type is gotten through dot it should be just the base type, so that C conversion works
+	x remove ++ and --
+	x remove while
+	x generate extra braces around functions that aren't blocks
+	x remove block comments, change comment syntax
+x default params
+	x definitions NOT in parameters have a default zero-value
+	x same syntax as struct literals
+	x IF positional AND too few arguments, BUT the rest are defaults
+		x THEN extra AST nodes are inserted into the call to match the rest of the parameters
+	x IF named
+		x THEN the arguments are re-ordered based on the parameters
+		x IF there are some that aren't given and are default parameters, they take their default parameter ASTs like with positional
+	x positional call and named call syntax is disjoint, cannot mix the two
+		x same with struct literals (make these the same in the parser!!)
+	x otherFn(3, 'a', 4, 0.0) // A positional call
+	x otherFn(3, 'd', 5) // Can leave out the LAST default parameters
+	x otherFn(.x=4, .y='v', .z=3, .a=0.3) // A named call, notice the .<ident> so I don't have to deal with scoping
+	x otherFn(.a=0.3, .z=3, .y='v', .x=4) // Same named call with parameters in different order
+	x otherFn(.z=4, .x=args.length) // Can leave out any default, not just at the end
+	x debug.assert takes in an optional message
+- functions inside structs
+	- calls to a function defined in a struct are replaced with a call to a regular function (ok to do since they're comptime)
+	- if reference to a struct is dotted, and a fuction that accepts the struct reference as its first argument is the right side of the dot, replace with function call and with struct reference as first argument, like static methods in Java
+		ex:
+		MyStruct::Type = (
+			state:Int
+			fn::(self:&MyStruct, incr:Int)->Int = {
+				self.state += incr
+			}
+		)
+		...
+		x := new MyStruct
+		MyStruct.fn(x, 4) // x's state increments by 4
+		x.fn(4) // equivalent function call
+	- generalizes to anything comptime in a struct? or any comptime definition?
+		- think about inner functions
+- unions like in julia and haskell
+	- add parenthesis to type syntax
+		- needed for union types
+		&(Int | Char) vs (&Int) | Char
+	struct {
+		bool isLeft;
+		union {
+			<type> left;
+			<type> right;
+		} data;
+	}
+	- runtime errors
+		- !<Type> which is just shorthand for Error | <Type>
+		- return an error code
+		- try unwraps value if no error, or returns the error
+		- catch unwraps value if no error, or evaluates to default expression
+		- errdefer is another return exit path if return is an error, a subset of defers (ie it defers all defers, and also errdefers if return is error)
+		- array indexing checks array size, returns error if out of bounds
+			- implies any function that indexes returns an error??
+	- Void type union
+		- ?<Type> which is just shorthand for Nothing | <Type>
+		- only void typed symbols can be null, null is of type void
+- compile time evaluation
+	- validate that all switch cases are unique numbers
+	- validate that all switch case exprs are comptime
+	- validate that default function parameters and struct fields are constant expressions
+	- if index is comptime, must be postive
+	- if denominator is comptime, must not be 0
+	- dead code trimming (A MUST! one of the only reasons to have comptime eval)
+	- calls to "pure?" functions are memoized (needed for generics)
+- generics
+	- you would need a function that 'returns' a type
+	- make type and expr syntax the same so that `return <type>` works
+	- if comptime, acts as generics
+	- if runtime, acts as a normal parameter to a function (it is)
+	- this applies to normal functions too
+	- replace keywords with functions (like new, free)
+- interfaces (traits in rust https://theburningmonk.com/2015/05/rust-memory-safety-without-gc/)
+	- https://www.nmichaels.org/zig/interfaces.html interfaces in Zig
+		- compose an interface within each struct
+		- requires in-struct function definitions, which shouldn't be too much of a problem
+	- interfaces define a list of functions for a struct type
+	- if there exists function definitions for the struct type ANYWHERE in the program, the struct type implements the interface
+- LLVM?
+- quantifiers from Alloy
+	- basically just iterators, use interface above
+	- should be expressions, generate as a function call
+	- for x : X  {}		# for each loop
+	- all x : X, P		# all x in X satisfy P
+	- some x : X, P		# one or more x in X satisfy P
+- test suite with @[...] for attributes
+	test::Attribute = ()->()! # What type do symbols with this attribute have?
+	@[test]
+	test_something::()->()! = {
+		stdlib.debug.assert(4 == 5)
+	}
+
+	main::(args:String[])->Int = {
+		tests ::= thisModule@test # an array of the test functions, maybe with some wrapper stuff like name, filename, line etc (what symbols have (give the user complete access to symbol tree/ASTs?))
+		for t : tests {
+			failed := false
+			try t() catch {
+				stdlib.system.println("Error")
+				failed = true
+			}
+			if !failed {
+				stdlib.system.println("Success")
+			}
+		}
+	}
+- rewrite in Orng

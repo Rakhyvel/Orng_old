@@ -1,0 +1,17 @@
+testModule::Module = (
+	Struct::Type = (
+		x:Int
+		y:Char='d'
+		z:Int
+		a:Int=5
+	)
+
+	namedParamters::(x:Int=3, y:Int, z:Int)->Int = {
+		return 4
+	}
+
+	+ main::(args: []String)->Int = {
+		stdlib.debug.assert(args.length > 100, "there are a lot of args")
+		return 0
+	}
+)
