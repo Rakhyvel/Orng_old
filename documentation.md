@@ -136,6 +136,7 @@ There are 14 primitive types in Orange.
 | Enum    | unsigned int | a list of values enumerated                                                                                       |
 | Module  | -            | a namespace and singleton list of variable definitions                                                            |
 | Package | -            | a namespace, root node in program symbol tree, and a singleton list of compile-time constant variable definitions |
+
 There are no unsigned integer types because no one seems to truly understand how unsigned integer arithmetic works.
 
 All types must start with a capital letter, except for the `()` type.
