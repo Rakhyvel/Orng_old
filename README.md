@@ -78,6 +78,22 @@ variableExample::Module = (
 )
 ```
 ### Types
+```
+// Module is a type, values are singleton namespaces
+typesExample::Module = (
+    // Some primitive type examples
+    anInteger: Int = 4
+    aReal: Real = 4.0
+    aLetter: Char = '4'
+    allFour: Bool = true
+)
+```
+Address types can be made from other types by adding a `&` in front.
+```
+addressesExample::Module = (
+    addrOfAnInt: &Int = null
+)
+```
 ### Blocks
 ### If
 ### For
