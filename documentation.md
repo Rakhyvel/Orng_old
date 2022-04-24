@@ -100,7 +100,7 @@ main::()->() = {
 Struct fields cannot be marked as external
 
 ### Public modifier
-Variables can be marked as public using `+`, similar to UML. Public variables can be accessed in cousin scopes using the `.` operator. Variables that aren't explicitly defined as public are private. All variables both public and private are visible in child scope.
+Variables can be marked as public using `+`, similar to UML. Public variables can be accessed in cousin scopes using the `.` operator. Variables that aren't explicitly defined as public are private. All variables, both public and private, are visible in children scopes.
 ```
 someModule::Module = (
     + visible: Int = 5
