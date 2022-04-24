@@ -157,8 +157,125 @@ freePtr: &:Int = null
 // Neither address, nor memory can be changed
 constConstptr::&:Int = null
 ```
-## Structs
+## Type aliasing
+Orange uses structural type equivalence. That means two types are the same if their underlying type structure is the same. New type aliases are defined using a variable definition and the Type type.
+```
+MyNewIntType::Type = Int32
+SomeOneElsesIntType:Type = Int32
 
+// ...
+
+a: MyNewIntType = 5
+b: SomeOneElsesIntType = 6
+a = b // Ok! 
+```
+## Structs
+Structs are collections of definitions, similar to modules. Unlike modules, they can have instances created.
+
+```
+position: (x:Real, y:Real)
+position.x = 5.4
+position.y = -0.1
+```
+### Struct type aliasing
+Structs are often aliased for compactness.
+```
+Vector::Type = (
+    x: Real
+    y: Real
+)
+
+position: Vector
+position.x = 5.4
+position.y = -0.1
+```
+### Struct zero-values
+The zero-value of a struct is the zero-value of all it's fields.
+```
+position: Vector // x=0.0, y=0.0
+```
+### Default field values
+Structs can have default field values. These override the zero-values of their fields.
+```
+Book::Type = (
+    title: String = "untitled"
+    author: String = "unknown"
+    isbn: Int = -1
+)
+greenEggsAndHam: Book // title="untitled", author="unknown", isbn=-1
+```
+### Positional argument lists
+Argument lists are used to instantiate a struct. Argument lists are untyped by default, so a cast is necessary.
+
+Positional argument lists give their fields in the same order as the struct definition.
+```
+greatGatsby:Book = ("The Great Gatsby", "F. Scott Fitzgerald", 101):Book
+```
+Argument lists can leave off fields that are defaults. For example:
+```
+MyStruct::Type = (
+    a:Int
+    b:Int = 2
+    c:Int
+    d:Int = 4
+)
+
+// Here, `d` field is missing
+// The default value specified by the struct is used
+x := (1, 2, 3):MyStruct
+
+// This is an error, because the `c` field is missing
+// The `c` field does not have a default value
+x := (1):MyStruct
+```
+### Named argument lists
+Arguments can also assign the fields directly and in any order using the `.` operator, the name of the field, the `=` character, and then the expression.
+```
+Book::Type = (
+    title: String = "untitled"
+    author: String = "unknown"
+    isbn: Int = -1
+)
+
+greatGatsby:Book = (.title="The Great Gatsby", .author="F. Scott Fitzgerald", .isbn=101):Book
+```
+The fields can be specified in any order.
+```
+// All Ok
+(.title="The Odyssey", .author="Homer", .isbn=42):Book
+(.title="The Odyssey", .isbn=42, .author="Homer"):Book
+(.author="Homer", .title="The Odyssey", .isbn=42):Book
+(.author="Homer", .isbn=42, .title="The Odyssey"):Book
+(.isbn=42, .title="The Odyssey", .author="Homer"):Book
+(.isbn=42, .author="Homer", .title="The Odyssey"):Book
+```
+The same field cannot be specified more than once.
+```
+// Error! author field specified more than once
+(.title="The Odyssey", .author="Homer", .isbn=42, .author="Homer Simpson",):Book
+```
+Fields with default values can be left out. Their value will be the field's default value
+```
+(.title="The Catcher in the Rye"):Book // Ok!
+```
+Fields without default values must be specified.
+```
+MyStruct::Type = (
+    a:Int
+    b:Int = 5
+)
+
+// ...
+
+// Error! a is never specified
+myStruct := (.b=4):MyStruct
+```
+Finally, you cannot mix positional and named arguments.
+```
+// Error! Cannot mix positional and named arguments
+("The Grapes Of Wrath", .author="John Steinbeck", 146):Book
+```
+## Addresses
 ## Arrays
 ## Enums
 ## Unions
