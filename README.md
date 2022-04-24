@@ -91,7 +91,28 @@ typesExample::Module = (
 Address types can be made from other types by adding a `&` in front.
 ```
 addressesExample::Module = (
-    addrOfAnInt: &Int = null
+    addrOfAnInt: &Int = null // A 64-bit address of an integer
+    addrOfAddrOfInt: &&Int
+)
+```
+Static arrays can be made by adding `[x]` where x is a constant time integer expression. Arrays are contiguous chunks of memory, not pointers like in C. Arrays know their length.
+```
+staticArrayExample::Module = (
+    fourChars: [4]Char
+    chessBoard: [8][8]Char // An array of arrays
+)
+```
+Dynamic arrays are pointers to arrays. They can either point to arrays of a known length, or arrays of any length.
+```
+dynamicArrayExample::Module = (
+    integerArrayAddr: &[10]Int  // A memory address of 10 integers
+    anySizeArray: []Real        // A pointer to an array of reals of any size
+)
+```
+Function types domain of parameters and a co-domain separated by the `->` token. Their values are equivalent to function pointers.
+```
+functionTypeExample::Module = (
+    sqrt: (x:Real)->Real // This function takes a real input and produces a real output
 )
 ```
 ### Blocks
