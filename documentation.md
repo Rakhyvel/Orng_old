@@ -161,7 +161,7 @@ constConstptr::&:Int = null
 Orange uses structural type equivalence. That means two types are the same if their underlying type structure is the same. New type aliases are defined using a variable definition and the Type type.
 ```
 MyNewIntType::Type = Int32
-SomeOneElsesIntType:Type = Int32
+SomeOneElsesIntType::Type = Int32
 
 // ...
 
@@ -181,7 +181,7 @@ position.y = -0.1
 Structs are often aliased for compactness.
 ```
 Vector::Type = (
-    x: Real
+    x: Real // Commas are optional if a newline is present
     y: Real
 )
 
@@ -195,7 +195,7 @@ The zero-value of a struct is the zero-value of all it's fields.
 position: Vector // x=0.0, y=0.0
 ```
 ### Default field values
-Structs can have default field values. These override the zero-values of their fields.
+Struct fields can have default values. These override the field's zero-values.
 ```
 Book::Type = (
     title: String = "untitled"
@@ -207,11 +207,11 @@ greenEggsAndHam: Book // title="untitled", author="unknown", isbn=-1
 ### Positional argument lists
 Argument lists are used to instantiate a struct. Argument lists are untyped by default, so a cast is necessary.
 
-Positional argument lists give their fields in the same order as the struct definition.
+Positional argument lists give their values in the same order as the fields in the struct.
 ```
 greatGatsby:Book = ("The Great Gatsby", "F. Scott Fitzgerald", 101):Book
 ```
-Argument lists can leave off fields that are defaults. For example:
+Argument lists can leave off fields that have default values specified. For example:
 ```
 MyStruct::Type = (
     a:Int
@@ -221,7 +221,7 @@ MyStruct::Type = (
 )
 
 // Here, `d` field is missing
-// The default value specified by the struct is used
+// The default value  for `d` is used
 x := (1, 2, 3):MyStruct
 
 // This is an error, because the `c` field is missing
@@ -229,7 +229,7 @@ x := (1, 2, 3):MyStruct
 x := (1):MyStruct
 ```
 ### Named argument lists
-Arguments can also assign the fields directly and in any order using the `.` operator, the name of the field, the `=` character, and then the expression.
+Argument lists can also assign the fields directly, and in any order, using the syntax `.<field-name>=<expr>`
 ```
 Book::Type = (
     title: String = "untitled"
@@ -239,7 +239,7 @@ Book::Type = (
 
 greatGatsby:Book = (.title="The Great Gatsby", .author="F. Scott Fitzgerald", .isbn=101):Book
 ```
-The fields can be specified in any order.
+The fields can be specified in any order in a named argument list.
 ```
 // All Ok
 (.title="The Odyssey", .author="Homer", .isbn=42):Book
@@ -252,9 +252,9 @@ The fields can be specified in any order.
 The same field cannot be specified more than once.
 ```
 // Error! author field specified more than once
-(.title="The Odyssey", .author="Homer", .isbn=42, .author="Homer Simpson",):Book
+(.title="The Odyssey", .author="Homer", .isbn=42, .author="Homer Simpson"):Book
 ```
-Fields with default values can be left out. Their value will be the field's default value
+Fields with default values can be left out. Their default value will be used.
 ```
 (.title="The Catcher in the Rye"):Book // Ok!
 ```
@@ -267,7 +267,7 @@ MyStruct::Type = (
 
 // ...
 
-// Error! a is never specified
+// Error! The field `a` is never specified
 myStruct := (.b=4):MyStruct
 ```
 Finally, you cannot mix positional and named arguments.
