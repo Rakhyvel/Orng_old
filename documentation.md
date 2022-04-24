@@ -30,7 +30,7 @@ x: Int // = 0
 Variable names must start with an underscore or any letter, but can contain underscores, letters, and numbers.
 
 ### Restriction list modifier
-Variables can have an optional restriction list that starts with `-[` and end in `]`. Any symbol included in the restriction list is visible in the variable's definition. If a variable does not include a restriction, all symbols in the parent scope are visible.
+Variables can have an optional restriction list that starts with `-[` and ends in `]`. Any symbol included in the restriction list is visible in the variable's definition. If a variable does not declare a restriction list, all symbols in the parent scope are visible.
 ```
 myModule::Module = (
     someGlobal: Int = 4
@@ -43,7 +43,7 @@ myModule::Module = (
 )
 ```
 ### External modifier
-Variables can optionally be declared as external. When a variable is declared as external, it tells the Orange compiler that the variable isn't defined now, but will be at linktime.
+Variables can optionally be declared as external using `?`. When a variable is declared as external, it tells the Orange compiler that the variable isn't defined now, but will be at linktime.
 ```
 ? malloc::(size:Int64)->&()
 someFunction::()->() = {
@@ -57,7 +57,8 @@ sdl::Module = (
     ?[SDL_Init] + init::(flags:Int32)->Int
     ? + SDL_Init::(flags:Int32)->Int
 )
-//...
+```
+```
 myModule::Module = (
     + myFunction::()->() = {
         // Compare...
@@ -77,7 +78,8 @@ typedef struct {
     char b;
     float c;
 } MyStruct;
-
+```
+```
 // Orange Code
 ?[MyStruct] MyStruct_version1::Type
 
@@ -98,13 +100,14 @@ main::()->() = {
 Struct fields cannot be marked as external
 
 ### Public modifier
-Variables can be marked as public using the `+` token, similar to UML. Public variables can be accessed in cousin scopes using the `.` operator. Variables that aren't explicitly defined as public are private. All variables both public and private are visible in child scope.
+Variables can be marked as public using `+`, similar to UML. Public variables can be accessed in cousin scopes using the `.` operator. Variables that aren't explicitly defined as public are private. All variables both public and private are visible in child scope.
 ```
 someModule::Module = (
     + visible: Int = 5
     invisible: Int = 7
 )
-// ...
+```
+```
 otherModule::Module = (
     myInvisible: Char = '2'
     + main::()->() = {
