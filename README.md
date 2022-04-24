@@ -6,6 +6,12 @@ Waste less time configuring libraries and more time working on the projects you 
 - No messing with complicated build configurations each time you start a new project
 - Package manifests use the same syntax as the rest of the language
 
+## Simple language
+Things look like what they do, and do what they look like.
+- No ambiguity!
+- No hidden control flow
+- No hidden allocation/deallocations
+
 ## Low friction
 As hobbyist programmers, our projects are living, breathing documents that change over time. Orange's syntax allows you to go from ...
 ```
@@ -65,12 +71,6 @@ myOtherFunction::(someVar:Int, someVar2:Char)->() = {
 }
 ```
 All with minimal code changes.
-
-## Simple language
-Things look like what they do, and do what they look like.
-- No ambiguity!
-- No hidden control flow
-- No hidden allocation/deallocations
 
 ## Planned features
 - Union types
