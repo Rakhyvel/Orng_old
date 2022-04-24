@@ -46,9 +46,37 @@ This is because the module definition is syntactically and semantically equivale
 Also notice the definition `theSystemModule::Module = stdlib.system`. In Orange, **everything is first class**. Types, modules, packages, functions, everything. `theSystemModule::Module = stdlib.system` is simply declaring another symbol for the `stdlib.system` module. When the code is compiled, any call to `stdlib.system.println` and `theSystemModule.println` will call the same function.
 
 ### Comments
-
+```
+commentExample::Module = (
+    // Comments in Orange start with a '//' token and end at a new line
+    // Code within a comment is not used by the compiler
+    + aFunction::()->() = {
+        // stdlib.system.println("This won't be seen!")
+    }
+)
+```
 
 ### Variables
+```
+variableExample::Module = (
+    // Variables can be declared in modules
+    globalVariable: Int = 5
+
+    someFunction::()->() = {
+        // Pattern is name : type = expression
+        var: Char = 'd'
+
+        // If expression is ommited, a zero-value expression is filled in
+        willBeZero: Int // = 0
+
+        // If the type is ommited, the type will be infered from the value
+        someInt := 5
+
+        // Use double colons to declare something constant
+        pi::Real = 3.1415926
+    }
+)
+```
 ### Types
 ### Blocks
 ### If
