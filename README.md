@@ -3,7 +3,7 @@ Orange is a simple, modular general-purpose programming language for hobby progr
 
 ## Emphasis on code re-use
 Waste less time configuring libraries and more time working on the projects you love.
-- Packages are directories that contain .orng files
+- Download package directories and place them in your <USER>
 - Package manifests end in a .pkg.orng extension and use the same syntax as the rest of the language
 
 ## Simple language
