@@ -7,13 +7,13 @@ Waste less time configuring libraries and more time working on the projects you 
 - Package manifests use the same syntax as the rest of the language
 
 ## Low friction
-As hobbyist programmers, our projects are living, breathing documents that change over time. Orange's syntax allows you to go from a:
+As hobbyist programmers, our projects are living, breathing documents that change over time. Orange's syntax allows you to go from ...
 ```
 myFunction::()->() = {
     someVar := 4
     someVar2 := '5'
     someVar3 := false
-    
+
     {
         // A block of code
     }
