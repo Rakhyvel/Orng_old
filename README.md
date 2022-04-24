@@ -22,17 +22,32 @@ Things look like what they do, and do what they look like.
 This is subject to change as the language evolves.
 
 ### Hello World
-Below is a sample Hello World program written in Orange using the `stdlib` package.
+Below is a sample Hello World program written in Orange using the `stdlib` package:
 ```
 -[stdlib]
 myModule::Module = (
+    theSystemModule::Module = stdlib.system
+
     + main::(args:[]String)->Int = {
-        stdlib.system.println("Hello, World!")
+        stdlib.system.println("Hello, ")
+        theSystemModule.println(" World!")
         return 0
     }
 )
 ```
+There are a couple idiomatic Orange things to notice about this Hello World example.
+
+The first line `-[stdlib]` is a restriction tag that indicates that the `myModule` module only sees the `stdlib` package symbol from it's parent scope. In other words, it "imports" the `stdlib` package. This is more intuitive than the import systems of other languages, and generalizes to other symbols in a way that improves refactorability.
+
+Next, notice that the `myModule` module definition is surrounded with parenthesis, while the `main` function definition is surrounded with braces. 
+
+This is because the module definition is syntactically and semantically equivalent to a function's parameter list. Modules are a list of definitions, and so are function parameter lists. They mean the same thing, so they look the same.
+
+Also notice the definition `theSystemModule::Module = stdlib.system`. In Orange, **everything is first class**. Types, modules, packages, functions, everything. `theSystemModule::Module = stdlib.system` is simply declaring another symbol for the `stdlib.system` module. When the code is compiled, any call to `stdlib.system.println` and `theSystemModule.println` will call the same function.
+
 ### Comments
+
+
 ### Variables
 ### Types
 ### Blocks
@@ -41,5 +56,7 @@ myModule::Module = (
 ### Switch
 ### Defer
 ### Functions
-### Modules & Scoping
+### External Symbols
+### Scoping Control
+### Modules
 ### Packages
