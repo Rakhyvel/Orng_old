@@ -13,11 +13,10 @@ myFunction::()->() = {
     someVar := 4
     someVar2 := '5'
     someVar3 := false
-<span style="color:blue">
+    
     {
         // A block of code
     }
-</span>
 }
 ```
 ```
