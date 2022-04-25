@@ -462,7 +462,7 @@ outer::()->() = {
 | Syntax           | Types                    | Description                                                                                |
 |------------------|--------------------------|--------------------------------------------------------------------------------------------|
 | a = b            | B <: A                   | Assignment.                                                                                |
-| a ? b : c        | A <: Bool, B <: C C <: B | Ternary operator.                                                                          |
+| a ? b ; c        | A <: Bool, B <: C C <: B | Ternary operator.                                                                          |
 | a \|\| b         | A <: Bool, B <: Bool     | Logical or.                                                                                |
 | a && b           | A <: Bool, B <: Bool     | Logical and.                                                                               |
 | a \| b           | A <: Int64, B <: Int64   | Bitwise or.                                                                                |
@@ -492,16 +492,154 @@ outer::()->() = {
 | a[b]             | A is an array, B <: Int64 | Array indexing. `a` must be an array, cannot index an address                              |
 | new A            | A is a type              | Allocation. Calls malloc, fills data with zero-value                                       |
 ## if
+Evaluates the condition, if it evaluates to true, runs the code in the block.
+```
+x: Int = 2
+if x < 4 {
+    x = 4
+}
+stdlib.system.println("x will now be greater than or equal to 4")
+```
+An else block is optional. If the condition evaluates to false, the else block will run.
+```
+if false {
+    stdlib.system.println("This won't run")
+} else {
+    stdlib.system.println("This will")
+}
+```
 ## for
+Takes in three statements. The first statement will be executed first, then while the second statement evaluates to true, the block will be run. After each loop, the third statement will run.
+```
+// Counts from 1-10
+for i := 1; i <= 10; i += 1 {
+    stdlib.system.println("%d", i)
+}
+```
+The outer two statements are optional
+```
+// All these both count from 1-10
+
+i := 1
+for ; i <= 10; i += 1 {
+    stdlib.system.println("%d", i)
+}
+
+for i:= 0; i <= 10; {
+    stdlib.system.println("%d", i)
+    i += 1
+}
+```
+If only one statement is specified, the for loop acts as a `while` loop in C.
+```
+for true {
+    stdlib.system.println("infinite loop!")
+}
+```
+### break
+`break` statements end a `for` loop.
+```
+printUpTo7::()->() = {
+    for i := 0; i < 7; i += 1 {
+        if i == 7 {
+            break
+        }
+        stdlib.system.println("%d", i)
+    }
+}
+```
+### continue
+`continue` statements end the current iteration.
+```
+printEvens::()->() = {
+    for i := 0; i < 10; i += 1 {
+        if i % 2 == 1 {
+            continue
+        }
+        stdlib.system.println("%d", i)
+    }
+}
+```
+## return
+The `return` keyword sets the return value of a function and exits the function.
+```
+max::(a:Real64, b:Real64)->Real64 = return a > b ? a ; b
+```
 ## switch
-## new/free
+Switch statements in Orange are like switch statements in C, except that cases are blocks that do not fall through.
+```
+x: Int = stdlib.system.rand()
+switch x % 4 {
+    case 0, 2 { // 'Chain multiple cases using commas
+        stdlib.system.println("x was even")
+    }
+    case 1 {
+        stdlib.system.println("x was one more than a multiple of four")
+    }
+    else { // 'else' keyword rather than 'default'
+        stdlib.system.println("x was something else")
+    }
+}
+```
+## new
+The `new` operator allocates a new type on the heap. The value will be filled with it's zero-value.
+```
+MyType::Type = (
+    a: Int = 4
+    b: Char = 'd'
+)
+
+x: &MyType = new MyType // x.a=4, x.b='d'
+```
+## free
+The `free` operator frees an address allocated with `new`.
+```
+x := new Int
+free x
+```
 ## defer
+The `defer` keyword delays the running of code until the end of the current block. Defers will be run in the reverse order that they were setup. Works with break/continue/return and in nested loops.
+```
+myFunction::(x:Int, y:Int)->() = {
+    for true {
+        arr: [][]Char = new [x][]Char
+        for i := 0; i < x; i += 1 {
+            arr[i] = new [y]Char
+        }
+        // Will run at the end of every loop, NOT at the end of the function
+        defer {
+            for i := 0; i < x; i += 1 {
+                free arr[i]
+            }
+            free arr
+        }
+
+        // Oh no something bad happened in the code! Time to bail!
+        if rand() % 4 = 0 {
+            return      // Our defer cleanup code will run before the function exits, no leaked memory!
+        } else if rand() % 4 = 0 {
+            continue    // Works with continue's
+        } else if rand() % 4 = 0 {
+            break       // and break's
+        }
+    }
+}
+```
 ## Compile-time evaluation
+Not implemented yet.
 ## Errors, errdefer, try, catch
+Not implemented yet.
 ## Optionals, orelse
+Not implemented yet.
 ## Generics
+Not implemented yet.
 ## Methods
+Not implemented yet.
 ## Iterators
+Not implemented yet.
 ## Quantifiers
+Not implemented yet.
 ## Package system
+TODO
 ## Testing
+Not implemented yet.
