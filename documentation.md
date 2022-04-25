@@ -462,13 +462,13 @@ outer::()->() = {
 | Syntax           | Types                    | Description                                                                                |
 |------------------|--------------------------|--------------------------------------------------------------------------------------------|
 | a = b            | B <: A                   | Assignment.                                                                                |
-| a ? b : c        | A <: Bool B <: C C <: B  | Ternary operator.                                                                          |
-| a \|\| b a \|= b | A <: Bool B <: Bool      | Logical or.                                                                                |
-| a && b a &= b    | A <: Bool B <: Bool      | Logical and.                                                                               |
-| a \| b a \|= b   | A <: Int64 B <: Int64    | Bitwise or.                                                                                |
-| a ^ b a ^= b     | A <: Int64 B <: Int64    | Bitwise xor.                                                                               |
-| a & b a &= b     | A <: Int64 B <: Int64    | Bitwise and.                                                                               |
-| a != b           | A <: B B <: A            | Not equals.                                                                                |
+| a ? b : c        | A <: Bool, B <: C C <: B | Ternary operator.                                                                          |
+| a \|\| b a \|= b | A <: Bool, B <: Bool     | Logical or.                                                                                |
+| a && b a &= b    | A <: Bool, B <: Bool     | Logical and.                                                                               |
+| a \| b a \|= b   | A <: Int64, B <: Int64   | Bitwise or.                                                                                |
+| a ^ b a ^= b     | A <: Int64, B <: Int64   | Bitwise xor.                                                                               |
+| a & b a &= b     | A <: Int64, B <: Int64   | Bitwise and.                                                                               |
+| a != b           | A <: B, B <: A            | Not equals.                                                                                |
 | a == b           | A <: B B <: A            | Equals.                                                                                    |
 | a <= b           | A <: Real64 B <: Real64  | Less than or equal to.                                                                     |
 | a >= b           | A <: Real64 B <: Real64  | Greater than or equal to.                                                                  |
