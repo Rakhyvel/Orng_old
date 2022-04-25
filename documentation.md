@@ -459,6 +459,38 @@ outer::()->() = {
 }
 ```
 ## Operators
+| Syntax           | Types                    | Description                                                                                |
+|------------------|--------------------------|--------------------------------------------------------------------------------------------|
+| a = b            | B <: A                   | Assignment.                                                                                |
+| a ? b : c        | A <: Bool B <: C C <: B  | Ternary operator.                                                                          |
+| a \|\| b a \|= b | A <: Bool B <: Bool      | Logical or.                                                                                |
+| a && b a &= b    | A <: Bool B <: Bool      | Logical and.                                                                               |
+| a \| b a \|= b   | A <: Int64 B <: Int64    | Bitwise or.                                                                                |
+| a ^ b a ^= b     | A <: Int64 B <: Int64    | Bitwise xor.                                                                               |
+| a & b a &= b     | A <: Int64 B <: Int64    | Bitwise and.                                                                               |
+| a != b           | A <: B B <: A            | Not equals.                                                                                |
+| a == b           | A <: B B <: A            | Equals.                                                                                    |
+| a <= b           | A <: Real64 B <: Real64  | Less than or equal to.                                                                     |
+| a >= b           | A <: Real64 B <: Real64  | Greater than or equal to.                                                                  |
+| a < b            | A <: Real64 B <: Real64  | Less than.                                                                                 |
+| a > b            | A <: Real64 B <: Real64  | Greater than.                                                                              |
+| a << b a <<= b   | A <: Int64 B <: Int64    | Left shift.                                                                                |
+| a >> b a >>= b   | A <: Int64 B <: Int64    | Right shift.                                                                               |
+| a - b a -= b     | A <: Real64 B <: Real64  | Subtraction.                                                                               |
+| a + b a += b     | A <: Real64 B <: Real64  | Addition.                                                                                  |
+| a % b a %= b     | A <: Int64 B <: Int64    | Modulus.                                                                                   |
+| a / b a /= b     | A <: Real64 B <: Real64  | Division.                                                                                  |
+| a * b a *= b     | A <: Real64 B <: Real64  | Multiplication.                                                                            |
+| \|A\|            | A <: Type                | Size of type.                                                                              |
+| ~a               | A <: Int64               | Bitwise negation.                                                                          |
+| -a               | A <: Real64              | Negation.                                                                                  |
+| *a               | A is an address          | Dereference.                                                                               |
+| &a               | -                        | Address of. `a` must be an l-value                                                         |
+| !a               | A <: Bool                | Boolean not.                                                                               |
+| a.b              | -                        | Dot. `b` must be an identifier, and must be contained within the symbol referred to by `a` |
+| a:B              | A is compatible with B   | Type cast.                                                                                 |
+| a[b]             | A is an array B <: Int64 | Array indexing. `a` must be an array, cannot index an address                              |
+| new A            | A is a type              | Allocation. Calls malloc, fills data with zero-value                                       |
 ## if
 ## for
 ## switch
