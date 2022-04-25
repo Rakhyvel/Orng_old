@@ -122,6 +122,12 @@ static SymbolNode* getDotSymbol(ASTNode* type)
         // newLeft is in the first child's type
         else if (newLeft->astType == AST_INDEX) {
             ASTNode* arrayType = getType(List_Get(newLeft->children, 0), false, false);
+            if (arrayType->astType == AST_ADDR) {
+                arrayType = List_Get(arrayType->children, 0);
+            }
+            if (arrayType->astType != AST_ARRAY) {
+                error(type->pos, "indexing on a non-array type");
+            }
             ASTNode* dataDefine = List_Get(arrayType->children, 1);
             SymbolNode* dataSymbol = dataDefine->data;
             ASTNode* dataAddrType = dataSymbol->type;
