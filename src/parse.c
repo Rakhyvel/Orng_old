@@ -125,18 +125,23 @@ ASTNode* parseExpr(SymbolNode* scope);
 static ASTNode* parseArgList(SymbolNode* scope)
 {
     ASTNode* arglist = AST_Create(AST_PAREN, 0, scope, prevToken->pos);
-    if (!accept(TOKEN_RPAREN)) {
-        while (true) {
-            while (accept(TOKEN_NEWLINE))
-                ;
-            // accept dot? perhaps
-            appendAndMerge(arglist, parseExpr(scope));
-            while (accept(TOKEN_NEWLINE))
-                ;
+    while (accept(TOKEN_NEWLINE))
+        ;
+    while (!accept(TOKEN_RPAREN)) {
+        while (accept(TOKEN_NEWLINE))
+            ;
+        // accept dot? perhaps
+        appendAndMerge(arglist, parseExpr(scope));
+        if (!accept(TOKEN_NEWLINE)) {
             if (!accept(TOKEN_COMMA)) {
+                while (accept(TOKEN_NEWLINE))
+                    ;
                 arglist->pos = merge(arglist->pos, expect(TOKEN_RPAREN)->pos);
                 break;
             }
+        } else {
+            while (accept(TOKEN_NEWLINE))
+                ;
         }
     }
     if (arglist->children->size != 1) {
@@ -896,6 +901,48 @@ static ASTNode* parseStatement(SymbolNode* scope)
     }
 }
 
+ASTNode* parseEnum(SymbolNode* scope)
+{
+    Token* token = expect(TOKEN_LPAREN);
+    ASTNode* enumNode = AST_Create(AST_PARAMLIST, 0, scope, token->pos);
+
+    SymbolNode* lengthSymbol = Symbol_Create("length", SYMBOL_VARIABLE, scope, token->pos);
+    ASTNode* lengthDefine = AST_Create(AST_DEFINE, lengthSymbol, scope, token->pos);
+    lengthSymbol->type = AST_Create(AST_IDENT, "Int", lengthSymbol, token->pos);
+    lengthSymbol->isPublic = true;
+    lengthSymbol->isCompTime = true;
+
+    int i = 0;
+    while (accept(TOKEN_NEWLINE))
+        ;
+    while (!accept(TOKEN_RPAREN)) {
+        while (accept(TOKEN_NEWLINE))
+            ;
+        Token* name = expect(TOKEN_IDENT);
+        SymbolNode* symbol = Symbol_Create(name->data, SYMBOL_ENUM, scope, name->pos);
+        ASTNode* define = AST_Create(AST_DEFINE, symbol, scope, name->pos);
+        symbol->def = AST_Create(AST_INT, i, symbol, name->pos);
+        symbol->type = AST_Create(AST_ENUM, symbol, symbol, name->pos);
+        symbol->isPublic = true;
+        symbol->isCompTime = true;
+        i++;
+        appendAndMerge(enumNode, define);
+        if (!accept(TOKEN_NEWLINE)) {
+            if (!accept(TOKEN_COMMA)) {
+                while (accept(TOKEN_NEWLINE))
+                    ;
+                expect(TOKEN_RPAREN);
+                break;
+            }
+        } else {
+            while (accept(TOKEN_NEWLINE))
+                ;
+        }
+    }
+    lengthSymbol->def = AST_Create(AST_INT, i, lengthSymbol, token->pos);
+    return enumNode;
+}
+
 // isPublic is passed in as true to make parameters and return types always public
 ASTNode* parseDefine(SymbolNode* scope, bool isPublic)
 {
@@ -1034,6 +1081,8 @@ ASTNode* parseDefine(SymbolNode* scope, bool isPublic)
             def = parseType(symbol, false);
         } else if (symbol->symbolType == SYMBOL_TYPE) {
             def = parseType(symbol, true);
+        } else if (symbol->symbolType == SYMBOL_ENUM) {
+            def = parseEnum(symbol);
         } else if (symbol->symbolType == SYMBOL_FUNCTION) {
             if (nextToken->type != TOKEN_LBRACE) { // Wrap non-block statements in blocks
                 SymbolNode* blockScope = Symbol_Create(myItoa(blockUID++), SYMBOL_BLOCK, symbol, prevToken->pos);
@@ -1050,10 +1099,6 @@ ASTNode* parseDefine(SymbolNode* scope, bool isPublic)
         error(name->pos, "constant expression for symbol '%s' expected", symbol->name);
     } else {
         def = AST_Create(AST_UNDEF, 0, scope, prevToken->pos);
-    }
-
-    if (symbol->symbolType == SYMBOL_ENUM) {
-        def->astType = AST_ENUM;
     }
 
     symbol->def = def;

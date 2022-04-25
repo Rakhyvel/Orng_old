@@ -42,72 +42,48 @@ struct struct_2* new_struct_2(int count)
 }
 
 /* String definitions */
-struct struct_1 string_23 = {23, {'t', 'h', 'e', 'r', 'e', ' ', 'a', 'r', 'e', ' ', 'a', ' ', 'l', 'o', 't', ' ', 'o', 'f', ' ', 'a', 'r', 'g', 's', '\0'}};
-struct struct_1 string_24 = {20, {'n', 'o', ' ', 'm', 'e', 's', 's', 'a', 'g', 'e', ' ', 's', 'p', 'e', 'c', 'i', 'f', 'i', 'e', 'd', '\0'}};
-struct struct_1 string_25 = {18, {'a', 's', 's', 'e', 'r', 't', 'i', 'o', 'n', ' ', 'f', 'a', 'i', 'l', 'e', 'd', ':', ' ', '\0'}};
-struct struct_1 string_28 = {1, {'\n', '\0'}};
 
 /* Enums */
+#define test_testModule_Color_RED 0
+#define test_testModule_Color_GREEN 1
+#define test_testModule_Color_BLUE 2
+struct struct_1* test_testModule_Color_toString(int x);
+int test_testModule_Color_length;
 
 /* Forward global declarations */
 
 /* Forward function declarations */
 signed int test_testModule_main(struct struct_2* _args);
-void stdlib_debug_assert(bool _predicate, struct struct_1* _msg);
-signed int stdlib_system_err(struct struct_1* _format, ...);
-signed int stdlib_system_errln(struct struct_1* _format, ...);
 
-#ifndef ORANGE_PROGRAM_23383
-#define ORANGE_PROGRAM_23383
+#ifndef ORANGE_PROGRAM_25960
+#define ORANGE_PROGRAM_25960
 
 /* Enum definitions */
+struct struct_1 test_testModule_Color_RED_str = {25, {'t', 'e', 's', 't', '_', 't', 'e', 's', 't', 'M', 'o', 'd', 'u', 'l', 'e', '_', 'C', 'o', 'l', 'o', 'r', '_', 'R', 'E', 'D', '\0'}};
+struct struct_1 test_testModule_Color_GREEN_str = {27, {'t', 'e', 's', 't', '_', 't', 'e', 's', 't', 'M', 'o', 'd', 'u', 'l', 'e', '_', 'C', 'o', 'l', 'o', 'r', '_', 'G', 'R', 'E', 'E', 'N', '\0'}};
+struct struct_1 test_testModule_Color_BLUE_str = {26, {'t', 'e', 's', 't', '_', 't', 'e', 's', 't', 'M', 'o', 'd', 'u', 'l', 'e', '_', 'C', 'o', 'l', 'o', 'r', '_', 'B', 'L', 'U', 'E', '\0'}};
+struct struct_1* test_testModule_Color_toString(unsigned int x)
+{
+	switch(x)
+	{
+	case test_testModule_Color_RED:
+		return &test_testModule_Color_RED_str;
+	case test_testModule_Color_GREEN:
+		return &test_testModule_Color_GREEN_str;
+	case test_testModule_Color_BLUE:
+		return &test_testModule_Color_BLUE_str;
+	}
+}
+unsigned int test_testModule_Color_length = 3;
 
 /* Function definitions */
 signed int test_testModule_main(struct struct_2* _args)
 { /* 169 */
     signed int retval;
-    stdlib_debug_assert(_args->length > 100, &string_23);
+    signed int _169_hmm = test_testModule_Color_GREEN;
     retval = 0;
     goto return_block_169;
 return_block_169:;
-    return retval;
-}
-
-void stdlib_debug_assert(bool _predicate, struct struct_1* _msg)
-{ /* 1 */
-    if (!_predicate)
-    { /* 2 */
-        stdlib_system_err(&string_25);
-        stdlib_system_errln(_msg);
-        exit(1);
-    }
-}
-
-signed int stdlib_system_err(struct struct_1* _format, ...)
-{ /* 26 */
-    signed int retval;
-    va_list _26_args;
-    va_start(_26_args, &_format->data);
-    signed int _26_retcode = vfprintf(stderr, &_format->data, _26_args);
-    va_end(_26_args);
-    retval = _26_retcode;
-    goto return_block_26;
-return_block_26:;
-    return retval;
-}
-
-signed int stdlib_system_errln(struct struct_1* _format, ...)
-{ /* 27 */
-    signed int retval;
-    va_list _27_args;
-    va_start(_27_args, &_format->data);
-    signed int _27_retcode = vfprintf(stderr, &_format->data, _27_args);
-    va_end(_27_args);
-    struct struct_1* _27_newLine = &string_28;
-    printf(&_27_newLine->data);
-    retval = _27_retcode;
-    goto return_block_27;
-return_block_27:;
     return retval;
 }
 

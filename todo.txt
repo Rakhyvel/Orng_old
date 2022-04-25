@@ -225,6 +225,7 @@ x default params
 		x.fn(4) // equivalent function call
 	- generalizes to anything comptime in a struct? or any comptime definition?
 		- think about inner functions
+	- enums have length and toString function
 - unions like in julia and haskell
 	- add parenthesis to type syntax
 		- needed for union types

@@ -3,6 +3,7 @@ This file deals with generating the output C file from the AST and Symbol trees
 parsed from the input file.
 */
 
+#define _CRT_SECURE_NO_WARNINGS
 #include "generator.h"
 #include "./main.h"
 #include "./parse.h"
@@ -34,6 +35,22 @@ static void printPath(FILE* out, SymbolNode* symbol)
     } else {
         fprintf(out, "%s", symbol->name);
     }
+}
+
+static int sprintPath(char* str, SymbolNode* symbol)
+{
+    char* origStr = str;
+    if (symbol->parent && symbol->parent->symbolType != SYMBOL_TYPE && symbol->parent->parent && !symbol->isExtern) {
+        if (symbol->parent->parent->symbolType != SYMBOL_BLOCK && symbol->parent->symbolType != SYMBOL_FUNCTION) {
+            str += sprintPath(str, symbol->parent);
+        }
+        str += sprintf(str, "_%s", symbol->name);
+    } else if (symbol->isExtern) {
+        str += sprintf(str, "%s", symbol->externName);
+    } else {
+        str += sprintf(str, "%s", symbol->name);
+    }
+    return str - origStr;
 }
 
 static void printDot(FILE* out, ASTNode* dot, SymbolNode* scope)
@@ -801,6 +818,28 @@ void generateStructDefinitions(FILE* out, List* depenGraph)
     }
 }
 
+void generateString(FILE* out, char* string)
+{
+    int backslashes = 0;
+    for (int j = 0; j < strlen(string); j++) {
+        if (string[j] == '\\') {
+            backslashes++;
+        }
+    }
+    fprintf(out, "{%d, {", strlen(string) - backslashes);
+    for (int j = 0; j < strlen(string); j++) {
+        char c = string[j];
+        if (c == '\\') {
+            fprintf(out, "'%c", c);
+            j++;
+            fprintf(out, "%c', ", string[j]);
+        } else {
+            fprintf(out, "'%c', ", c);
+        }
+    }
+    fprintf(out, "'\\0'}};\n");
+}
+
 void generateStrings(FILE* out, List* strings)
 {
     fprintf(out, "/* String definitions */\n");
@@ -815,24 +854,7 @@ void generateStrings(FILE* out, List* strings)
         }
         printType(out, stringRawType);
         fprintf(out, " string_%d = ", i);
-        int backslashes = 0;
-        for (int j = 0; j < strlen(node->data); j++) {
-            if (node->data[j] == '\\') {
-                backslashes++;
-            }
-        }
-        fprintf(out, "{%d, {", strlen(node->data) - backslashes);
-        for (int j = 0; j < strlen(node->data); j++) {
-            char c = node->data[j];
-            if (c == '\\') {
-                fprintf(out, "'%c", c);
-                j++;
-                fprintf(out, "%c', ", node->data[j]);
-            } else {
-                fprintf(out, "'%c', ", c);
-            }
-        }
-        fprintf(out, "'\\0'}};\n");
+        generateString(out, node->data);
     }
     fprintf(out, "\n");
 }
@@ -892,10 +914,11 @@ void generateEnums(FILE* out, List* enums)
         int i = 0;
         ASTNode* root = symbol->def;
         for (ListElem* elem = List_Begin(root->children); elem != List_End(root->children); elem = elem->next) {
-            ASTNode* ident = elem->data;
+            ASTNode* define = elem->data;
+            SymbolNode* var = define->data;
             fprintf(out, "#define ");
             printPath(out, symbol);
-            fprintf(out, "_%s %d", (char*)ident->data, i);
+            fprintf(out, "_%s %d", var->name, i);
             i++;
             fprintf(out, "\n");
         }
@@ -928,34 +951,44 @@ static int getPathLength(SymbolNode* symbol)
 void generateEnumFunctions(FILE* out, List* enums)
 {
     fprintf(out, "/* Enum definitions */\n");
+    ASTNode* stringRawType = List_Get(STRING_TYPE->children, 0);
     for (ListElem* elem = List_Begin(enums); elem != List_End(enums); elem = elem->next) {
         SymbolNode* symbol = elem->data;
         if (!symbol->isReachable) {
             continue;
         }
 
-        int i = 0;
         ASTNode* root = symbol->def;
+        for (ListElem* elem = List_Begin(root->children); elem != List_End(root->children); elem = elem->next) {
+            ASTNode* define = elem->data;
+            SymbolNode* var = define->data;
+            printType(out, stringRawType);
+            fprintf(out, " ");
+            printPath(out, var);
+            fprintf(out, "_str = ");
+            char nameBuffer[255];
+            sprintPath(nameBuffer, var);
+            generateString(out, nameBuffer);
+        }
+
         printType(out, STRING_TYPE);
         fprintf(out, " ");
         printPath(out, symbol);
         fprintf(out, "_toString(unsigned int x)\n{\n\tswitch(x)\n\t{\n");
         for (ListElem* elem = List_Begin(root->children); elem != List_End(root->children); elem = elem->next) {
-            ASTNode* ident = elem->data;
+            ASTNode* define = elem->data;
+            SymbolNode* var = define->data;
             fprintf(out, "\tcase ");
-            printPath(out, symbol);
-            fprintf(out, "_%s:\n\t\treturn (", (char*)ident->data);
-            printType(out, STRING_TYPE);
-            fprintf(out, "){\"");
-            printPath(out, symbol);
-            fprintf(out, "_%s\", %d};\n", (char*)ident->data, getPathLength(symbol) + strlen(ident->data) + 1);
-            i++;
+            printPath(out, var);
+            fprintf(out, ":\n\t\treturn &");
+            printPath(out, var);
+            fprintf(out, "_str;\n");
         }
         fprintf(out, "\t}\n}\n");
 
         fprintf(out, "unsigned int ");
         printPath(out, symbol);
-        fprintf(out, "_length = %d;\n", i);
+        fprintf(out, "_length = %d;\n", root->children->size);
     }
     fprintf(out, "\n");
 }

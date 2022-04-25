@@ -158,7 +158,7 @@ freePtr: &:Int = null
 constConstptr::&:Int = null
 ```
 ## Type aliasing
-Orange uses structural type equivalence. That means two types are the same if their underlying type structure is the same. New type aliases are defined using a variable definition and the Type type.
+Orange uses structural type equivalence. That means two types are the same if their underlying type structure is the same. New type aliases are defined using a variable definition and the `Type` type.
 ```
 MyNewIntType::Type = Int32
 SomeOneElsesIntType::Type = Int32
@@ -276,10 +276,114 @@ Finally, you cannot mix positional and named arguments.
 ("The Grapes Of Wrath", .author="John Steinbeck", 146):Book
 ```
 ## Addresses
+Addresses can be made using `&` before the type.
+```
+addrOfInt: &Int
+addrOfAddrOfInt: &&Int
+```
+Addresses are platform specific addresses to some place in memory.
 ## Arrays
+Arrays in Orange are contiguous chunks of memory. Unlike in C, arrays *are* that memory, not just pointers. Also unlike C, the length of the array is known and stored at the beginining of the array.
+
+Arrays are closely related to structs. They have two fields, `length` and `data`. `length` is an integer and is how long the array is. `data` is the first element in the array.
+
+### Fixed arrays
+There are two forms of arrays, fixed and dynamic. Fixed arrays are stored in-place either on the stack or within a struct. They are declared using `[x]` where `x` is a compile-time constant expression.
+```
+myArr: [5]Int          // Array of 5 integers
+chessBoard: [8][8]Char // An array of arrays
+```
+The zero-value of a fixed array is the length of the array along with the zero-value of all the elements.
+```
+someArr: [5]Bool // 5 booleans, all set to false
+```
+Fixed arrays are equivalent when the type of the two arrays matches **and** and the length matches.
+```
+arr1: [5]Int
+arr2: [5]Int
+arr3: [6]Int
+arr1 = arr2 // Ok, simple byte-for-byte copy
+arr1 = arr3 // Error! [5]Int is not compatible with [6]Int
+```
+Unlike in C, the length does not have to be an integer literal. The length can be any positive compile-time integer expression.
+```
+someConst::Int = 6
+anotherConst::Int = 3
+arr: [someConst * anotherConst]Char
+arr2: [arr.length]Char // Ok! Fixed array lengths are known at compile time
+```
+Fixed arrays can be instantiated using an array literal.
+```
+someNumbers: [5]Int = [1, 2, 3, 4, 5]
+moreNumbers := [6, 7, 8, 9, 10] // Types can be infered from array literals
+```
+All arrays can be indexed using square brackets. Array indices start at 0.
+```
+moreNumbers := [6, 7, 8, 9, 10]
+seven: Int = moreNumbers[1]
+```
+### Dynamic arrays
+Dynamic arrays are addresses of arrays. They can point to an array of any length. They are formed with the empty `[]` token.
+```
+arr: []Int
+arr2: [][]Int
+```
+The built in `String` type is a dynamic array of characters.
+```
+String::Type = []Char
+```
+Dynamic arrays are useful for accepting arrays of any size as input to a function.
+```
+printInts::(ints: []Int)->() = {
+    for i := 0; i < ints.length; i += 1 {
+        stdlib.system.println("%d", ints[i])
+    }
+}
++ main::()->() = {
+    arr1: [3]Int = [1, 2, 3]
+    arr2: [4]Int = [1, 2, 3, 4]
+    printInts(&arr1)    // These both work
+    printInts(&arr2)
+}
+```
 ## Enums
+Enums are lists of values. They can be created using the `Enum` type.
+```
+Color::Enum = (
+    RED
+    GREEN
+    BLUE
+)
+```
+Enums are accessed through their namespace, they are not added to the global pool like in C.
+```
+color := Color.RED
+```
+Variables of integer types can be assigned enums, however variables of enum types cannot be assigned integers. Likewise, different enums are considered different types.
+```
+Color::Enum = (
+    RED
+    GREEN
+    BLUE
+)
+Color2::Enum = (
+    RED
+    GREEN
+    BLUE
+)
+var1: Color = Color.RED   // Ok
+var2: Int   = Color2.RED  // Ok
+var3: Color = Color2.BLUE // Error! Cannot mix between two enums
+var4: Color = 5           // Error! Cannot assign an integer to an enum
+```
+### Enum length field
+Not implemented yet.
+### Enum toString function
+Not implemented yet.
 ## Unions
+Not implemented yet.
 ## Functions
+
 ## Operators
 ## if
 ## for

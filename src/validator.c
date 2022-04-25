@@ -261,11 +261,15 @@ static ASTNode* expandTypeIdent(ASTNode* type, bool reassigning)
                     error2(type->pos, var->pos, "symbol '%s' is not a type", var->name);
                 }
             }
-            if (reassigning && var->isExtern) {
-                expanded = AST_Create(AST_EXTERN, var, type->scope, type->pos);
-                break;
+            if (var->symbolType == SYMBOL_ENUM) {
+                expanded = AST_Create(AST_ENUM, var, type->scope, type->pos);
             } else {
-                expanded = var->def;
+                if (reassigning && var->isExtern) {
+                    expanded = AST_Create(AST_EXTERN, var, type->scope, type->pos);
+                    break;
+                } else {
+                    expanded = var->def;
+                }
             }
         } else if (!strcmp(expanded->data, "String")) {
             expanded = STRING_TYPE;
@@ -489,10 +493,7 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
         ASTNode* paramlist = NULL;
 
         bool resolved = false;
-        if (leftType->astType == AST_IDENT && !strcmp(leftType->data, "Enum")) {
-            type = INT32_TYPE;
-            break;
-        } else if (leftType->astType == AST_IDENT && (!strcmp(leftType->data, "Module") || !strcmp(leftType->data, "Package"))) {
+        if (leftType->astType == AST_IDENT && (!strcmp(leftType->data, "Module") || !strcmp(leftType->data, "Package") || !strcmp(leftType->data, "Enum"))) {
             SymbolNode* leftSymbol = NULL;
             if (left->astType == AST_IDENT) {
                 leftSymbol = Symbol_Find(left->data, left->scope);
@@ -517,7 +518,7 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
             SymbolNode* leftSymbol = leftType->data;
             paramlist = leftSymbol->def;
         } else {
-            error(left->pos, "left side of dot must be container %s", AST_GetString(leftType->astType));
+            error(left->pos, "left side of dot must be container");
         }
         if (paramlist->astType == AST_EXTERN) {
             SymbolNode* var = paramlist->data;
@@ -559,11 +560,11 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
         type = node;
         break;
     }
+    case AST_ENUM:
     case AST_PARAMLIST:
     case AST_FUNCTION:
     case AST_ADDR:
-    case AST_ARRAY:
-    case AST_ENUM: {
+    case AST_ARRAY: {
         type = TYPE_TYPE;
         break;
     }
@@ -622,7 +623,11 @@ static int typesAreCompatible(ASTNode* a, ASTNode* b)
     if (aIntType < 0 || bIntType < 0) {
         return -1;
     } else {
-        return aIntType <= bIntType;
+        if (a->astType != AST_ENUM && b->astType == AST_ENUM || a->astType == AST_ENUM && b->astType == AST_ENUM) {
+            return -1;
+        } else {
+            return aIntType <= bIntType;
+        }
     }
 }
 
@@ -671,7 +676,7 @@ bool typesAreEquivalent(ASTNode* a, ASTNode* b)
     }
 
     bool retval = true;
-    if (aExpand->astType != bExpand->astType && aExpand->astType != AST_ENUM && bExpand->astType != AST_ENUM) {
+    if (aExpand->astType != bExpand->astType) {
         if (aExpand->astType == AST_C_ARRAY) {
             ASTNode* dataType = List_Get(aExpand->children, 0);
             retval = typesAreCompatible(dataType, bExpand);
@@ -694,7 +699,8 @@ bool typesAreEquivalent(ASTNode* a, ASTNode* b)
             break;
         }
         case AST_ENUM: {
-            retval = bExpand->astType == AST_IDENT && !strcmp(bExpand->data, "Int");
+            SymbolNode* aSymbol = aExpand->data;
+            retval = aSymbol->parent == bExpand->data;
             break;
         }
         case AST_FUNCTION:
@@ -903,6 +909,9 @@ void inferTypes(SymbolNode* var)
     if (var->def) {
         if (!var->def->isValid) {
             validateAST(var->def);
+        }
+        if (!strcmp(var->name, "hmm")) {
+            printf("");
         }
         // if type is undef, type is type of def
         // else, type must match type of def
@@ -1197,9 +1206,11 @@ void validateAST(ASTNode* node)
         /// var type is not Type or Enum
         if (var->type->astType != AST_IDENT || strcmp(var->type->data, "Type") && strcmp(var->type->data, "Enum")) {
             inferTypes(var);
-        } else {
+        } else if (!strcmp(var->type->data, "Type")) {
             var->def = expandTypeIdent(var->def, true);
             validateType(var->def);
+        } else if (!strcmp(var->type->data, "Enum")) {
+            var->def = expandTypeIdent(var->def, true);
         }
         break;
     }

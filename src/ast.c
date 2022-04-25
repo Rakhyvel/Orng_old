@@ -183,6 +183,10 @@ int AST_TypeRepr(char* str, ASTNode* type)
 {
     char* origStr = str;
     switch (type->astType) {
+    case AST_ENUM: {
+        SymbolNode* symbol = type->data;
+        str += sprintf(str, "%s", symbol->name);
+    } break;
     case AST_VOID:
         str += sprintf(str, "()", (char*)type->data);
         break;
