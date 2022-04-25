@@ -285,7 +285,7 @@ Addresses are platform specific addresses to some place in memory.
 ## Arrays
 Arrays in Orange are contiguous chunks of memory. Unlike in C, arrays *are* that memory, not just pointers. Also unlike C, the length of the array is known and stored at the beginining of the array.
 
-Arrays are closely related to structs. They have two fields, `length` and `data`. `length` is an integer and is how long the array is. `data` is the first element in the array.
+Arrays are closely related to structs. They have two fields, `length` and `data`. `length` is an integer and is how long the array is. `data` is the first element in the array. You can take the address of the `data` field to get a C compatible array, if needed.
 
 ### Fixed arrays
 There are two forms of arrays, fixed and dynamic. Fixed arrays are stored in-place either on the stack or within a struct. They are declared using `[x]` where `x` is a compile-time constant expression.
@@ -334,14 +334,18 @@ String::Type = []Char
 ```
 Dynamic arrays are useful for accepting arrays of any size as input to a function.
 ```
+// Accepts an address of an integer array of any size, prints it out
 printInts::(ints: []Int)->() = {
     for i := 0; i < ints.length; i += 1 {
         stdlib.system.println("%d", ints[i])
     }
 }
+
 + main::()->() = {
+    // Two arrays of different sizes
     arr1: [3]Int = [1, 2, 3]
     arr2: [4]Int = [1, 2, 3, 4]
+    
     printInts(&arr1)    // These both work
     printInts(&arr2)
 }
@@ -355,7 +359,7 @@ Color::Enum = (
     BLUE
 )
 ```
-Enums are accessed through their namespace, they are not added to the global pool like in C.
+Enums are accessed through their namespace, they are not added to the global name pool like in C.
 ```
 color := Color.RED
 ```
@@ -383,7 +387,77 @@ Not implemented yet.
 ## Unions
 Not implemented yet.
 ## Functions
+Function types are created by using an arrow `->`. The arrow is left-associative. The domain type of a function must be a parameter list. The co-domain type of the function can be any type.
+```
+sqrt:(x:Real)->Real
+main:(args:[]String)->Int
+curry:(x:Int)->(y:Int)->Int
+```
+Compile-time constant function types are proper functions that require a statement as their expression.
+```
+// Functions can take any statement as their expression, not just blocks
+f::(x:Real)->Real = return x * x + 2 * x
 
+branch::(predicate:Bool)->Int = 
+if predicate {
+    return 5
+} else {
+    return 7
+}
+
+// Since defines are statements, this is possible
+// Just not very useful!
+this::()->() = is::()->() = weird::()->() = stdlib.system.println("Haha!") 
+``` 
+Constant functions must return a value from their co-domain through all control-flow paths.
+```
+// This function type has Int as it's co-domain
+function::(x:Int)->Int = {
+    if x > 4 {
+        stdlib.system.println("I'm not gonna return anything!")
+        // Error here, since this path does not return an Int
+    } else {
+        return 5
+    }
+}
+```
+Variable function types are function pointers.
+```
+// Constant functions, cannot re-assign
+main::()->() = {}
+otherMain::()->() = {}
+
+// Variable functions, can reassign to functions of the same type
+fxnPtr: ()->() = main
+fnxPtr = otherMain
+```
+### Calling functions
+A function call is made by joining the function's symbol description with an argument list. 
+
+The parameter list of a function is syntactically the same as a struct definition, and the argument list is the same as a struct literal. So default parameters and position/named arguments work the same for functions as they did above for structs.
+```
+someFunction::()->() = {}
+someFunction()
+
+defaultValues::(a:Int = 4, b:Char = 5)->() = {}
+defaultValues(.b=4)
+
+arrOfFns: [](a:Int = 4, b:Char = 5)->() = ...
+arrOfFns[x](7)
+```
+### Inner functions
+Functions may be defined inside other functions. The inner function cannot see the variables defined in the outer function.
+```
+outer::()->() = {
+    var: Int = 4
+
+    inner::()->() = {
+        var += 4 // Error! Inner function cannot see variables in outer function's scope
+    }
+
+    inner()
+}
+```
 ## Operators
 ## if
 ## for
