@@ -203,7 +203,7 @@ x default params
 	x otherFn(.a=0.3, .z=3, .y='v', .x=4) // Same named call with parameters in different order
 	x otherFn(.z=4, .x=args.length) // Can leave out any default, not just at the end
 	x debug.assert takes in an optional message
-- can't declare struct fields as extern
+x can't declare struct fields as extern
 - change const type syntax and semantics
 	pi::Real = 3.14159			// Cannot change value
 	constPtr::&Int = null		// Cannot change value. Can modify memory

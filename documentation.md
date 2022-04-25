@@ -622,6 +622,8 @@ myFunction::(x:Int, y:Int)->() = {
         } else if rand() % 4 = 0 {
             break       // and break's
         }
+
+        // If execution gets to the end of a block, defers are automatically run in reverse order
     }
 }
 ```

@@ -206,7 +206,7 @@ static void generateDefine(FILE* out, SymbolNode* var, bool param)
 {
     printType(out, var->type);
     fprintf(out, " ");
-    bool functionPtr = !var->isCompTime && var->type->astType == AST_FUNCTION;
+    bool functionPtr = !var->type->isConst && var->type->astType == AST_FUNCTION;
     if (functionPtr) {
         fprintf(out, "(*");
     }
@@ -614,7 +614,7 @@ static void generateAST(FILE* out, ASTNode* node, int spaces)
         break;
     case AST_DEFINE:
         SymbolNode* var = node->data;
-        if (!(var->symbolType == SYMBOL_FUNCTION && var->isCompTime)) {
+        if (!(var->symbolType == SYMBOL_FUNCTION && var->type->isConst)) {
             generateDefine(out, var, false);
         }
         break;

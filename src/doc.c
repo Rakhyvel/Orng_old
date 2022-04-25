@@ -14,11 +14,7 @@ static void generateType(FILE* out, SymbolNode* global)
     fprintf(out, "<div class=\"member\">");
     char typeStr[255];
     AST_TypeRepr(typeStr, global->type);
-    if (global->isCompTime) {
-        fprintf(out, "<h3><code class=\"ident\">%s</code><code>::</code><code class=\"type\">%s</code></h3>", global->name, typeStr);
-    } else {
-        fprintf(out, "<h3><code class=\"ident\">%s</code><code>:</code><code class=\"type\">%s</code></h3>", global->name, typeStr);
-    }
+    fprintf(out, "<h3><code class=\"ident\">%s</code><code>:</code><code class=\"type\">%s</code></h3>", global->name, typeStr);
     fprintf(out, "</div>");
 }
 
@@ -30,11 +26,7 @@ static void generateGlobal(FILE* out, SymbolNode* global)
     fprintf(out, "<div class=\"member\">");
     char typeStr[255];
     AST_TypeRepr(typeStr, global->type);
-    if (global->isCompTime) {
-        fprintf(out, "<h3><code class=\"ident\">%s</code><code>::</code><code class=\"type\">%s</code></h3>", global->name, typeStr);
-    } else {
-        fprintf(out, "<h3><code class=\"ident\">%s</code><code>:</code><code class=\"type\">%s</code></h3>", global->name, typeStr);
-    }
+    fprintf(out, "<h3><code class=\"ident\">%s</code><code>:</code><code class=\"type\">%s</code></h3>", global->name, typeStr);
 
     fprintf(out, "<p>%s</p></div>", global->desc);
 }
@@ -48,11 +40,7 @@ static void generateFunction(FILE* out, SymbolNode* global)
     fprintf(out, "<div class=\"member\">");
     char typeStr[255];
     AST_TypeRepr(typeStr, global->type);
-    if (global->isCompTime) {
-        fprintf(out, "<h3><code class=\"ident\">%s</code><code>::</code><code class=\"type\">%s</code></h3>", global->name, typeStr);
-    } else {
-        fprintf(out, "<h3><code class=\"ident\">%s</code><code>:</code><code class=\"type\">%s</code></h3>", global->name, typeStr);
-    }
+    fprintf(out, "<h3><code class=\"ident\">%s</code><code>:</code><code class=\"type\">%s</code></h3>", global->name, typeStr);
     fprintf(out, "<p>%s</p><h3><em>Parameters</em></h3><p>blah blah blah blah</p><h3><em>Returns</em></h3><p>blah blah blah blah</p>\n", global->desc);
     fprintf(out, "</div>");
 }
@@ -65,11 +53,7 @@ static void generateModule(FILE* out, SymbolNode* module)
     fprintf(out, "<div class=\"module\" id=\"%s\">", module->name);
     char typeStr[255];
     AST_TypeRepr(typeStr, module->type);
-    if (module->isCompTime) {
-        fprintf(out, "<h2><code class=\"ident\">%s</code><code>::</code><code class=\"type\">%s</code></h2>", module->name, typeStr);
-    } else {
-        fprintf(out, "<h2><code class=\"ident\">%s</code><code>::</code><code class=\"type\">%s</code></h2>", module->name, typeStr);
-    }
+    fprintf(out, "<h2><code class=\"ident\">%s</code><code>::</code><code class=\"type\">%s</code></h2>", module->name, typeStr);
     fprintf(out, "<p>%s</p>", module->desc);
 
     List* children = module->children->keyList;

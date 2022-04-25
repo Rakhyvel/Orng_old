@@ -90,6 +90,7 @@ enum astType {
     AST_DOT,
     // Types
     AST_VOID,
+	AST_CONST,
     AST_CAST,
     AST_PARAMLIST,
     AST_FUNCTION,
@@ -112,6 +113,8 @@ typedef struct astNode {
     bool visited;
     bool isValid;
 
+	bool isConst;
+
 	// if subtree contains any of these
     bool containsReturn;
     bool containsContinue;
@@ -124,11 +127,14 @@ const ASTNode* INT8_TYPE;
 const ASTNode* INT16_TYPE;
 const ASTNode* INT32_TYPE;
 const ASTNode* INT64_TYPE;
+const ASTNode* CONST_STRING_TYPE;
 const ASTNode* STRING_TYPE;
 const ASTNode* STRING_ARR_TYPE;
+const ASTNode* CONST_CHAR_TYPE;
 const ASTNode* CHAR_TYPE;
 const ASTNode* REAL32_TYPE;
 const ASTNode* REAL64_TYPE;
+const ASTNode* CONST_BOOL_TYPE;
 const ASTNode* BOOL_TYPE;
 const ASTNode* TYPE_TYPE;
 const ASTNode* PACKAGE_TYPE;
@@ -138,9 +144,9 @@ const ASTNode* ENUM_TYPE;
 
 // Functions that are defined in the file ast.c
 ASTNode* createArrayTypeNode(ASTNode* baseType, int length);
-ASTNode* AST_Create(enum astType type, uint64_t data, SymbolNode* scope, struct position pos);
+ASTNode* AST_Create(enum astType type, uint64_t data, SymbolNode* scope, struct position pos, bool isConst);
 void AST_Print(ASTNode* root, char* prefix, char* childrenPrefix);
-void AST_PrintTypeRepr(char* str, ASTNode* type);
+int AST_TypeRepr(char* str, ASTNode* type);
 char* AST_GetString(enum astType type);
 
 #endif

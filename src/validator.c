@@ -197,16 +197,34 @@ static void validateLValue(ASTNode* node)
     switch (node->astType) {
     case AST_IDENT: {
         SymbolNode* var = Symbol_Find(node->data, node->scope);
-        if (var->isCompTime) {
+        if (var->type->isConst) {
             error(node->pos, "symbol '%s' is constant", var->name);
         }
         break;
     }
     case AST_PAREN:
-    case AST_CAST:
+    case AST_CAST: {
+        ASTNode* child = List_Get(node->children, 0);
+        validateLValue(child);
+        break;
+    }
     case AST_INDEX: {
         ASTNode* child = List_Get(node->children, 0);
         validateLValue(child);
+        ASTNode* childType = getType(child, false, false);
+        if (childType->astType != AST_ARRAY && childType->astType != AST_ADDR) {
+            ASSERT(0);
+        }
+        if (childType->astType == AST_ADDR) {
+            childType = List_Get(childType->children, 0);
+        }
+        ASTNode* dataDefine = List_Get(childType->children, 1);
+        SymbolNode* dataSymbol = dataDefine->data;
+        ASTNode* dataAddrType = dataSymbol->type;
+        ASTNode* dataType = List_Get(dataAddrType->children, 0);
+        if (dataType->isConst) {
+            error(node->pos, "array data type is constant");
+        }
         break;
     }
     case AST_DEREF: {
@@ -214,14 +232,22 @@ static void validateLValue(ASTNode* node)
         if (child->astType != AST_ADDROF) {
             validateLValue(child);
         }
+        ASTNode* childType = getType(child, false, false);
+        if (childType->astType != AST_ADDR) {
+            ASSERT(0);
+        }
+        ASTNode* underlyingType = List_Get(childType->children, 0);
+
+        if (underlyingType->isConst) {
+            error(node->pos, "address expression is constant");
+        }
         break;
     }
     case AST_DOT: {
         SymbolNode* var = getDotSymbol(node);
         if (var == 0 || var == 1) {
             error(node->pos, "dot expression does not resolve to a symbol");
-        }
-        if (var->isCompTime) {
+        } else if (var->type->isConst) {
             error(node->pos, "symbol '%s' is constant", var->name);
         }
         break;
@@ -239,7 +265,7 @@ static ASTNode* resolveDotTypes(ASTNode* node, bool reassigning)
             error(node->pos, "dot expression doesn't resolve to a symbol");
         }
         if (reassigning && dotSymbol->isExtern) {
-            return AST_Create(AST_EXTERN, dotSymbol, dotSymbol, dotSymbol->pos);
+            return AST_Create(AST_EXTERN, dotSymbol, dotSymbol, dotSymbol->pos, false);
         } else {
             return dotSymbol->def;
         }
@@ -268,10 +294,10 @@ static ASTNode* expandTypeIdent(ASTNode* type, bool reassigning)
                 }
             }
             if (var->symbolType == SYMBOL_ENUM) {
-                expanded = AST_Create(AST_ENUM, var, type->scope, type->pos);
+                expanded = AST_Create(AST_ENUM, var, type->scope, type->pos, false);
             } else {
                 if (reassigning && var->isExtern) {
-                    expanded = AST_Create(AST_EXTERN, var, type->scope, type->pos);
+                    expanded = AST_Create(AST_EXTERN, var, type->scope, type->pos, false);
                     break;
                 } else {
                     expanded = var->def;
@@ -279,6 +305,8 @@ static ASTNode* expandTypeIdent(ASTNode* type, bool reassigning)
             }
         } else if (!strcmp(expanded->data, "String")) {
             expanded = STRING_TYPE;
+        } else if (!strcmp(expanded->data, "Module") && !expanded->isConst) {
+            printf("Found one\n");
         } else {
             break;
         }
@@ -361,11 +389,11 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
         break;
     }
     case AST_STRING: {
-        type = STRING_TYPE;
+        type = CONST_STRING_TYPE;
         break;
     }
     case AST_CHAR: {
-        type = CHAR_TYPE;
+        type = CONST_CHAR_TYPE;
         break;
     }
     case AST_REAL: {
@@ -417,7 +445,7 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
     }
     case AST_ADDROF: {
         ASTNode* innerType = getType(List_Get(node->children, 0), false, reassigning);
-        ASTNode* addrType = AST_Create(AST_ADDR, 0, node->scope, (Position) { 0, 0, 0, 0 });
+        ASTNode* addrType = AST_Create(AST_ADDR, 0, node->scope, (Position) { 0, 0, 0, 0 }, true);
         List_Append(addrType->children, innerType);
         type = addrType;
         break;
@@ -441,8 +469,8 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
         break;
     }
     case AST_NULL: {
-        ASTNode* voidPtr = AST_Create(AST_VOID, 0, node->scope, (Position) { 0, 0, 0, 0 });
-        ASTNode* addrType = AST_Create(AST_ADDR, 0, node->scope, (Position) { 0, 0, 0, 0 });
+        ASTNode* voidPtr = AST_Create(AST_VOID, 0, node->scope, (Position) { 0, 0, 0, 0 }, true);
+        ASTNode* addrType = AST_Create(AST_ADDR, 0, node->scope, (Position) { 0, 0, 0, 0 }, true);
         List_Append(addrType->children, voidPtr);
         type = addrType;
         break;
@@ -462,7 +490,7 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
     case AST_LTE:
     case AST_TRUE:
     case AST_FALSE: {
-        type = BOOL_TYPE;
+        type = CONST_BOOL_TYPE;
         break;
     }
     case AST_BLOCK:
@@ -577,12 +605,13 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
     case AST_ARRAY_LITERAL: {
         ASTNode* firstElem = List_Begin(node->children)->data;
         ASTNode* firstType = getType(firstElem, false, reassigning);
-        type = createArrayTypeNode(firstType, node->children->size);
+        type = createArrayTypeNode(firstType, node->children->size, true);
+        type->isConst = true;
         break;
     }
     case AST_NEW: {
         ASTNode* newType = List_Get(node->children, 0);
-        ASTNode* addr = AST_Create(AST_ADDR, NULL, node->scope, node->pos);
+        ASTNode* addr = AST_Create(AST_ADDR, NULL, node->scope, node->pos, false);
         List_Append(addr->children, newType);
         type = addr;
         break;
@@ -638,7 +667,9 @@ static int typesAreCompatible(ASTNode* a, ASTNode* b)
 }
 
 /*
-checks whether a <= b
+checks whether A <= B, that is "is A a subtype of B"
+Note that there is no subtype polymorphism other than Int <: Enum and T <: :T
+All other types are distinct
 */
 bool typesAreEquivalent(ASTNode* a, ASTNode* b)
 {
@@ -679,6 +710,9 @@ bool typesAreEquivalent(ASTNode* a, ASTNode* b)
     }
     if (aExpand->astType == AST_FUNCTION && typesAreEquivalent(bExpand, VOID_ADDR_TYPE) || bExpand->astType == AST_FUNCTION && typesAreEquivalent(aExpand, VOID_ADDR_TYPE)) {
         return true;
+    }
+    if (bExpand->isConst && !aExpand->isConst) {
+        return false;
     }
 
     bool retval = true;
@@ -774,9 +808,8 @@ bool typesAreEquivalent(ASTNode* a, ASTNode* b)
                 bExpand->visited = true;
                 bool fieldNamesSame = (aSymbol == NULL || bSymbol == NULL || !strcmp(aSymbol->name, bSymbol->name));
                 bool typeEquiv = typesAreEquivalent(aType, bType);
-                bool bothConst = (aSymbol == NULL || bSymbol == NULL || aSymbol->isCompTime == bSymbol->isCompTime);
                 bool bothPub = (aSymbol == NULL || bSymbol == NULL || aSymbol->isPublic == bSymbol->isPublic);
-                allEquiv &= typeEquiv && fieldNamesSame && bothConst && bothPub;
+                allEquiv &= typeEquiv && fieldNamesSame && bothPub;
             }
             retval = allEquiv;
             break;
@@ -916,22 +949,23 @@ void inferTypes(SymbolNode* var)
         if (!var->def->isValid) {
             validateAST(var->def);
         }
-        if (!strcmp(var->name, "hmm")) {
-            printf("");
-        }
         // if type is undef, type is type of def
         // else, type must match type of def
         ASTNode* defType = getType(var->def, false, true);
         if (var->type->astType == AST_UNDEF) {
             // No type annot., infer types
+            bool wasConst = var->type->isConst;
             var->type = defType;
+            var->type->isConst = wasConst;
 
             if (defType->astType == AST_IDENT && !strcmp(defType->data, "Type")) {
                 var->symbolType = SYMBOL_TYPE;
             } else if (defType->astType == AST_IDENT && !strcmp(defType->data, "Module")) {
                 var->symbolType = SYMBOL_MODULE;
+                var->type->isConst = true;
             } else if (defType->astType == AST_IDENT && !strcmp(defType->data, "Package")) {
                 var->symbolType = SYMBOL_PACKAGE;
+                var->type->isConst = true;
             }
             if (var->type->astType == AST_UNDEF) {
                 error(var->pos, "cannot infer type of symbol '%s', try using a cast", var->name);
@@ -1804,12 +1838,12 @@ Program Validator_Validate(SymbolNode* symbol)
 
         includes = Map_Create();
 
-        mainFunctionType = AST_Create(AST_FUNCTION, 0, NULL, (Position) { 0, 0, 0, 0 });
-        ASTNode* mainFunctionParams = AST_Create(AST_PARAMLIST, 0, NULL, (Position) { 0, 0, 0, 0 });
+        mainFunctionType = AST_Create(AST_FUNCTION, 0, NULL, (Position) { 0, 0, 0, 0 }, true);
+        ASTNode* mainFunctionParams = AST_Create(AST_PARAMLIST, 0, NULL, (Position) { 0, 0, 0, 0 }, true);
         SymbolNode* argsDefineSymbol = Symbol_Create("args", SYMBOL_VARIABLE, NULL, (Position) { 0, 0, 0, 0 });
         argsDefineSymbol->type = STRING_ARR_TYPE;
-        argsDefineSymbol->def = AST_Create(AST_UNDEF, 0, NULL, (Position) { 0, 0, 0, 0 });
-        ASTNode* argsDefine = AST_Create(AST_DEFINE, argsDefineSymbol, NULL, (Position) { 0, 0, 0, 0 });
+        argsDefineSymbol->def = AST_Create(AST_UNDEF, 0, NULL, (Position) { 0, 0, 0, 0 }, false);
+        ASTNode* argsDefine = AST_Create(AST_DEFINE, argsDefineSymbol, NULL, (Position) { 0, 0, 0, 0 }, false);
         List_Append(mainFunctionParams->children, argsDefine);
         List_Append(mainFunctionType->children, mainFunctionParams);
         List_Append(mainFunctionType->children, INT32_TYPE);
@@ -1848,28 +1882,31 @@ Program Validator_Validate(SymbolNode* symbol)
             if (child->symbolType != SYMBOL_PACKAGE) {
                 typeMismatchError(child->type->pos, PACKAGE_TYPE, child->type);
             }
-            if (!child->isCompTime) {
-                error(child->def->pos, "package '%s' is not constant", child->name);
-            }
         }
         if (mainFunction == NULL) {
             gen_error("no main function defined");
         }
         // Reachability?
         reachableSymbol(mainFunction);
-        collectStructs(STRING_TYPE);
+        collectStructs(CONST_STRING_TYPE);
         collectStructs(STRING_ARR_TYPE);
         unVisitSymbolTree(symbol);
         collectStructsMain(symbol);
         break;
     }
     case SYMBOL_PACKAGE: {
+        if (!symbol->type->isConst) {
+            error(symbol->def->pos, "package '%s' is not constant", symbol->name);
+        }
         ListElem* elem = List_Begin(children);
         for (; elem != List_End(children); elem = elem->next) {
             SymbolNode* child = Map_Get(symbol->children, elem->data);
             Validator_Validate(child);
-            if (!child->isCompTime) {
-                error(child->def->pos, "identifier '%s' is not constant", child->name);
+            if (!child->type->isConst) {
+                char typeBuffer[255];
+                AST_TypeRepr(typeBuffer, child->type);
+                printf("%s\n", typeBuffer);
+                error(child->pos, "immediate child symbol '%s' of package '%s' is not constant", child->name, symbol->name);
             }
         }
         if (symbol->def->astType != AST_PARAMLIST && symbol->def->astType != AST_VOID) {
@@ -1926,6 +1963,9 @@ Program Validator_Validate(SymbolNode* symbol)
         }
         break;
     case SYMBOL_TYPE: {
+        if (!symbol->type->isConst) {
+            error(symbol->pos, "type '%s' is not constant", symbol->name);
+        }
         // validate valid type def
         validateType(symbol->def);
         // if def ast type is param list then for all define in paramlist children, define symbol is not extern
@@ -1941,6 +1981,9 @@ Program Validator_Validate(SymbolNode* symbol)
         break;
     }
     case SYMBOL_MODULE: {
+        if (!symbol->type->isConst) {
+            error(symbol->pos, "module '%s' is not constant", symbol->name);
+        }
         ListElem* elem = List_Begin(children);
         for (; elem != List_End(children); elem = elem->next) {
             SymbolNode* child = Map_Get(symbol->children, elem->data);

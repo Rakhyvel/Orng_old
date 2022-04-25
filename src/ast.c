@@ -18,11 +18,13 @@ const ASTNode* INT8_TYPE = NULL;
 const ASTNode* INT16_TYPE = NULL;
 const ASTNode* INT32_TYPE = NULL;
 const ASTNode* INT64_TYPE = NULL;
-const ASTNode* STRING_TYPE = NULL;
+const ASTNode* CONST_STRING_TYPE = NULL;
 const ASTNode* STRING_ARR_TYPE = NULL;
+const ASTNode* CONST_CHAR_TYPE = NULL;
 const ASTNode* CHAR_TYPE = NULL;
 const ASTNode* REAL32_TYPE = NULL;
 const ASTNode* REAL64_TYPE = NULL;
+const ASTNode* CONST_BOOL_TYPE = NULL;
 const ASTNode* BOOL_TYPE = NULL;
 const ASTNode* TYPE_TYPE = NULL;
 const ASTNode* UNDEF_TYPE = NULL;
@@ -35,33 +37,32 @@ ASTNode* createArrayTypeNode(ASTNode* baseType, int length)
 {
     ASTNode* retval = NULL;
     if (length == -1) {
-        retval = AST_Create(AST_ADDR, 0, NULL, (Position) { NULL, 0, 0, 0 });
+        retval = AST_Create(AST_ADDR, 0, NULL, (Position) { NULL, 0, 0, 0 }, false);
     }
-    ASTNode* array = AST_Create(AST_ARRAY, 0, NULL, (Position) { NULL, 0, 0, 0 });
+    ASTNode* array = AST_Create(AST_ARRAY, 0, NULL, (Position) { NULL, 0, 0, 0 }, false);
 
     SymbolNode* lengthSymbol = Symbol_Create("length", SYMBOL_VARIABLE, NULL, (Position) { NULL, 0, 0, 0 });
-    ASTNode* lengthDefine = AST_Create(AST_DEFINE, lengthSymbol, NULL, (Position) { NULL, 0, 0, 0 });
-    ASTNode* lengthType = AST_Create(AST_IDENT, "Int", NULL, (Position) { NULL, 0, 0, 0 });
-    ASTNode* lengthCode = AST_Create(AST_UNDEF, 0, NULL, (Position) { NULL, 0, 0, 0 });
+    ASTNode* lengthDefine = AST_Create(AST_DEFINE, lengthSymbol, NULL, (Position) { NULL, 0, 0, 0 }, false);
+    ASTNode* lengthType = AST_Create(AST_IDENT, "Int", NULL, (Position) { NULL, 0, 0, 0 }, false);
+    ASTNode* lengthCode = AST_Create(AST_UNDEF, 0, NULL, (Position) { NULL, 0, 0, 0 }, false);
     lengthSymbol->def = lengthCode;
     lengthSymbol->type = lengthType;
     lengthSymbol->isPublic = true;
-    lengthSymbol->isCompTime = true;
+    lengthType->isConst = true;
 
     SymbolNode* dataSymbol = Symbol_Create("data", SYMBOL_VARIABLE, NULL, (Position) { NULL, 0, 0, 0 });
-    ASTNode* dataDefine = AST_Create(AST_DEFINE, dataSymbol, NULL, (Position) { NULL, 0, 0, 0 });
-    ASTNode* dataType = AST_Create(AST_C_ARRAY, NULL, NULL, (Position) { NULL, 0, 0, 0 });
+    ASTNode* dataDefine = AST_Create(AST_DEFINE, dataSymbol, NULL, (Position) { NULL, 0, 0, 0 }, false);
+    ASTNode* dataType = AST_Create(AST_C_ARRAY, NULL, NULL, (Position) { NULL, 0, 0, 0 }, false);
     List_Append(dataType->children, baseType);
     if (length != -1) {
-        List_Append(dataType->children, AST_Create(AST_INT, length, NULL, (Position) { NULL, 0, 0, 0 }));
+        List_Append(dataType->children, AST_Create(AST_INT, length, NULL, (Position) { NULL, 0, 0, 0 }, false));
     } else {
-        List_Append(dataType->children, AST_Create(AST_UNDEF, 0, NULL, (Position) { NULL, 0, 0, 0 }));
+        List_Append(dataType->children, AST_Create(AST_UNDEF, 0, NULL, (Position) { NULL, 0, 0, 0 }, false));
     }
-    ASTNode* dataCode = AST_Create(AST_UNDEF, 0, NULL, (Position) { NULL, 0, 0, 0 });
+    ASTNode* dataCode = AST_Create(AST_UNDEF, 0, NULL, (Position) { NULL, 0, 0, 0 }, false);
     dataSymbol->def = dataCode;
     dataSymbol->type = dataType;
     dataSymbol->isPublic = true;
-    dataSymbol->isCompTime = false;
 
     List_Append(array->children, lengthDefine);
     List_Append(array->children, dataDefine);
@@ -77,22 +78,25 @@ ASTNode* createArrayTypeNode(ASTNode* baseType, int length)
 
 void AST_Init()
 {
-    INT8_TYPE = AST_Create(AST_IDENT, "Int8", NULL, (Position) { NULL, 0, 0, 0 });
-    INT16_TYPE = AST_Create(AST_IDENT, "Int16", NULL, (Position) { NULL, 0, 0, 0 });
-    INT32_TYPE = AST_Create(AST_IDENT, "Int32", NULL, (Position) { NULL, 0, 0, 0 });
-    INT64_TYPE = AST_Create(AST_IDENT, "Int64", NULL, (Position) { NULL, 0, 0, 0 });
-    CHAR_TYPE = AST_Create(AST_IDENT, "Char", NULL, (Position) { NULL, 0, 0, 0 });
-    STRING_TYPE = createArrayTypeNode(CHAR_TYPE, -1);
-    STRING_ARR_TYPE = createArrayTypeNode(STRING_TYPE, -1);
-    REAL32_TYPE = AST_Create(AST_IDENT, "Real32", NULL, (Position) { NULL, 0, 0, 0 });
-    REAL64_TYPE = AST_Create(AST_IDENT, "Real64", NULL, (Position) { NULL, 0, 0, 0 });
-    BOOL_TYPE = AST_Create(AST_IDENT, "Bool", NULL, (Position) { NULL, 0, 0, 0 });
-    TYPE_TYPE = AST_Create(AST_IDENT, "Type", NULL, (Position) { NULL, 0, 0, 0 });
-    PACKAGE_TYPE = AST_Create(AST_IDENT, "Package", NULL, (Position) { NULL, 0, 0, 0 });
-    UNDEF_TYPE = AST_Create(AST_UNDEF, 0, NULL, (Position) { NULL, 0, 0, 0 });
-    VOID_ADDR_TYPE = AST_Create(AST_ADDR, 0, NULL, (Position) { NULL, 0, 0, 0 });
-    ENUM_TYPE = AST_Create(AST_IDENT, "Enum", NULL, (Position) { NULL, 0, 0, 0 });
-    List_Append(VOID_ADDR_TYPE->children, AST_Create(AST_PARAMLIST, 0, 0, (Position) { NULL, 0, 0, 0 }));
+    INT8_TYPE = AST_Create(AST_IDENT, "Int8", NULL, (Position) { NULL, 0, 0, 0 }, true);
+    INT16_TYPE = AST_Create(AST_IDENT, "Int16", NULL, (Position) { NULL, 0, 0, 0 }, true);
+    INT32_TYPE = AST_Create(AST_IDENT, "Int32", NULL, (Position) { NULL, 0, 0, 0 }, true);
+    INT64_TYPE = AST_Create(AST_IDENT, "Int64", NULL, (Position) { NULL, 0, 0, 0 }, true);
+    CONST_CHAR_TYPE = AST_Create(AST_IDENT, "Char", NULL, (Position) { NULL, 0, 0, 0 }, true);
+    CHAR_TYPE = AST_Create(AST_IDENT, "Char", NULL, (Position) { NULL, 0, 0, 0 }, false);
+    CONST_STRING_TYPE = createArrayTypeNode(CHAR_TYPE, -1, true);
+    STRING_TYPE = createArrayTypeNode(CHAR_TYPE, -1, false);
+    STRING_ARR_TYPE = createArrayTypeNode(STRING_TYPE, -1, true);
+    REAL32_TYPE = AST_Create(AST_IDENT, "Real32", NULL, (Position) { NULL, 0, 0, 0 }, true);
+    REAL64_TYPE = AST_Create(AST_IDENT, "Real64", NULL, (Position) { NULL, 0, 0, 0 }, true);
+    CONST_BOOL_TYPE = AST_Create(AST_IDENT, "Bool", NULL, (Position) { NULL, 0, 0, 0 }, true);
+    BOOL_TYPE = AST_Create(AST_IDENT, "Bool", NULL, (Position) { NULL, 0, 0, 0 }, false);
+    TYPE_TYPE = AST_Create(AST_IDENT, "Type", NULL, (Position) { NULL, 0, 0, 0 }, true);
+    PACKAGE_TYPE = AST_Create(AST_IDENT, "Package", NULL, (Position) { NULL, 0, 0, 0 }, true);
+    UNDEF_TYPE = AST_Create(AST_UNDEF, 0, NULL, (Position) { NULL, 0, 0, 0 }, true);
+    VOID_ADDR_TYPE = AST_Create(AST_ADDR, 0, NULL, (Position) { NULL, 0, 0, 0 }, true);
+    ENUM_TYPE = AST_Create(AST_IDENT, "Enum", NULL, (Position) { NULL, 0, 0, 0 }, true);
+    List_Append(VOID_ADDR_TYPE->children, AST_Create(AST_PARAMLIST, 0, 0, (Position) { NULL, 0, 0, 0 }, true));
 }
 
 /*
@@ -107,7 +111,7 @@ void AST_Init()
  * Returns:
  *	The AST node with the given parameters
  */
-ASTNode* AST_Create(enum astType type, uint64_t data, SymbolNode* scope, struct position pos)
+ASTNode* AST_Create(enum astType type, uint64_t data, SymbolNode* scope, struct position pos, bool isConst)
 {
     ASTNode* retval = calloc(1, sizeof(ASTNode));
     retval->children = List_Create();
@@ -117,6 +121,7 @@ ASTNode* AST_Create(enum astType type, uint64_t data, SymbolNode* scope, struct 
     retval->pos = pos;
     retval->visited = false;
     retval->type = NULL;
+    retval->isConst = isConst;
     return retval;
 }
 
@@ -182,6 +187,9 @@ void AST_Print(ASTNode* root, char* prefix, char* childrenPrefix)
 int AST_TypeRepr(char* str, ASTNode* type)
 {
     char* origStr = str;
+    if (type->isConst) {
+        str += sprintf(str, ":");
+    }
     switch (type->astType) {
     case AST_ENUM: {
         SymbolNode* symbol = type->data;
@@ -203,7 +211,7 @@ int AST_TypeRepr(char* str, ASTNode* type)
             str += AST_TypeRepr(str, symbol->type);
         } else {
             str += sprintf(str, "( .. )");
-		}
+        }
         break;
     case AST_PARAMLIST:
         str += sprintf(str, "(");

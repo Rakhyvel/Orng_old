@@ -1,12 +1,7 @@
 testModule::Module = (
-	MyType::Type = Char
-	
-	List::(T:Type)->() = {
-		x:T
-	}
+	ptrToConst := new [4]Int
 
-	+ main::(args: []String)->Int = {
-		List(Int)
+	+ main::(args::[]:String)->Int = {
 		return 0
 	}
 )

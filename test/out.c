@@ -48,27 +48,20 @@ struct struct_2* new_struct_2(int count)
 /* Forward global declarations */
 
 /* Forward function declarations */
-void test_testModule_List(Type _T, signed char _y);
 signed int test_testModule_main(struct struct_2* _args);
 
-#ifndef ORANGE_PROGRAM_19075
-#define ORANGE_PROGRAM_19075
+#ifndef ORANGE_PROGRAM_22376
+#define ORANGE_PROGRAM_22376
 
 /* Enum definitions */
 
 /* Function definitions */
-void test_testModule_List(Type _T, signed char _y)
-{ /* 171 */
-    signed char _171_x = 0;
-}
-
 signed int test_testModule_main(struct struct_2* _args)
-{ /* 172 */
+{ /* 171 */
     signed int retval;
-    test_testModule_List(test_testModule_MyType, 'd');
     retval = 0;
-    goto return_block_172;
-return_block_172:;
+    goto return_block_171;
+return_block_171:;
     return retval;
 }
 
