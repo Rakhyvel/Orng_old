@@ -1,21 +1,12 @@
 testModule::Module = (
-	Color::Enum = (
-		RED
-		GREEN
-		BLUE
-	)
-	Color2::Enum = (
-		RED
-		GREEN
-		BLUE
-	)
-
-	fn::(c:Color, i:Int)->() = {
-
+	MyType::Type = Char
+	
+	List::(T:Type)->() = {
+		x:T
 	}
 
 	+ main::(args: []String)->Int = {
-		hmm: Color = Color.GREEN
+		List(Int)
 		return 0
 	}
 )

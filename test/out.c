@@ -44,46 +44,31 @@ struct struct_2* new_struct_2(int count)
 /* String definitions */
 
 /* Enums */
-#define test_testModule_Color_RED 0
-#define test_testModule_Color_GREEN 1
-#define test_testModule_Color_BLUE 2
-struct struct_1* test_testModule_Color_toString(int x);
-int test_testModule_Color_length;
 
 /* Forward global declarations */
 
 /* Forward function declarations */
+void test_testModule_List(Type _T, signed char _y);
 signed int test_testModule_main(struct struct_2* _args);
 
-#ifndef ORANGE_PROGRAM_25960
-#define ORANGE_PROGRAM_25960
+#ifndef ORANGE_PROGRAM_19075
+#define ORANGE_PROGRAM_19075
 
 /* Enum definitions */
-struct struct_1 test_testModule_Color_RED_str = {25, {'t', 'e', 's', 't', '_', 't', 'e', 's', 't', 'M', 'o', 'd', 'u', 'l', 'e', '_', 'C', 'o', 'l', 'o', 'r', '_', 'R', 'E', 'D', '\0'}};
-struct struct_1 test_testModule_Color_GREEN_str = {27, {'t', 'e', 's', 't', '_', 't', 'e', 's', 't', 'M', 'o', 'd', 'u', 'l', 'e', '_', 'C', 'o', 'l', 'o', 'r', '_', 'G', 'R', 'E', 'E', 'N', '\0'}};
-struct struct_1 test_testModule_Color_BLUE_str = {26, {'t', 'e', 's', 't', '_', 't', 'e', 's', 't', 'M', 'o', 'd', 'u', 'l', 'e', '_', 'C', 'o', 'l', 'o', 'r', '_', 'B', 'L', 'U', 'E', '\0'}};
-struct struct_1* test_testModule_Color_toString(unsigned int x)
-{
-	switch(x)
-	{
-	case test_testModule_Color_RED:
-		return &test_testModule_Color_RED_str;
-	case test_testModule_Color_GREEN:
-		return &test_testModule_Color_GREEN_str;
-	case test_testModule_Color_BLUE:
-		return &test_testModule_Color_BLUE_str;
-	}
-}
-unsigned int test_testModule_Color_length = 3;
 
 /* Function definitions */
+void test_testModule_List(Type _T, signed char _y)
+{ /* 171 */
+    signed char _171_x = 0;
+}
+
 signed int test_testModule_main(struct struct_2* _args)
-{ /* 169 */
+{ /* 172 */
     signed int retval;
-    signed int _169_hmm = test_testModule_Color_GREEN;
+    test_testModule_List(test_testModule_MyType, 'd');
     retval = 0;
-    goto return_block_169;
-return_block_169:;
+    goto return_block_172;
+return_block_172:;
     return retval;
 }
 

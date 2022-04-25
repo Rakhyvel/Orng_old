@@ -48,7 +48,7 @@ leetcode::Module = (
     // list.
     // https://leetcode.com/problems/add-two-numbers/
     + ListNode::Type = (
-        val:Int
+        ? val:Int
         next:&ListNode
     )
     convertToInt::(l:&ListNode)->Int = {

@@ -1,17 +1,35 @@
 /*
-LEXICAL ANAYLSIS:
-The translator reads in each character from the input file to build a queue of
-tokens.
+To compile:
+- Get symbol tree from parser
+- Validate program root symbol
+- Calculate reachability
+- Add reachable symbols to the VPR
+- From the VPR, generate the output file
 
-PARSING:
-A token is taken off the front of the token queue, and is parsed into a symbol 
-tree, which shows the scope relation between the symbols (variable and procedure
-names). Symbols have code that is associated with them. This code is parsed from
-the token stream into an abstract syntax tree.
+To validate a symbol:
+- Evaluate symbol type
+- Evaluate symbol definition
+- Validate children symbols
 
-GENERATING:
-The combination of the symbol tree, along with each symbol's AST are then 
-converted into C code.
+To evaluate an expression:
+- Evaluate children expressions
+- Validate the expression AST
+- Restructure the AST depending on the AST, potentially calling and running functions at compile-time
+
+To run a function at compiletime:
+- Setup a 'stackframe' structure that has a list of variables and children stackframes
+- Bind arguments of call to parameters of function
+- Variable definitions are AST trees
+- Step through AST of the function definition as if it were an interpreted program
+	- Validate AST before executing the code, validator will need to know about the stack frame and the function's variable bindings
+	- Recursive function calls? Can't modify the function in any way
+	- Make a distinction between procedures which can have side-effects and functions which cannot
+	- No global scope assignment (within scope is ok)
+	- No calling procedures
+	- No allocating/free-ing memory
+	- No dereferencing memory
+	- No referencing external symbols (all has to remain inside Orange)
+	- All this applies to all compile-time expressions
 */
 
 #include "../util/debug.h"

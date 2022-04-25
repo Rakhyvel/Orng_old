@@ -61,7 +61,6 @@ enum astType {
     // Statements
     AST_BLOCK,
     AST_DEFINE,
-	AST_ALIAS,
     AST_ASSIGN,
     AST_ADD_ASSIGN,
     AST_SUB_ASSIGN,

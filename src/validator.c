@@ -1074,11 +1074,9 @@ void argsMatchParams(ASTNode* expr, ASTNode* args, ASTNode* params)
 {
     if (args->children->size == 0 && params->children->size == 0) {
         return;
-    } else if (args->children->size == 0) {
-        error(args->pos, "argument list with no arguments");
     }
 
-    if (((ASTNode*)List_Get(args->children, 0))->astType == AST_NAMED_ARG) {
+    if (args->children->size == 0 || ((ASTNode*)List_Get(args->children, 0))->astType == AST_NAMED_ARG) {
         namedArgsMatch(expr, args, params);
     } else {
         positionalArgsMatch(expr, args, params);
@@ -1931,6 +1929,15 @@ Program Validator_Validate(SymbolNode* symbol)
         // validate valid type def
         validateType(symbol->def);
         // if def ast type is param list then for all define in paramlist children, define symbol is not extern
+        if (symbol->def->astType == AST_PARAMLIST) {
+            for (ListElem* elem = List_Begin(symbol->def->children); elem != List_End(symbol->def->children); elem = elem->next) {
+                ASTNode* define = elem->data;
+                SymbolNode* var = define->data;
+                if (var && var->isExtern) {
+                    error(var->type->pos, "struct field is marked external");
+                }
+            }
+        }
         break;
     }
     case SYMBOL_MODULE: {

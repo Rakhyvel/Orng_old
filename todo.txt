@@ -209,9 +209,10 @@ x default params
 	constPtr::&Int = null		// Cannot change value. Can modify memory
 	freePtr:&:Int = null		// Cannot modify memory, can change value
 	constConstptr::&:Int = null	// Cannot change value nor modify memory
-- functions inside structs
-	- calls to a function defined in a struct are replaced with a call to a regular function (ok to do since they're comptime)
-	- if reference to a struct is dotted, and a fuction that accepts the struct reference as its first argument is the right side of the dot, replace with function call and with struct reference as first argument, like static methods in Java
+- distinction between procedures which can have normal side-effects and functions which cannot
+- procedures inside structs
+	- calls to a procedure defined in a struct are replaced with a call to a regular procedure (ok to do since they're comptime)
+	- if reference to a struct is dotted, and a fuction that accepts the struct reference as its first argument is the right side of the dot, replace with procedure call and with struct reference as first argument, like static methods in Java
 		ex:
 		MyStruct::Type = (
 			state:Int
@@ -255,7 +256,7 @@ x default params
 	- if index is comptime, must be postive
 	- if denominator is comptime, must not be 0
 	- dead code trimming (A MUST! one of the only reasons to have comptime eval)
-	- calls to "pure?" functions are memoized (needed for generics)
+	- calls to functions (not procedures) are memoized (needed for generics)
 - generics
 	- you would need a function that 'returns' a type
 	- make type and expr syntax the same so that `return <type>` works
