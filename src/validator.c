@@ -325,7 +325,7 @@ static ASTNode* expandTypeIdent(ASTNode* type, bool reassigning)
             SymbolNode* symbol = define->data;
             Validator_Validate(symbol);
         }
-    } else if (expanded->astType == AST_FUNCTION) {
+    } else if (expanded->astType == AST_PROCEDURE || expanded->astType == AST_FUNCTION) {
         ListElem* params = List_Begin(expanded->children);
         ListElem* rets = params->next;
         params->data = expandTypeIdent(params->data, true);
@@ -597,6 +597,7 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
     case AST_ENUM:
     case AST_PARAMLIST:
     case AST_FUNCTION:
+    case AST_PROCEDURE:
     case AST_ADDR:
     case AST_ARRAY: {
         type = TYPE_TYPE;
@@ -708,15 +709,12 @@ bool typesAreEquivalent(ASTNode* a, ASTNode* b)
     if (bExpand->astType == AST_IDENT && !strcmp(bExpand->data, "Package")) {
         return true;
     }
-    if (aExpand->astType == AST_FUNCTION && typesAreEquivalent(bExpand, VOID_ADDR_TYPE) || bExpand->astType == AST_FUNCTION && typesAreEquivalent(aExpand, VOID_ADDR_TYPE)) {
-        return true;
-    }
     if (bExpand->isConst && !aExpand->isConst) {
         return false;
     }
 
     bool retval = true;
-    if (aExpand->astType != bExpand->astType) {
+    if (aExpand->astType != bExpand->astType && bExpand->astType != AST_PROCEDURE && aExpand != AST_FUNCTION) {
         if (aExpand->astType == AST_C_ARRAY) {
             ASTNode* dataType = List_Get(aExpand->children, 0);
             retval = typesAreCompatible(dataType, bExpand);
@@ -744,6 +742,7 @@ bool typesAreEquivalent(ASTNode* a, ASTNode* b)
             break;
         }
         case AST_FUNCTION:
+        case AST_PROCEDURE:
             ASTNode* aLeft = List_Begin(aExpand->children)->data;
             ASTNode* aRight = List_Begin(aExpand->children)->next->data;
             ASTNode* bLeft = List_Begin(bExpand->children)->data;
@@ -895,7 +894,8 @@ void validateType(ASTNode* node)
         SymbolNode* var = getDotSymbol(node);
         break;
     }
-    case AST_FUNCTION: {
+    case AST_FUNCTION:
+    case AST_PROCEDURE: {
         ASTNode* params = List_Get(node->children, 0);
         ASTNode* rets = List_Get(node->children, 1);
         validateType(params);
@@ -1206,9 +1206,12 @@ void validateAST(ASTNode* node)
     case AST_RETURN: {
         ASTNode* retval = List_Get(node->children, 0);
         ASTNode* retType = getType(retval, false, false);
-        SymbolNode* function = Symbol_TypeAncestor(node->scope, SYMBOL_FUNCTION);
+        SymbolNode* function = Symbol_TypeAncestor(node->scope, SYMBOL_PROCEDURE);
         if (function == NULL) {
-            error(node->pos, "return not within function");
+            function = Symbol_TypeAncestor(node->scope, SYMBOL_FUNCTION);
+            if (function == NULL) {
+                error(node->pos, "return not within procedure or function");
+            }
         }
         ASTNode* functionType = function->type;
         ASTNode* functionRetType = List_Get(functionType->children, 1);
@@ -1515,6 +1518,12 @@ void validateAST(ASTNode* node)
 
         // cannot cast between function addr and data addr
         ASTNode* exprType = getType(expr, false, false);
+        if (exprType->astType == AST_ADDR && cast->astType == AST_PROCEDURE) {
+            error(node->pos, "cast from data address to procedure address");
+        }
+        if (exprType->astType == AST_PROCEDURE && cast->astType == AST_ADDR) {
+            error(node->pos, "cast from procedure address to data address");
+        }
         if (exprType->astType == AST_ADDR && cast->astType == AST_FUNCTION) {
             error(node->pos, "cast from data address to function address");
         }
@@ -1536,8 +1545,8 @@ void validateAST(ASTNode* node)
         // call is to a function type
         ASTNode* expr = List_Get(node->children, 0);
         ASTNode* exprType = getType(expr, false, false);
-        if (exprType->astType != AST_FUNCTION) {
-            error(node->pos, "call is not to function");
+        if (exprType->astType != AST_PROCEDURE && exprType->astType != AST_FUNCTION) {
+            error(node->pos, "call is not to procedure or function");
         }
         argsMatchParams(expr, List_Get(node->children, 1), List_Get(exprType->children, 0));
         break;
@@ -1618,6 +1627,7 @@ void validateAST(ASTNode* node)
     case AST_ARRAY:
     case AST_ADDR:
     case AST_FUNCTION:
+    case AST_PROCEDURE:
     case AST_NULL:
     case AST_TRUE:
     case AST_FALSE:
@@ -1734,7 +1744,7 @@ void collectStructsMain(SymbolNode* symbol)
         if (symbol->symbolType == SYMBOL_VARIABLE && symbol->type || symbol->symbolType == SYMBOL_TYPE) {
             collectStructs(symbol->type);
             collectStructs(symbol->def);
-        } else if (symbol->symbolType == SYMBOL_FUNCTION && symbol->isReachable) {
+        } else if ((symbol->symbolType == SYMBOL_PROCEDURE || symbol->symbolType == SYMBOL_FUNCTION) && symbol->isReachable) {
             ASTNode* returns = (ASTNode*)List_Get(symbol->type->children, 1);
             if (returns->children->size > 1) {
                 collectStructs(returns);
@@ -1838,7 +1848,7 @@ Program Validator_Validate(SymbolNode* symbol)
 
         includes = Map_Create();
 
-        mainFunctionType = AST_Create(AST_FUNCTION, 0, NULL, (Position) { 0, 0, 0, 0 }, true);
+        mainFunctionType = AST_Create(AST_PROCEDURE, 0, NULL, (Position) { 0, 0, 0, 0 }, true);
         ASTNode* mainFunctionParams = AST_Create(AST_PARAMLIST, 0, NULL, (Position) { 0, 0, 0, 0 }, true);
         SymbolNode* argsDefineSymbol = Symbol_Create("args", SYMBOL_VARIABLE, NULL, (Position) { 0, 0, 0, 0 });
         argsDefineSymbol->type = STRING_ARR_TYPE;
@@ -1851,7 +1861,7 @@ Program Validator_Validate(SymbolNode* symbol)
     }
 
     // Move inner functions up to module level
-    if (symbol->symbolType == SYMBOL_FUNCTION && symbol->parent->symbolType == SYMBOL_BLOCK) {
+    if ((symbol->symbolType == SYMBOL_PROCEDURE || symbol->symbolType == SYMBOL_FUNCTION) && symbol->parent->symbolType == SYMBOL_BLOCK) {
         SymbolNode* realParent = symbol->parent;
         while (realParent->symbolType != SYMBOL_MODULE) {
             realParent = realParent->parent;
@@ -1884,7 +1894,7 @@ Program Validator_Validate(SymbolNode* symbol)
             }
         }
         if (mainFunction == NULL) {
-            gen_error("no main function defined");
+            gen_error("no main procedure defined");
         }
         // Reachability?
         reachableSymbol(mainFunction);
@@ -1930,7 +1940,8 @@ Program Validator_Validate(SymbolNode* symbol)
         }
         break;
     }
-    case SYMBOL_FUNCTION: {
+    case SYMBOL_FUNCTION:
+    case SYMBOL_PROCEDURE: {
         if (!symbol->isExtern) {
             List_Append(functions, symbol);
         }

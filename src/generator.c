@@ -26,7 +26,7 @@ symbol tree to the given node out to the given file.
 static void printPath(FILE* out, SymbolNode* symbol)
 {
     if (symbol->parent && symbol->parent->symbolType != SYMBOL_TYPE && symbol->parent->parent && !symbol->isExtern) {
-        if (symbol->parent->parent->symbolType != SYMBOL_BLOCK && symbol->parent->symbolType != SYMBOL_FUNCTION) {
+        if (symbol->parent->parent->symbolType != SYMBOL_BLOCK && symbol->parent->symbolType != SYMBOL_PROCEDURE && symbol->parent->symbolType != SYMBOL_FUNCTION) {
             printPath(out, symbol->parent);
         }
         fprintf(out, "_%s", symbol->name);
@@ -41,7 +41,7 @@ static int sprintPath(char* str, SymbolNode* symbol)
 {
     char* origStr = str;
     if (symbol->parent && symbol->parent->symbolType != SYMBOL_TYPE && symbol->parent->parent && !symbol->isExtern) {
-        if (symbol->parent->parent->symbolType != SYMBOL_BLOCK && symbol->parent->symbolType != SYMBOL_FUNCTION) {
+        if (symbol->parent->parent->symbolType != SYMBOL_BLOCK && symbol->parent->symbolType != SYMBOL_PROCEDURE && symbol->parent->symbolType != SYMBOL_FUNCTION) {
             str += sprintPath(str, symbol->parent);
         }
         str += sprintf(str, "_%s", symbol->name);
@@ -140,6 +140,7 @@ static void printType(FILE* out, ASTNode* type)
         break;
     }
     case AST_FUNCTION:
+    case AST_PROCEDURE:
         // The second child in a function is the return type
         ASTNode* ret = List_Get(type->children, 1);
         printType(out, ret);
@@ -206,7 +207,7 @@ static void generateDefine(FILE* out, SymbolNode* var, bool param)
 {
     printType(out, var->type);
     fprintf(out, " ");
-    bool functionPtr = !var->type->isConst && var->type->astType == AST_FUNCTION;
+    bool functionPtr = !var->type->isConst && (var->type->astType == AST_PROCEDURE || var->type->astType == AST_FUNCTION);
     if (functionPtr) {
         fprintf(out, "(*");
     }
@@ -614,7 +615,7 @@ static void generateAST(FILE* out, ASTNode* node, int spaces)
         break;
     case AST_DEFINE:
         SymbolNode* var = node->data;
-        if (!(var->symbolType == SYMBOL_FUNCTION && var->type->isConst)) {
+        if (!((var->symbolType == SYMBOL_PROCEDURE || var->symbolType == SYMBOL_FUNCTION) && var->type->isConst)) {
             generateDefine(out, var, false);
         }
         break;
@@ -861,7 +862,7 @@ void generateStrings(FILE* out, List* strings)
 
 void generateForwardFunctions(FILE* out, List* functions)
 {
-    fprintf(out, "/* Forward function declarations */\n");
+    fprintf(out, "/* Forward function and procedure declarations */\n");
     for (ListElem* elem = List_Begin(functions); elem != List_End(functions); elem = elem->next) {
         SymbolNode* symbol = elem->data;
         if (!symbol->isReachable) {
@@ -939,7 +940,7 @@ static int getPathLength(SymbolNode* symbol)
 {
     if (symbol->parent->parent != NULL && !symbol->isExtern) {
         int length = 0;
-        if (symbol->parent->symbolType != SYMBOL_FUNCTION) {
+        if (symbol->parent->symbolType != SYMBOL_PROCEDURE && symbol->parent->symbolType != SYMBOL_FUNCTION) {
             length += getPathLength(symbol->parent);
         }
         return length + strlen(symbol->name) + 1;
@@ -1009,7 +1010,7 @@ void generateGlobalDefinitions(FILE* out, List* globals)
 
 void generateFunctionDefinitions(FILE* out, List* functions)
 {
-    fprintf(out, "/* Function definitions */\n");
+    fprintf(out, "/* Function and procedure definitions */\n");
     global = false;
     for (ListElem* elem = List_Begin(functions); elem != List_End(functions); elem = elem->next) {
         SymbolNode* symbol = elem->data;

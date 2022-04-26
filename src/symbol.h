@@ -11,6 +11,7 @@ typedef enum symbolType {
     SYMBOL_PACKAGE,
     SYMBOL_MODULE,
     SYMBOL_FUNCTION,
+	SYMBOL_PROCEDURE,
     SYMBOL_TYPE, // typedef or struct def
     SYMBOL_ENUM,
     SYMBOL_BLOCK,

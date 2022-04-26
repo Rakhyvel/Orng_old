@@ -93,6 +93,7 @@ enum astType {
 	AST_CONST,
     AST_CAST,
     AST_PARAMLIST,
+	AST_PROCEDURE,
     AST_FUNCTION,
     AST_ADDR,
 	AST_C_ARRAY,

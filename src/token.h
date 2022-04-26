@@ -84,6 +84,7 @@ typedef enum {
 	TOKEN_DEFER,
     // Types
     TOKEN_ARROW,
+	TOKEN_BIG_ARROW,
     TOKEN_AMPERSAND,
     // Comments
     TOKEN_DOC,
@@ -102,5 +103,6 @@ typedef struct token Token;
 
 const char* Token_GetString(_TokenType type);
 const char* Token_GetRepr(_TokenType type);
+const char* Token_GetErrorMsgRepr(_TokenType type);
 
 #endif

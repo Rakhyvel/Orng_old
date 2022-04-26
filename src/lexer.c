@@ -55,7 +55,7 @@ static bool shouldSplitToken(char c, char start, int length)
         || start == ';'
         || start == '?'
         || start == ':'
-        || (start == '=' && c != '=')
+        || (start == '=' && c != '=' & c != '>')
         || (start == '&' && c != '&' && c != '=')
         || (start == '|' && c != '|' && c != '=')
         || (start == '<' && c != '<' && c != '=')

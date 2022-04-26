@@ -67,7 +67,7 @@ static Token* expect(_TokenType type)
     if ((token = accept(type)) != NULL) {
         return token;
     } else {
-        error(prevToken->pos, "expected %s, got %s", Token_GetString(type), Token_GetString(nextToken->type));
+        error(prevToken->pos, "expected '%s', got '%s'", Token_GetErrorMsgRepr(type), Token_GetErrorMsgRepr(nextToken->type));
         return NULL;
     }
 }
@@ -78,7 +78,7 @@ static Token* expect2(_TokenType type, _TokenType type2)
     if ((token = accept2(type, type2)) != NULL) {
         return token;
     } else {
-        error(prevToken->pos, "expected %s, got %s", Token_GetString(type), Token_GetString(nextToken->type));
+        error(prevToken->pos, "expected '%s', got '%s'", Token_GetErrorMsgRepr(type), Token_GetErrorMsgRepr(nextToken->type));
         return NULL;
     }
 }
@@ -223,7 +223,7 @@ static ASTNode* parseFactor(SymbolNode* scope)
         child = AST_Create(AST_NAMED_ARG, text, scope, token->pos, false);
         appendAndMerge(child, parseExpr(scope));
     } else {
-        error(prevToken->pos, "expected expression, got %s", Token_GetString(nextToken->type));
+        error(prevToken->pos, "expected expression, got '%s'", Token_GetErrorMsgRepr(nextToken->type));
     }
     return child;
 }
@@ -1057,6 +1057,8 @@ ASTNode* parseDefine(SymbolNode* scope, bool isPublic)
             symbol->symbolType = SYMBOL_TYPE;
         } else if (type->astType == AST_IDENT && !strcmp(type->data, "Enum")) {
             symbol->symbolType = SYMBOL_ENUM;
+        } else if (type->astType == AST_PROCEDURE && type->isConst) {
+            symbol->symbolType = SYMBOL_PROCEDURE;
         } else if (type->astType == AST_FUNCTION && type->isConst) {
             symbol->symbolType = SYMBOL_FUNCTION;
         } else {
@@ -1083,7 +1085,7 @@ ASTNode* parseDefine(SymbolNode* scope, bool isPublic)
             def = parseType(symbol, true);
         } else if (symbol->symbolType == SYMBOL_ENUM) {
             def = parseEnum(symbol);
-        } else if (symbol->symbolType == SYMBOL_FUNCTION) {
+        } else if (symbol->symbolType == SYMBOL_PROCEDURE || symbol->symbolType == SYMBOL_FUNCTION) {
             if (nextToken->type != TOKEN_LBRACE) { // Wrap non-block statements in blocks
                 SymbolNode* blockScope = Symbol_Create(myItoa(blockUID++), SYMBOL_BLOCK, symbol, prevToken->pos);
                 def = AST_Create(AST_BLOCK, blockScope, symbol, prevToken->pos, false);
@@ -1138,7 +1140,7 @@ ASTNode* parseTypeAtom(SymbolNode* scope, bool isPublic)
             child->astType = AST_VOID;
         }
     } else {
-        error(prevToken->pos, "expected type, got %s", Token_GetString(nextToken->type));
+        error(prevToken->pos, "expected type, got '%s'", Token_GetErrorMsgRepr(nextToken->type));
     }
     return child;
 }
@@ -1168,7 +1170,19 @@ ASTNode* parseTypeFunction(SymbolNode* scope, bool isPublic)
         if ((token = accept(TOKEN_ARROW)) != NULL) {
             while (accept(TOKEN_NEWLINE))
                 ;
-            if (child->astType != AST_FUNCTION && child->astType != AST_PARAMLIST && child->astType != AST_VOID) {
+            if (child->astType != AST_PROCEDURE && child->astType != AST_FUNCTION && child->astType != AST_PARAMLIST && child->astType != AST_VOID) {
+                error(child->pos, "expected parameter list or function");
+            }
+            ASTNode* parent = AST_Create(AST_PROCEDURE, 0, scope, token->pos, false);
+            SymbolNode* hiddenSymbol = Symbol_Create("", SYMBOL_BLOCK, scope, parent->pos); // So that paramlist members are not visible in function
+            ASTNode* right = parseType(hiddenSymbol, isPublic);
+            appendAndMerge(parent, child);
+            appendAndMerge(parent, right);
+            child = parent;
+        } else if ((token = accept(TOKEN_BIG_ARROW)) != NULL) {
+            while (accept(TOKEN_NEWLINE))
+                ;
+            if (child->astType != AST_PROCEDURE && child->astType != AST_FUNCTION && child->astType != AST_PARAMLIST && child->astType != AST_VOID) {
                 error(child->pos, "expected parameter list or function");
             }
             ASTNode* parent = AST_Create(AST_FUNCTION, 0, scope, token->pos, false);
@@ -1255,7 +1269,7 @@ ASTNode* parseType(SymbolNode* scope, bool isPublic)
         return type;
     } else {
         return parseTypeNonConst(scope, isPublic);
-	}
+    }
 }
 
 // Parses the token queue into a symbol tree

@@ -140,6 +140,8 @@ const char* Token_GetString(_TokenType type)
         return "TOKEN_DEFER";
     case TOKEN_ARROW:
         return "TOKEN_ARROW";
+    case TOKEN_BIG_ARROW:
+        return "TOKEN_BIG_ARROW";
     case TOKEN_AMPERSAND:
         return "TOKEN_AMPERSAND";
     case TOKEN_DOC:
@@ -152,6 +154,32 @@ const char* Token_GetString(_TokenType type)
     }
     PANIC("Invalid token type");
     return "";
+}
+
+const char* Token_GetErrorMsgRepr(_TokenType type)
+{
+    switch (type) {
+    case TOKEN_IDENT:
+        return "identifier";
+    case TOKEN_STR:
+        return "string literal";
+    case TOKEN_CHAR:
+        return "character literal";
+    case TOKEN_INT:
+        return "integer literal";
+    case TOKEN_HEX:
+        return "hexadecimal literal";
+    case TOKEN_BIN:
+        return "binary literal";
+    case TOKEN_REAL:
+        return "real number literal";
+    case TOKEN_NEWLINE:
+        return "end of line";
+    case TOKEN_EOF:
+        return "end of file";
+    default:
+        return Token_GetRepr(type);
+    }
 }
 
 const char* Token_GetRepr(_TokenType type)
@@ -279,6 +307,8 @@ const char* Token_GetRepr(_TokenType type)
         return "defer";
     case TOKEN_ARROW:
         return "->";
+    case TOKEN_BIG_ARROW:
+        return "=>";
     case TOKEN_AMPERSAND:
         return "&";
     case TOKEN_DOC:

@@ -1,7 +1,11 @@
 testModule::Module = (
-	ptrToConst := new [4]Int
+	f::(x:Int)=>Real = return x
+	g:(x:Int)->Real = f
+	h:(x:Int)=>Real = f
 
-	+ main::(args::[]:String)->Int = {
+	+ main::(args:[]String)->Int = {
+		f(5)
+		g(5)
 		return 0
 	}
 )
