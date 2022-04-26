@@ -83,8 +83,8 @@ signed int test_testModule_main(struct struct_2* _args);
 void test_testModule_MyType_print(struct struct_3* _self, struct struct_1* _prefix1, struct struct_1* _prefx2);
 signed int stdlib_system_println(struct struct_1* _format, ...);
 
-#ifndef ORANGE_PROGRAM_12695
-#define ORANGE_PROGRAM_12695
+#ifndef ORANGE_PROGRAM_999
+#define ORANGE_PROGRAM_999
 
 /* String definitions */
 struct struct_1 string_23 = {14, {'s', 'e', 'l', 'f', ' ', 'w', 'a', 's', ' ', 'n', 'u', 'l', 'l', '!', '\0'}};
@@ -100,6 +100,7 @@ signed int test_testModule_main(struct struct_2* _args)
 { /* 180 */
     signed int retval;
     struct struct_4 _180_arr = ((struct struct_4){4, 0, 0, 0, 0});
+    test_testModule_MyType_print(_180_arr.data[3], &string_25, &string_26);
     test_testModule_MyType_print(_180_arr.data[3], &string_25, &string_26);
     retval = 0;
     goto return_block_180;

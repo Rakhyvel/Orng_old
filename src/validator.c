@@ -544,6 +544,16 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
             } else {
                 error(leftSymbol->pos, "leftSymbol def ast type was %s, is that right?", AST_GetString(leftSymbol->def->astType));
             }
+        } else if (leftType->astType == AST_IDENT && !strcmp(leftType->data, "Type")) {
+            SymbolNode* leftSymbol = NULL;
+            if (left->astType == AST_IDENT) {
+                leftSymbol = Symbol_Find(left->data, left->scope);
+            } else if (left->astType == AST_DOT) {
+                leftSymbol = getDotSymbol(left);
+            } else {
+                ASSERT(0);
+            }
+            paramlist = leftSymbol->def;
         } else if (leftType->astType == AST_ADDR) {
             paramlist = expandTypeIdent((ASTNode*)List_Get(leftType->children, 0), reassigning);
         } else if (leftType->astType == AST_PARAMLIST || leftType->astType == AST_ARRAY) {
@@ -570,6 +580,9 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
             attr = define->data;
             if (!strcmp(attr->name, right->data)) {
                 ASTNode* retval = expandTypeIdent(attr->type, reassigning);
+                if (leftType->astType == AST_IDENT && !strcmp(leftType->data, "Type") && !retval->isConst) {
+                    error(node->pos, "type access is not a constant");
+                }
                 if (intermediate && retval->astType == AST_IDENT && (!strcmp(retval->data, "Module") || !strcmp(retval->data, "Package"))) {
                     type = attr->def;
                     break;
@@ -1051,7 +1064,8 @@ void positionalArgsMatch(ASTNode* expr, ASTNode* args, ASTNode* params)
 {
     if (expr && expr->astType == AST_DOT && params->children->size > 0) {
         SymbolNode* var = expr->data;
-        if (var->parent && var->parent->symbolType == SYMBOL_TYPE) {
+        ASTNode* exprType = getType(expr, false, false);
+        if (exprType->astType == AST_ADDR && var->parent && var->parent->symbolType == SYMBOL_TYPE) {
             // CALL( DOT(self, methodName), ARGLIST(...) )
             // CALL( DOT(self, methodName), ARGLIST(self, ...) )
             ASTNode* self = List_Get(expr->children, 0);

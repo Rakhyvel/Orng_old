@@ -1136,6 +1136,7 @@ ASTNode* parseTypeAtom(SymbolNode* scope, bool isPublic)
                     ;
             }
         }
+        child->pos = merge(child->pos, token->pos);
         if (child->children->size == 0) {
             child->astType = AST_VOID;
         }
