@@ -468,19 +468,19 @@ outer::()->() = {
 | a \| b           | A <: Int64, B <: Int64   | Bitwise or.                                                                                |
 | a ^ b            | A <: Int64, B <: Int64   | Bitwise xor.                                                                               |
 | a & b            | A <: Int64, B <: Int64   | Bitwise and.                                                                               |
-| a != b           | A <: B, B <: A            | Not equals.                                                                                |
-| a == b           | A <: B, B <: A            | Equals.                                                                                    |
-| a <= b           | A <: Real64, B <: Real64  | Less than or equal to.                                                                     |
-| a >= b           | A <: Real64, B <: Real64  | Greater than or equal to.                                                                  |
-| a < b            | A <: Real64, B <: Real64  | Less than.                                                                                 |
-| a > b            | A <: Real64, B <: Real64  | Greater than.                                                                              |
-| a << b           | A <: Int64, B <: Int64    | Left shift.                                                                                |
-| a >> b           | A <: Int64, B <: Int64    | Right shift.                                                                               |
-| a - b            | A <: Real64, B <: Real64  | Subtraction.                                                                               |
-| a + b            | A <: Real64, B <: Real64  | Addition.                                                                                  |
-| a % b            | A <: Int64, B <: Int64    | Modulus.                                                                                   |
-| a / b            | A <: Real64, B <: Real64  | Division.                                                                                  |
-| a * b            | A <: Real64, B <: Real64  | Multiplication.                                                                            |
+| a != b           | A <: B, B <: A           | Not equals.                                                                                |
+| a == b           | A <: B, B <: A           | Equals.                                                                                    |
+| a <= b           | A <: Real64, B <: Real64 | Less than or equal to.                                                                     |
+| a >= b           | A <: Real64, B <: Real64 | Greater than or equal to.                                                                  |
+| a < b            | A <: Real64, B <: Real64 | Less than.                                                                                 |
+| a > b            | A <: Real64, B <: Real64 | Greater than.                                                                              |
+| a << b           | A <: Int64, B <: Int64   | Left shift.                                                                                |
+| a >> b           | A <: Int64, B <: Int64   | Right shift.                                                                               |
+| a - b            | A <: Real64, B <: Real64 | Subtraction.                                                                               |
+| a + b            | A <: Real64, B <: Real64 | Addition.                                                                                  |
+| a % b            | A <: Int64, B <: Int64   | Modulus.                                                                                   |
+| a / b            | A <: Real64, B <: Real64 | Division.                                                                                  |
+| a * b            | A <: Real64, B <: Real64 | Multiplication.                                                                            |
 | \|A\|            | A <: Type                | Size of type.                                                                              |
 | ~a               | A <: Int64               | Bitwise negation.                                                                          |
 | -a               | A <: Real64              | Negation.                                                                                  |
@@ -489,7 +489,7 @@ outer::()->() = {
 | !a               | A <: Bool                | Boolean not.                                                                               |
 | a.b              | -                        | Dot. `b` must be an identifier, and must be contained within the symbol referred to by `a` |
 | a:B              | A is compatible with B   | Type cast.                                                                                 |
-| a[b]             | A is an array, B <: Int64 | Array indexing. `a` must be an array, cannot index an address                              |
+| a[b]             | A is an array, B <: Int64| Array indexing. `a` must be an array, cannot index an address                              |
 | new A            | A is a type              | Allocation. Calls malloc, fills data with zero-value                                       |
 ## if
 Evaluates the condition, if it evaluates to true, runs the code in the block.

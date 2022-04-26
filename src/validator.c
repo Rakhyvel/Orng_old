@@ -542,7 +542,7 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
                 SymbolNode* dotSymbol = getDotSymbol(leftSymbol->def);
                 paramlist = dotSymbol->def;
             } else {
-                error(leftSymbol->def->pos, "leftSymbol def ast type was %s, is that right?", AST_GetString(leftSymbol->def->astType));
+                error(leftSymbol->pos, "leftSymbol def ast type was %s, is that right?", AST_GetString(leftSymbol->def->astType));
             }
         } else if (leftType->astType == AST_ADDR) {
             paramlist = expandTypeIdent((ASTNode*)List_Get(leftType->children, 0), reassigning);
@@ -1828,6 +1828,80 @@ void reachableSymbol(SymbolNode* symbol)
     }
 }
 
+/*
+	- can't call procedures
+	- can't dereference pointers
+	- can't take addresses of
+	- can't call new or free
+	- can't reference external symbols
+	- can't assign to variables outside of function's scope
+*/
+ASTNode* isASTStateful(ASTNode* node)
+{
+    ListElem* elem = List_Begin(node->children);
+    if (node->astType != AST_DOT) {
+        for (; elem != List_End(node->children); elem = elem->next) {
+            ASTNode* child = elem->data;
+            ASTNode* res = isASTStateful(child);
+            if (res) {
+                return res;
+            }
+        }
+    }
+    switch (node->astType) {
+    case AST_DEREF:
+    case AST_ADDROF:
+    case AST_NEW:
+    case AST_FREE:
+        return node;
+    case AST_INDEX: {
+        ASTNode* child = List_Get(node->children, 0);
+        ASTNode* type = getType(child, false, false);
+        if (type->astType == AST_ADDR) {
+            return node;
+        } else {
+            return NULL;
+        }
+    }
+    case AST_IDENT: {
+        SymbolNode* var = Symbol_Find(node->data, node->scope);
+        if (var->isExtern) {
+            return node;
+        }
+        return var->parent != NULL && var->parent->symbolType != SYMBOL_BLOCK && var->parent->symbolType != SYMBOL_FUNCTION && !var->type->isConst ? node : NULL;
+    }
+    case AST_DOT: {
+        SymbolNode* var = getDotSymbol(node);
+        if (var->isExtern) {
+            return node;
+        }
+        return var->parent != NULL && var->parent->symbolType != SYMBOL_BLOCK && var->parent->symbolType != SYMBOL_FUNCTION && !var->type->isConst ? node : NULL;
+    }
+    case AST_DEFINE: {
+        SymbolNode* var = node->data;
+        ASTNode* res = isASTStateful(var->def);
+        if (res != NULL) {
+            return res;
+        } else if (var->type->astType == AST_ADDR) {
+            return node;
+        } else {
+            return NULL;
+        }
+    }
+    case AST_CALL: {
+        ASTNode* expr = List_Get(node->children, 0);
+        ASTNode* exprType = getType(expr, false, false);
+        if (exprType->astType != AST_FUNCTION) {
+            return node;
+        } else {
+            return NULL;
+		}
+    }
+    default:
+        return NULL;
+    }
+}
+
 Program Validator_Validate(SymbolNode* symbol)
 {
     ASSERT(symbol != NULL);
@@ -1906,7 +1980,7 @@ Program Validator_Validate(SymbolNode* symbol)
     }
     case SYMBOL_PACKAGE: {
         if (!symbol->type->isConst) {
-            error(symbol->def->pos, "package '%s' is not constant", symbol->name);
+            error(symbol->pos, "package '%s' is not constant", symbol->name);
         }
         ListElem* elem = List_Begin(children);
         for (; elem != List_End(children); elem = elem->next) {
@@ -1920,7 +1994,7 @@ Program Validator_Validate(SymbolNode* symbol)
             }
         }
         if (symbol->def->astType != AST_PARAMLIST && symbol->def->astType != AST_VOID) {
-            error(symbol->def->pos, "expected parameter list");
+            error(symbol->pos, "expected parameter list");
         }
         validateAST(symbol->def);
 
@@ -1945,9 +2019,6 @@ Program Validator_Validate(SymbolNode* symbol)
         if (!symbol->isExtern) {
             List_Append(functions, symbol);
         }
-        // no symbols in def symbol tree shadow parameters or ret types:
-        // TODO:	all ret : rets such that ret type* is not stack array
-        // TODO:	lone param in params such that param type is vararg
         ListElem* elem = List_Begin(children);
         for (; elem != List_End(children); elem = elem->next) {
             SymbolNode* child = Map_Get(symbol->children, elem->data);
@@ -1955,13 +2026,19 @@ Program Validator_Validate(SymbolNode* symbol)
         }
         ASTNode* retType = List_Get(symbol->type->children, 1);
         if (symbol->def->astType != AST_UNDEF && retType->astType != AST_VOID && !allReturnPath(symbol->def)) {
-            error(symbol->def->pos, "not all paths return a value in function '%s'", symbol->name);
+            error(symbol->pos, "not all paths return a value in '%s'", symbol->name);
         }
         if (!strcmp(symbol->name, "main") && typesAreEquivalent(mainFunctionType, symbol->type)) {
             if (mainFunction) {
-                error2(symbol->def->pos, mainFunction->def->pos, "multiple main function definitions");
+                error2(symbol->pos, mainFunction->pos, "multiple main function definitions");
             } else if (symbol->isPublic) {
                 mainFunction = symbol;
+            }
+        }
+        ASTNode* statefulNode = NULL;
+        if (symbol->type->isConst && symbol->symbolType == SYMBOL_FUNCTION) {
+            if ((statefulNode = isASTStateful(symbol->def)) != NULL) {
+                error(statefulNode->pos, "stateful expression in function definition");
             }
         }
         break;

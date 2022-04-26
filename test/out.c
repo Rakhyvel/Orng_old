@@ -41,57 +41,32 @@ struct struct_2* new_struct_2(int count)
 	return retval;
 }
 
-struct struct_3 {
-	signed int test_testModule_g_x;
-};
-
-struct struct_3* new_struct_3()
-{
-	struct struct_3* retval = malloc(sizeof(struct struct_3));
-	*retval = ((struct struct_3){0});
-	return retval;
-}
-
 /* String definitions */
 
 /* Enums */
 
 /* Forward global declarations */
-float test_testModule_g;
 
 /* Forward function and procedure declarations */
-float test_testModule_f(signed int _x);
 signed int test_testModule_main(struct struct_2* _args);
 
-#ifndef ORANGE_PROGRAM_658
-#define ORANGE_PROGRAM_658
+#ifndef ORANGE_PROGRAM_32593
+#define ORANGE_PROGRAM_32593
 
 /* Enum definitions */
 
 /* Function and procedure definitions */
-float test_testModule_f(signed int _x)
-{ /* 171 */
-    float retval;
-    retval = _x;
-    goto return_block_171;
-return_block_171:;
-    return retval;
-}
-
 signed int test_testModule_main(struct struct_2* _args)
-{ /* 172 */
+{ /* 180 */
     signed int retval;
-    test_testModule_f(5);
-    test_testModule_g(5);
     retval = 0;
-    goto return_block_172;
-return_block_172:;
+    goto return_block_180;
+return_block_180:;
     return retval;
 }
 
 int main(int argc, char** argv)
 {
-	float (*test_testModule_g) (signed int test_testModule_g_x) = test_testModule_f;
 	struct struct_2* args = calloc(sizeof(struct struct_2*) + sizeof(struct struct_1*) * argc, 1);
 	args->length = argc;
 	for (int  i = 0; i < argc; i++) {

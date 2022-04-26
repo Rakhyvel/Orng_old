@@ -209,7 +209,14 @@ x change const type syntax and semantics
 	constPtr::&Int = null		// Cannot change value. Can modify memory
 	freePtr:&:Int = null		// Cannot modify memory, can change value
 	constConstptr::&:Int = null	// Cannot change value nor modify memory
-- distinction between procedures which can have normal side-effects and functions which cannot
+x distinction between procedures which can have normal side-effects and functions which cannot
+	- can't call procedures
+	x can't dereference pointers
+	x can't take addresses of
+	x can't take in pointers
+	x can't call new or free
+	x can't reference external symbols
+	x can't assign to variables outside of function's scope
 - procedures inside structs
 	- calls to a procedure defined in a struct are replaced with a call to a regular procedure (ok to do since they're comptime)
 	- if reference to a struct is dotted, and a fuction that accepts the struct reference as its first argument is the right side of the dot, replace with procedure call and with struct reference as first argument, like static methods in Java
@@ -298,3 +305,10 @@ x change const type syntax and semantics
 		}
 	}
 - rewrite in Orng
+- `if let` from zig or odin or whatever
+	// Wrap if in a separate scope
+	if node := isASTStateful(symbol->def); node != NULL && symbol.symbolType == SYMBOL_FUNCTION {
+		
+	} else if node % 2 != 0 {
+		
+	}

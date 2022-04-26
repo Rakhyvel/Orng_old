@@ -90,7 +90,6 @@ enum astType {
     AST_DOT,
     // Types
     AST_VOID,
-	AST_CONST,
     AST_CAST,
     AST_PARAMLIST,
 	AST_PROCEDURE,

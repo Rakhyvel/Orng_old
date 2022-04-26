@@ -1,11 +1,17 @@
 testModule::Module = (
-	f::(x:Int)=>Real = return x
-	g:(x:Int)->Real = f
-	h:(x:Int)=>Real = f
+	globalVar: Int
+	globalConst::Int = 5
+
+	f::(x:[5]Char)=>Int = {
+		for i := 0; i < x.length; i += 1 {
+			x[i] = 'd'
+		}
+		return globalConst + g(x.length)
+	}
+
+	g::(x::Int)=>Int = return x
 
 	+ main::(args:[]String)->Int = {
-		f(5)
-		g(5)
 		return 0
 	}
 )
