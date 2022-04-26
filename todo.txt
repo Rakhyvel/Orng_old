@@ -219,7 +219,7 @@ x distinction between procedures which can have normal side-effects and function
 	x can't assign to variables outside of function's scope
 - procedures inside structs
 	- calls to a procedure defined in a struct are replaced with a call to a regular procedure (ok to do since they're comptime)
-	- if reference to a struct is dotted, and a fuction that accepts the struct reference as its first argument is the right side of the dot, replace with procedure call and with struct reference as first argument, like static methods in Java
+	x if reference to a struct is dotted, and a fuction that accepts the struct reference as its first argument is the right side of the dot, replace with procedure call and with struct reference as first argument
 		ex:
 		MyStruct::Type = (
 			state:Int
@@ -231,9 +231,7 @@ x distinction between procedures which can have normal side-effects and function
 		x := new MyStruct
 		MyStruct.fn(x, 4) // x's state increments by 4
 		x.fn(4) // equivalent function call
-	- generalizes to anything comptime in a struct? or any comptime definition?
-		- think about inner functions
-	- enums have length and toString function
+	- enums have length field and toString procedure
 - unions like in julia and haskell
 	- add parenthesis to type syntax
 		- needed for union types

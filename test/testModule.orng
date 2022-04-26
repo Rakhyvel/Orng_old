@@ -1,17 +1,19 @@
 testModule::Module = (
-	globalVar: Int
-	globalConst::Int = 5
+	MyType::Type = (
+		x:Int
 
-	f::(x:[5]Char)=>Int = {
-		for i := 0; i < x.length; i += 1 {
-			x[i] = 'd'
+		print::(self:&MyType, prefix1:String="", prefx2:String="")->() = {
+			if self == null {
+				stdlib.system.println("self was null!")
+			} else {
+				stdlib.system.println("%d", self.x)
+			}
 		}
-		return globalConst + g(x.length)
-	}
-
-	g::(x::Int)=>Int = return x
+	)
 
 	+ main::(args:[]String)->Int = {
+		arr: [4]&MyType
+		arr[3].print()
 		return 0
 	}
 )

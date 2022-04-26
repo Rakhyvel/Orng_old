@@ -58,6 +58,9 @@ void Symbol_Print(SymbolNode* root, wchar_t* prefix, wchar_t* childrenPrefix)
     case SYMBOL_MODULE:
         printf("[SYMBOL_MODULE]\n");
         break;
+    case SYMBOL_PROCEDURE:
+        printf("[SYMBOL_PROCEDURE]\n");
+        break;
     case SYMBOL_FUNCTION:
         printf("[SYMBOL_FUNCTION]\n");
         break;
@@ -110,7 +113,13 @@ struct symbolNode* Symbol_Find(const char* symbolName, const struct symbolNode* 
     if (symbol != NULL) {
         return symbol;
     } else if (scope->parent != NULL) {
-        SymbolNode* var = Symbol_Find(symbolName, scope->parent);
+        SymbolNode* parentNode = scope->parent;
+        if (scope->symbolType == SYMBOL_PROCEDURE || scope->symbolType == SYMBOL_FUNCTION) {
+            while (parentNode->symbolType == SYMBOL_TYPE || parentNode->symbolType == SYMBOL_PROCEDURE || parentNode->symbolType == SYMBOL_FUNCTION) {
+                parentNode = parentNode->parent;
+            }
+        }
+        SymbolNode* var = Symbol_Find(symbolName, parentNode);
         if (scope->isRestricted && !List_Contains(scope->restrictions, var) && scope != var && var != 0) {
             rejectingSymbol = scope;
             return -1;

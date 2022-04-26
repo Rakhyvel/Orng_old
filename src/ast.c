@@ -244,7 +244,12 @@ int AST_TypeRepr(char* str, ASTNode* type)
     case AST_ADDR: {
         ASTNode* child = List_Get(type->children, 0);
         str += sprintf(str, "&");
-        str += AST_TypeRepr(str, child);
+        if (child->visited) {
+            str += sprintf(str, "..");
+        } else {
+            child->visited = true;
+            str += AST_TypeRepr(str, child);
+        }
     } break;
     case AST_C_ARRAY: {
         ASTNode* child = List_Get(type->children, 0);

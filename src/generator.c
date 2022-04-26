@@ -25,7 +25,7 @@ symbol tree to the given node out to the given file.
 */
 static void printPath(FILE* out, SymbolNode* symbol)
 {
-    if (symbol->parent && symbol->parent->symbolType != SYMBOL_TYPE && symbol->parent->parent && !symbol->isExtern) {
+    if (symbol->parent && (symbol->parent->symbolType != SYMBOL_TYPE || symbol->symbolType == SYMBOL_PROCEDURE) && symbol->parent->parent && !symbol->isExtern) {
         if (symbol->parent->parent->symbolType != SYMBOL_BLOCK && symbol->parent->symbolType != SYMBOL_PROCEDURE && symbol->parent->symbolType != SYMBOL_FUNCTION) {
             printPath(out, symbol->parent);
         }
@@ -63,6 +63,8 @@ static void printDot(FILE* out, ASTNode* dot, SymbolNode* scope)
         ASTNode* right = List_Begin(dot->children)->next->data;
         ASTNode* leftType = left->type;
         if (dotSymbol && leftType->astType == AST_IDENT && (!strcmp(leftType->data, "Module") || !strcmp(leftType->data, "Package") || !strcmp(leftType->data, "Enum"))) {
+            printPath(out, dotSymbol);
+        } else if (dotSymbol && dotSymbol->type->isConst) {
             printPath(out, dotSymbol);
         } else if (leftType->astType == AST_ADDR) {
             generateAST(out, left, 0);
@@ -191,11 +193,14 @@ static void generateDefaultValue(FILE* out, ASTNode* type)
             SymbolNode* var = define->data;
             if (var->def->astType == AST_UNDEF) {
                 generateDefaultValue(out, var->type);
-            } else {
+                if (elem->next != List_End(type->children)) {
+                    fprintf(out, ", ");
+                }
+            } else if (!((var->symbolType == SYMBOL_PROCEDURE || var->symbolType == SYMBOL_FUNCTION) && var->type->isConst)) {
                 generateAST(out, var->def, 0);
-            }
-            if (elem->next != List_End(type->children)) {
-                fprintf(out, ", ");
+                if (elem->next != List_End(type->children)) {
+                    fprintf(out, ", ");
+                }
             }
         }
         fprintf(out, "})");
@@ -786,9 +791,11 @@ static void generateStruct(FILE* out, DGraph* graphNode)
     for (; paramElem != List_End(_struct->children); paramElem = paramElem->next) {
         ASTNode* define = paramElem->data;
         SymbolNode* var = define->data;
-        fprintf(out, "\t");
-        generateDefine(out, var, true);
-        fprintf(out, ";\n");
+        if (!((var->symbolType == SYMBOL_PROCEDURE || var->symbolType == SYMBOL_FUNCTION) && var->type->isConst)) {
+            fprintf(out, "\t");
+            generateDefine(out, var, true);
+            fprintf(out, ";\n");
+        }
     }
     fprintf(out, "};\n\n");
 
@@ -839,6 +846,24 @@ void generateString(FILE* out, char* string)
         }
     }
     fprintf(out, "'\\0'}};\n");
+}
+
+void generateForwardStrings(FILE* out, List* strings)
+{
+    fprintf(out, "/* Forward string declarations */\n");
+    ListElem* elem = List_Begin(strings);
+    int i = -1;
+    ASTNode* stringRawType = List_Get(STRING_TYPE->children, 0);
+    for (; elem != List_End(strings); elem = elem->next) {
+        i++;
+        ASTNode* node = elem->data;
+        if (!node->scope->isReachable) {
+            continue;
+        }
+        printType(out, stringRawType);
+        fprintf(out, " string_%d;\n", i);
+    }
+    fprintf(out, "\n");
 }
 
 void generateStrings(FILE* out, List* strings)
@@ -1106,11 +1131,12 @@ void Generator_Generate(Program _program, FILE* out)
 
     generateIncludes(out, program.includes);
     generateStructDefinitions(out, program.dependencyGraph);
-    generateStrings(out, program.strings);
+    generateForwardStrings(out, program.strings);
     generateEnums(out, program.enums);
     generateForwardGlobals(out, program.globalVars);
     generateForwardFunctions(out, program.functions);
     fprintf(out, "#ifndef ORANGE_PROGRAM_%s\n#define ORANGE_PROGRAM_%s\n\n", myItoa(randID), myItoa(randID));
+    generateStrings(out, program.strings);
     generateEnumFunctions(out, program.enums);
     generateFunctionDefinitions(out, program.functions);
     generateMainFunction(out, program.mainFunction);

@@ -987,7 +987,7 @@ void inferTypes(SymbolNode* var)
 
 void namedArgsMatch(ASTNode* expr, ASTNode* args, ASTNode* params)
 {
-    Map* argNames = Map_Create();
+    Map* argNames = Map_Create(); // maps param names:String -> arg expressions:&ASTNode
 
     for (ListElem* elem = List_Begin(args->children); elem != List_End(args->children); elem = elem->next) {
         ASTNode* namedArg = elem->data;
@@ -1002,6 +1002,20 @@ void namedArgsMatch(ASTNode* expr, ASTNode* args, ASTNode* params)
 
     while (!List_IsEmpty(args->children)) {
         List_Pop(args->children);
+    }
+
+    if (expr && expr->astType == AST_DOT && params->children->size > 0) {
+        SymbolNode* var = expr->data;
+        if (var->parent && var->parent->symbolType == SYMBOL_TYPE) {
+            // CALL( DOT(self, methodName), ARGLIST(...) )
+            // CALL( DOT(self, methodName), ARGLIST(self, ...) )
+            ASTNode* self = List_Get(expr->children, 0);
+            ASTNode* firstParamDefine = List_Get(params->children, 0);
+            SymbolNode* firstParamVar = firstParamDefine->data;
+            if (Map_Put(argNames, firstParamVar->name, self)) {
+                error(self->pos, "self argument already specified in the argument list");
+            }
+        }
     }
 
     for (ListElem* elem = List_Begin(params->children); elem != List_End(params->children); elem = elem->next) {
@@ -1035,6 +1049,16 @@ void namedArgsMatch(ASTNode* expr, ASTNode* args, ASTNode* params)
 
 void positionalArgsMatch(ASTNode* expr, ASTNode* args, ASTNode* params)
 {
+    if (expr && expr->astType == AST_DOT && params->children->size > 0) {
+        SymbolNode* var = expr->data;
+        if (var->parent && var->parent->symbolType == SYMBOL_TYPE) {
+            // CALL( DOT(self, methodName), ARGLIST(...) )
+            // CALL( DOT(self, methodName), ARGLIST(self, ...) )
+            ASTNode* self = List_Get(expr->children, 0);
+            List_Push(args->children, self);
+        }
+    }
+
     // arguments are correct arity
     ListElem* paramElem = List_Begin(params->children);
     bool isVararg = false;
@@ -1895,7 +1919,7 @@ ASTNode* isASTStateful(ASTNode* node)
             return node;
         } else {
             return NULL;
-		}
+        }
     }
     default:
         return NULL;
@@ -2035,6 +2059,7 @@ Program Validator_Validate(SymbolNode* symbol)
                 mainFunction = symbol;
             }
         }
+        validateAST(symbol->def);
         ASTNode* statefulNode = NULL;
         if (symbol->type->isConst && symbol->symbolType == SYMBOL_FUNCTION) {
             if ((statefulNode = isASTStateful(symbol->def)) != NULL) {
