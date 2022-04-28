@@ -1,6 +1,8 @@
 testModule::Module = (
 	+ main::(args:[]String)->Int = {
-		x := new (z:Int = 3, y:Int = 10)
+		defer {
+			4
+		}
 		return 0
 	}
 )

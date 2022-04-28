@@ -41,18 +41,6 @@ struct struct_2* new_struct_2(int count)
 	return retval;
 }
 
-struct struct_3 {
-	signed int z;
-	signed int y;
-};
-
-struct struct_3* new_struct_3()
-{
-	struct struct_3* retval = malloc(sizeof(struct struct_3));
-	*retval = ((struct struct_3){3, 10});
-	return retval;
-}
-
 /* Verbatim code */
 int stdlib_system_println(struct struct_1* _format, ...) {
     va_list _25_args;
@@ -73,8 +61,8 @@ int stdlib_system_println(struct struct_1* _format, ...) {
 /* Forward function and procedure declarations */
 signed int test_testModule_main(struct struct_2* _args);
 
-#ifndef ORANGE_PROGRAM_13244
-#define ORANGE_PROGRAM_13244
+#ifndef ORANGE_PROGRAM_16183
+#define ORANGE_PROGRAM_16183
 
 /* String definitions */
 
@@ -84,17 +72,23 @@ signed int test_testModule_main(struct struct_2* _args);
 signed int test_testModule_main(struct struct_2* _args)
 {
 	signed int retval;
-// AST_DEFINE
+int defer_0 = 0;
+// Unknown ASTNode type
 // test/testModule.orng:3
-	struct struct_3* _0 = calloc(sizeof(struct struct_3), 1);
-	*_0 = ((struct struct_3){3, 10});
-	struct struct_3* _176_x = _0;
-// AST_RETURN
-// test/testModule.orng:4
-	signed int _1 = 0;
-	retval = _1;
+defer_0 = 1;// AST_RETURN
+// test/testModule.orng:6
+	signed int _0 = 0;
+	retval = _0;
 	goto return_block_176;
+if (defer_0)
+// AST_INT
+// test/testModule.orng:4
+	signed int _1 = 4;
 return_block_176:;
+if (defer_0)
+// AST_INT
+// test/testModule.orng:4
+	signed int _2 = 4;
     return retval;
 }
 int main(int argc, char** argv)
