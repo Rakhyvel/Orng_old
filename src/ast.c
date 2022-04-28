@@ -390,14 +390,8 @@ char* AST_GetString(enum astType type)
         return "AST_ASSIGN";
     case AST_IF:
         return "AST_IF";
-    case AST_IFELSE:
-        return "AST_IFELSE";
-    case AST_WHILE:
-        return "AST_WHILE";
     case AST_FOR:
         return "AST_FOR";
-    case AST_DO_WHILE:
-        return "AST_DO_WHILE";
     case AST_SWITCH:
         return "AST_SWITCH";
     case AST_CASE:

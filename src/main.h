@@ -28,6 +28,7 @@ typedef struct {
     List* enums;
     List* dependencyGraph;
     List* strings;
+    List* verbatims;
     Map* includes;
     SymbolNode* mainFunction;
 } Program;

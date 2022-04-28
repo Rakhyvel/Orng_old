@@ -11,8 +11,10 @@ static const List* globalVars = NULL;
 static const List* enums = NULL;
 static const List* depenGraph = NULL;
 static const List* strings = NULL;
+static const List* verbatims = NULL;
 static const Map* includes = NULL;
 static const SymbolNode* mainFunction = NULL;
+static List* types;
 
 static const ASTNode* mainFunctionType;
 static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning);
@@ -202,8 +204,7 @@ static void validateLValue(ASTNode* node)
         }
         break;
     }
-    case AST_PAREN:
-    case AST_CAST: {
+    case AST_PAREN:{
         ASTNode* child = List_Get(node->children, 0);
         validateLValue(child);
         break;
@@ -346,6 +347,21 @@ static ASTNode* expandTypeIdent(ASTNode* type, bool reassigning)
     }
 
     return expanded;
+}
+
+void collectType (ASTNode* type) {
+    ListElem* elem = List_Begin(types);
+    bool withinList = false;
+    for (; elem != List_End(types); elem = elem->next) {
+        ASTNode* otherType = elem->data;
+        if (typesAreEquivalent(otherType, type)) {
+            withinList = true;
+            break;
+        }
+    }
+    if (!withinList) {
+        List_Append(types, type);
+    }
 }
 
 /*
@@ -497,9 +513,7 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
     case AST_DEFINE:
     case AST_IF:
     case AST_IFELSE:
-    case AST_WHILE:
     case AST_FOR:
-    case AST_DO_WHILE:
     case AST_SWITCH:
     case AST_CASE:
     case AST_RETURN:
@@ -635,6 +649,7 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
     }
 
     node->type = type;
+    collectType(type);
     return type;
 }
 
@@ -727,7 +742,7 @@ bool typesAreEquivalent(ASTNode* a, ASTNode* b)
     }
 
     bool retval = true;
-    if (aExpand->astType != bExpand->astType && bExpand->astType != AST_PROCEDURE && aExpand != AST_FUNCTION) {
+    if (aExpand->astType != bExpand->astType && !(bExpand->astType == AST_PROCEDURE && aExpand == AST_FUNCTION)) {
         if (aExpand->astType == AST_C_ARRAY) {
             ASTNode* dataType = List_Get(aExpand->children, 0);
             retval = typesAreCompatible(dataType, bExpand);
@@ -993,6 +1008,7 @@ void inferTypes(SymbolNode* var)
                 // Types annot.'d, types agree
                 var->type = expandTypeIdent(var->type, true);
                 validateType(var->type);
+                var->def->type = var->type;
             }
         }
     }
@@ -1176,7 +1192,7 @@ void validateAST(ASTNode* node)
     node->isValid = true;
 
     if (node->astType != AST_DOT && node->astType != AST_SIZEOF && node->astType != AST_CAST && node->astType != AST_NEW && node->astType != AST_ENUM) {
-        if (node->astType == AST_FOR || node->astType == AST_WHILE || node->astType == AST_DO_WHILE) {
+        if (node->astType == AST_FOR) {
             ASTNode* lastNode = List_Get(node->children, node->children->size - 2);
             List_Push(loops, lastNode->data);
         }
@@ -1188,7 +1204,7 @@ void validateAST(ASTNode* node)
             node->containsBreak |= statement->astType == AST_BREAK || statement->containsBreak;
             node->containsContinue |= statement->astType == AST_CONTINUE || statement->containsContinue;
             node->containsReturn |= statement->astType == AST_RETURN || statement->containsReturn;
-            if (i == node->children->size - 1 && (node->astType == AST_FOR || node->astType == AST_WHILE || node->astType == AST_DO_WHILE)) {
+            if (i == node->children->size - 1 && node->astType == AST_FOR) {
                 List_Pop(loops);
             }
             i++;
@@ -1198,9 +1214,7 @@ void validateAST(ASTNode* node)
     switch (node->astType) {
     case AST_IF:
     case AST_IFELSE:
-    case AST_WHILE:
-    case AST_NOT:
-    case AST_DO_WHILE: {
+    case AST_NOT: {
         // condition (#0) is bool type
         ASTNode* condition = List_Get(node->children, 0);
         ASTNode* conditionType = getType(condition, false, false);
@@ -1280,7 +1294,6 @@ void validateAST(ASTNode* node)
         break;
     }
     case AST_DEFINE: {
-        // symbol is not already defined
         SymbolNode* var = node->data;
         /// var type is not Type or Enum
         if (var->type->astType != AST_IDENT || strcmp(var->type->data, "Type") && strcmp(var->type->data, "Enum")) {
@@ -1404,7 +1417,9 @@ void validateAST(ASTNode* node)
         ASTNode* rightType = getType(right, false, true);
         if (!typesAreEquivalent(rightType, leftType)) {
             typeMismatchError(right->pos, leftType, rightType);
-        }
+        } else {
+            right->type = leftType;
+		}
 
         // left type is an l-value
         validateLValue(left);
@@ -1957,8 +1972,11 @@ Program Validator_Validate(SymbolNode* symbol)
         enums = List_Create();
         depenGraph = List_Create();
         strings = List_Create();
+        verbatims = List_Create();
 
         includes = Map_Create();
+
+        types = List_Create();
 
         mainFunctionType = AST_Create(AST_PROCEDURE, 0, NULL, (Position) { 0, 0, 0, 0 }, true);
         ASTNode* mainFunctionParams = AST_Create(AST_PARAMLIST, 0, NULL, (Position) { 0, 0, 0, 0 }, true);
@@ -1985,6 +2003,7 @@ Program Validator_Validate(SymbolNode* symbol)
     if (symbol->type) {
         symbol->type = expandTypeIdent(symbol->type, true);
         validateType(symbol->type);
+        collectType(symbol->type);
     }
 
     if (symbol->parent && symbol->parent->symbolType != SYMBOL_TYPE) {
@@ -2037,6 +2056,7 @@ Program Validator_Validate(SymbolNode* symbol)
         validateAST(symbol->def);
 
         SymbolNode* includesSymbol = Map_Get(symbol->children, "includes");
+        SymbolNode* verbatimSymbol = Map_Get(symbol->children, "verbatim");
         if (includesSymbol) {
             if (includesSymbol->def->astType != AST_ARRAY_LITERAL) {
                 error(includesSymbol->pos, "includes array must be a string array");
@@ -2048,6 +2068,19 @@ Program Validator_Validate(SymbolNode* symbol)
                     typeMismatchError(stringLiteral->pos, STRING_TYPE, stringLiteral->type);
                 }
                 Map_Put(includes, stringLiteral->data, 1);
+            }
+        }
+        if (verbatimSymbol) {
+            if (verbatimSymbol->def->astType != AST_ARRAY_LITERAL) {
+                error(verbatimSymbol->pos, "verbatim array must be a string array");
+            }
+            ListElem* e = List_Begin(verbatimSymbol->def->children);
+            for (; e != List_End(verbatimSymbol->def->children); e = e->next) {
+                ASTNode* stringLiteral = e->data;
+                if (!typesAreEquivalent(stringLiteral->type, STRING_TYPE)) {
+                    typeMismatchError(stringLiteral->pos, STRING_TYPE, stringLiteral->type);
+                }
+                List_Append(verbatims, stringLiteral->data);
             }
         }
         break;
@@ -2140,5 +2173,5 @@ Program Validator_Validate(SymbolNode* symbol)
     }
     }
 
-    return (Program) { functions, globalVars, enums, depenGraph, strings, includes, mainFunction };
+    return (Program) { functions, globalVars, enums, depenGraph, strings, verbatims, includes, mainFunction };
 }

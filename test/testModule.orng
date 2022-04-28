@@ -1,20 +1,6 @@
 testModule::Module = (
-	MyType::Type = (
-		x:Int
-
-		print::(self:&MyType, prefix1:String="", prefx2:String="")->() = {
-			if self == null {
-				stdlib.system.println("self was null!")
-			} else {
-				stdlib.system.println("%d", self.x)
-			}
-		}
-	)
-
 	+ main::(args:[]String)->Int = {
-		arr: [4]&MyType
-		arr[3].print()
-		MyType.print(arr[3])
+		leetcode.test_all()
 		return 0
 	}
 )

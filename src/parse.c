@@ -717,14 +717,14 @@ static ASTNode* parseFor(SymbolNode* scope)
     ASTNode* pre = parseStatement(NULL);
     if (pre && !accept(TOKEN_NEWLINE)) {
         if (accept(TOKEN_LBRACE)) {
-            // For loop acts as while loop
-            forNode->astType = AST_WHILE;
             ASTNode* body = parseBlock(scope);
             SymbolNode* blockSymbol = body->data;
             blockSymbol->isLoop = true;
 
             rebaseScope(pre, blockSymbol);
+            appendAndMerge(forNode, AST_Create(AST_UNDEF, NULL, scope, pre->pos, false));
             appendAndMerge(forNode, pre);
+            appendAndMerge(forNode, AST_Create(AST_UNDEF, NULL, scope, pre->pos, false));
             appendAndMerge(forNode, body);
             return forNode;
         } else {
@@ -868,6 +868,9 @@ static ASTNode* parseDefer(SymbolNode* scope)
 {
     ASTNode* defer = AST_Create(AST_DEFER, scope->defers->size, scope, prevToken->pos, false);
     ASTNode* deferStatement = parseStatement(scope);
+    if (deferStatement == NULL) {
+        error(defer->pos, "expected statement after defer");
+    }
     List_Append(scope->defers, deferStatement);
     appendAndMerge(defer, deferStatement);
     return defer;
@@ -875,30 +878,30 @@ static ASTNode* parseDefer(SymbolNode* scope)
 
 static ASTNode* parseStatement(SymbolNode* scope)
 {
-    if (accept(TOKEN_LBRACE)) {
+    if (accept(TOKEN_LBRACE)) { // Evaluates to last evaluated expression in the block
         return parseBlock(scope);
-    } else if (accept(TOKEN_IF)) {
+    } else if (accept(TOKEN_IF)) { // Evaluates to to block evaluated
         return parseIf(scope);
-    } else if (accept(TOKEN_FOR)) {
+    } else if (accept(TOKEN_FOR)) { // Evaluates to to block evaluated
         return parseFor(scope);
-    } else if (accept(TOKEN_CONTINUE)) {
-        return AST_Create(AST_CONTINUE, "continue", scope, prevToken->pos, false);
-    } else if (accept(TOKEN_BREAK)) {
-        return AST_Create(AST_BREAK, "break", scope, prevToken->pos, false);
-    } else if (accept(TOKEN_SWITCH)) {
+    } else if (accept(TOKEN_SWITCH)) { // Evaluates to to block evaluated
         return parseSwitch(scope);
-    } else if (accept(TOKEN_RETURN)) {
-        return parseReturn(scope);
-    } else if (accept(TOKEN_RESTRICT)) {
+    } else if (accept(TOKEN_RESTRICT)) { // Evaluates to to block evaluated
         return parseRestrict(scope);
-    } else if (accept(TOKEN_NEWLINE) || accept(TOKEN_SEMICOLON)) {
+    } else if (accept(TOKEN_CONTINUE)) { // not expr
+        return AST_Create(AST_CONTINUE, "continue", scope, prevToken->pos, false);
+    } else if (accept(TOKEN_BREAK)) { // not expr
+        return AST_Create(AST_BREAK, "break", scope, prevToken->pos, false);
+    } else if (accept(TOKEN_RETURN)) { // not expr
+        return parseReturn(scope);
+    } else if (accept(TOKEN_NEWLINE) || accept(TOKEN_SEMICOLON)) { // not expr
         return NULL;
-    } else if ((nextToken->type == TOKEN_IDENT && nextNextToken->type == TOKEN_COLON) || (nextToken->type == TOKEN_IDENT && nextNextToken->type == TOKEN_RESTRICT)) {
+    } else if ((nextToken->type == TOKEN_IDENT && nextNextToken->type == TOKEN_COLON) || (nextToken->type == TOKEN_IDENT && nextNextToken->type == TOKEN_RESTRICT)) { // not expr
         return parseDefine(scope, false);
-    } else if (accept(TOKEN_DEFER)) {
+    } else if (accept(TOKEN_DEFER)) { // not expr
         return parseDefer(scope);
     } else {
-        return parseExpr(scope);
+        return parseExpr(scope); // plain expression, evals to itself
     }
 }
 

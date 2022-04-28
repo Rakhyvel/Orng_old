@@ -37,9 +37,9 @@ typedef enum {
     TOKEN_DGTR_ASSIGN,
     TOKEN_PLUS,
     TOKEN_MINUS,
+    TOKEN_DMINUS,
     TOKEN_STAR,
     TOKEN_SLASH,
-    TOKEN_DSLASH,
     TOKEN_PERCENT,
     // Bitwise
     TOKEN_TILDE,
@@ -96,7 +96,7 @@ typedef enum {
 // Used to break up lexicographical meaning
 struct token {
     _TokenType type;
-    char data[255];
+    char data[500];
     Position pos;
 };
 typedef struct token Token;

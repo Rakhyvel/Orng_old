@@ -223,12 +223,12 @@ const char* Token_GetRepr(_TokenType type)
         return "+";
     case TOKEN_MINUS:
         return "-";
+    case TOKEN_DMINUS:
+        return "--";
     case TOKEN_STAR:
         return "*";
     case TOKEN_SLASH:
         return "/";
-    case TOKEN_DSLASH:
-        return "//";
     case TOKEN_PERCENT:
         return "%";
     case TOKEN_TILDE:

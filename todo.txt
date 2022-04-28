@@ -210,15 +210,15 @@ x change const type syntax and semantics
 	freePtr:&:Int = null		// Cannot modify memory, can change value
 	constConstptr::&:Int = null	// Cannot change value nor modify memory
 x distinction between procedures which can have normal side-effects and functions which cannot
-	- can't call procedures
+	x can't call procedures
 	x can't dereference pointers
 	x can't take addresses of
 	x can't take in pointers
 	x can't call new or free
 	x can't reference external symbols
 	x can't assign to variables outside of function's scope
-- procedures inside structs
-	- calls to a procedure defined in a struct are replaced with a call to a regular procedure (ok to do since they're comptime)
+x procedures inside structs
+	x calls to a procedure defined in a struct are replaced with a call to a regular procedure (ok to do since they're comptime)
 	x if reference to a struct is dotted, and a fuction that accepts the struct reference as its first argument is the right side of the dot, replace with procedure call and with struct reference as first argument
 		ex:
 		MyStruct::Type = (
@@ -231,18 +231,41 @@ x distinction between procedures which can have normal side-effects and function
 		x := new MyStruct
 		MyStruct.fn(x, 4) // x's state increments by 4
 		x.fn(4) // equivalent function call
-	- enums have length field and toString procedure
+	x enums have length field and toString procedure
+- imitation LLVM
+	x basic blocks that either call another block or return from the function
+	- all ASTs store their temporary values in temporary variables marked _x where x is a number
+		x lvalues
+		- short circuit && and ||?
+		- recycle unused variables, depends on AST height
+		- calculate sizeof during validation, output int
+	- statements are expressions, return is implied = almost functional programming
+		- blocks evaluate to the last expression in the block
+		- if-else as a ternary operator
+		- if evaluates to it's block value
+		- for loops evaluate to their block value
+		- switches evaluate to their case's block's value
+		- restricts evaluate to their block's value
+		- returns set the return value of the function, jump to return path like normal
+	x custom if, while, for loops using gotos(!)
+	- relational operator chainings
+		- wasn't possible before because of duplication of code. Now that can be inlined
+		- can't mix directionality (ie chaining < and >)
+		- have to be transitive operators (== < <= > >=)
+	- array bounds checking
+	- remove new struct functions, since it can now be done inline
+	- remove parens AST as it isn't necessary anymore
+	- breaks should bust out of switches inside loops
 - unions like in julia and haskell
-	- add parenthesis to type syntax
-		- needed for union types
-		&(Int | Char) vs (&Int) | Char
-	struct {
-		bool isLeft;
-		union {
-			<type> left;
-			<type> right;
-		} data;
-	}
+	- Only practical uses are Either, and Maybe. Either is only ever used to pass error messages
+	- Tagged union and enums
+		- void type is implied if no type is given
+		- void fields in unions aren't generated
+		- enums are tagged unions with the identifiers having a default void value
+		- enums shouldn't coerce to int anymore
+	- type switch switches on the type of an union/enum
+		union: 
+		switch union
 	- runtime errors
 		- !<Type> which is just shorthand for Error | <Type>
 		- return an error code
@@ -275,13 +298,13 @@ x distinction between procedures which can have normal side-effects and function
 		- requires in-struct function definitions, which shouldn't be too much of a problem
 	- interfaces define a list of functions for a struct type
 	- if there exists function definitions for the struct type ANYWHERE in the program, the struct type implements the interface
-- LLVM?
 - quantifiers from Alloy
 	- basically just iterators, use interface above
 	- should be expressions, generate as a function call
 	- for x : X  {}		# for each loop
 	- all x : X, P		# all x in X satisfy P
 	- some x : X, P		# one or more x in X satisfy P
+- LLVM
 - test suite with @[...] for attributes
 	test::Attribute = ()->()! # What type do symbols with this attribute have?
 	@[test]
@@ -310,3 +333,42 @@ x distinction between procedures which can have normal side-effects and function
 	} else if node % 2 != 0 {
 		
 	}
+
+No prereqs:
+- type unions
+	- hard
+- return inference
+	- easy
+- function composition operator
+	- easy
+- no syntactical difference between procedures and functions, just confuses things
+	- true, easy, if symbol's type is constant make sure def is stateless
+
+Compile-time eval:
+- setup a runtime, interpret program at runtime and simplify/prune
+
+Generics:
+- generic types and functions
+	- requires 'stamping'
+	- I prefer the Zig way of doing it with compile-time compilation, requires compile-time compilation
+- x, y: Type
+	- syntax change, combine type and expression syntax (after generics) and make grammar before this
+- subset/predicate set-builder notation
+	- generics
+
+Interfaces:
+- lazy evaluated lists
+	- Can be achieved with iterator interface, or some other form of interface
+- all, some quantifiers
+	- interfaces
+- summation, products, union, intersection, complement (map, reduce)
+	- interfaces
+- subset operator
+	- interfaces
+	- all a : A, a is in B
+
+Move to LLVM:
+- if-else as ternary operator
+	- syntax change, may need to move to LLVM for this since it might require control-flows that aren't possible in C
+- relational operator chaining
+	- need to wait until move to LLVM, control-flow not possible in C

@@ -167,7 +167,7 @@ Token* Lexer_GetNextToken(FILE* in)
         span = 1;
     }
     // Ignore tokens until newline if line comment
-    else if (token->type == TOKEN_DSLASH) {
+    else if (token->type == TOKEN_DMINUS) {
         Token* junk;
         inComment = true;
         do {
