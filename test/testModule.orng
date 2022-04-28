@@ -1,8 +1,6 @@
 testModule::Module = (
 	+ main::(args:[]String)->Int = {
-		defer {
-			4
-		}
+		leetcode.test_all()
 		return 0
 	}
 )

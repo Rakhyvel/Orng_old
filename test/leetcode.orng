@@ -95,24 +95,37 @@ leetcode::Module = (
     }
 
 
-    -- Given a string s, find the length of the longest substring without 
+    -- The characters in str from i to j are unique
+    areDistinct::(str:String, i:Int, j:Int)->Bool = {
+        -- Note : Default values in visited are false
+        visited:[256]Bool
+        for k := i; k <= j; k += 1 {
+            charCode := str[k]:Int
+            if visited[charCode] {
+                return false
+            }
+            visited[charCode] = true
+        }
+        return true
+    }
+    -- Given a string str, find the length of the longest substring without 
     -- repeating characters.
     -- https://leetcode.com/problems/longest-substring-without-repeating-characters/
-    + lengthOfLongestSubstring::(s:String)->Int = {
-        longest := 0
-        for i := 0; i < s.length; i += 1 {
-            visited: [256]Bool
-            for j := i; j < s.length; j += 1 {
-                if visited[s[j]] {
-                    break
-                } else {
-                    longest = stdlib.math.max(longest, j - i + 1):Int
-                    visited[s[j]] = true
+    + lengthOfLongestSubstring::(str:String)->Int = {
+        n := str.length;
+        res := 0; 
+        
+        -- try all possible substrings
+        -- for each unique one, remember the longest
+        for i := 0; i < n; i += 1 {
+            for j := i; j < n; j += 1 {
+                if areDistinct(str, i, j) {
+                    res = stdlib.math.max(res, j - i + 1):Int
                 }
             }
-            visited[s[i]] = false
         }
-        return longest
+                    
+        return res;
     }
 
     + test_lengthOfLongestSubstring::()->() = {
@@ -123,7 +136,7 @@ leetcode::Module = (
         if ans == 3 {
             stdlib.system.println("lengthOfLongestSubstring: Passed!")
         } else {
-            stdlib.system.println("lengthOfLongestSubstring: Failed")
+            stdlib.system.println("lengthOfLongestSubstring: Failed %d", ans)
         }
     }
 

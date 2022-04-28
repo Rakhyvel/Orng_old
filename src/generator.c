@@ -25,9 +25,12 @@ symbol tree to the given node out to the given file.
 */
 static void printPath(FILE* out, SymbolNode* symbol)
 {
-    if (symbol->parent && (symbol->parent->symbolType != SYMBOL_TYPE || symbol->symbolType == SYMBOL_PROCEDURE) && symbol->parent->parent && !symbol->isExtern) {
+    if (symbol->symbolType == SYMBOL_VARIABLE && symbol->parent && symbol->parent->symbolType == SYMBOL_BLOCK) {
+        fprintf(out, "_%s_%s", symbol->parent->name, symbol->name);
+    } else if (symbol->parent && (symbol->parent->symbolType != SYMBOL_TYPE || symbol->symbolType == SYMBOL_PROCEDURE) && symbol->parent->parent && !symbol->isExtern) {
         if (symbol->parent->symbolType != SYMBOL_VARIABLE) { // Done so that fields in anon structs collected by variable types don't have their variable names appended
-            if (symbol->parent->parent->symbolType != SYMBOL_BLOCK && symbol->parent->symbolType != SYMBOL_PROCEDURE && symbol->parent->symbolType != SYMBOL_FUNCTION) {
+            // Done so that inner functions print correctly (i think)
+            if (symbol->symbolType == SYMBOL_VARIABLE || (symbol->parent->parent->symbolType != SYMBOL_BLOCK && symbol->parent->symbolType != SYMBOL_PROCEDURE && symbol->parent->symbolType != SYMBOL_FUNCTION)) {
                 printPath(out, symbol->parent);
             }
             fprintf(out, "_%s", symbol->name);
@@ -41,6 +44,7 @@ static void printPath(FILE* out, SymbolNode* symbol)
     }
 }
 
+// Used for enum printing
 static int sprintPath(char* str, SymbolNode* symbol)
 {
     char* origStr = str;
@@ -235,20 +239,27 @@ static void generateDefine(FILE* out, SymbolNode* var, bool param)
     }
 }
 
+static void resetBlockName(ASTNode* node)
+{
+    if (node->astType == AST_BLOCK) {
+        SymbolNode* symbol = node->data;
+        strncpy(symbol->name, myItoa(blockUID++), 255);
+    }
+    for (ListElem* elem = List_Begin(node->children); elem != List_End(node->children); elem = elem->next) {
+        ASTNode* child = elem->data;
+        resetBlockName(child);
+    }
+}
+
 static void generateDefers(FILE* out, List* defers)
 {
     int defer = defers->size - 1;
     for (ListElem* elem = List_End(defers)->prev; elem->prev != NULL; elem = elem->prev) {
         ASTNode* statement = elem->data;
-        fprintf(out, "if (defer_%d)\n", defer);
-        if (statement->astType == AST_BLOCK) {
-            generateAST(out, statement, false);
-        } else {
-            generateAST(out, statement, false);
-        }
-        if (statement->astType != AST_BLOCK && statement->astType != AST_IF && statement->astType != AST_IFELSE && statement->astType != AST_FOR && statement->astType != AST_SWITCH) {
-            fprintf(out, ";\n");
-        }
+        resetBlockName(statement);
+        fprintf(out, "\tif (defer_%d) {\n", defer);
+        generateAST(out, statement, false);
+        fprintf(out, "\t}\n");
         defer--;
     }
 }
@@ -303,7 +314,7 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
         SymbolNode* symbolTree = node->data;
 
         for (int i = 0; i < symbolTree->defers->size; i++) {
-            fprintf(out, "int defer_%d = 0;\n", i);
+            fprintf(out, "\tint defer_%d = 0;\n", i);
         }
 
         // Print each child of the block
@@ -316,51 +327,22 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
         List_Pop(blockStack);
 
         if (!List_IsEmpty(blockStack) && (node->containsReturn || node->containsContinue || node->containsBreak) && symbolTree->defers->size > 0) {
-            fprintf(out, "if (0) {\n");
-
+            fprintf(out, "\t goto continue_%s;\n", symbolTree->name);
             if (node->containsReturn) {
                 fprintf(out, "return_block_%s:;\n", symbolTree->name);
                 generateDefers(out, symbolTree->defers);
                 ASTNode* parentBlock = List_Peek(blockStack);
-                fprintf(out, "goto return_block_%s;\n", ((SymbolNode*)parentBlock->data)->name);
+                fprintf(out, "\tgoto return_block_%s;\n", ((SymbolNode*)parentBlock->data)->name);
             }
 
             if (node->containsBreak) {
-                fprintf(out, "break_block_%s:;\n", symbolTree->name);
+                fprintf(out, "break_defer_%s:;\n", symbolTree->name);
                 generateDefers(out, symbolTree->defers);
-                SymbolNode* parentSymbol = symbolTree->parent;
-                while (parentSymbol->defers->size == 0 && parentSymbol->parent->symbolType == SYMBOL_BLOCK && !parentSymbol->isLoop) {
-                    parentSymbol = parentSymbol->parent;
-                }
-                if (parentSymbol->defers->size == 0) {
-                    fprintf(out, "break;\n");
-                } else if (!parentSymbol->isLoop) {
-                    fprintf(out, "goto return_block_%s;\n", parentSymbol->name);
-                } else {
-                    fprintf(out, "goto break_block_%s;\n", parentSymbol->name);
-                }
+                fprintf(out, "\tgoto end_%s;\n", symbolTree->name);
             }
-
-            if (node->containsContinue) {
-                fprintf(out, "continue_block_%s:;\n", symbolTree->name);
-                generateDefers(out, symbolTree->defers);
-                SymbolNode* parentSymbol = symbolTree->parent;
-                while (parentSymbol->defers->size == 0 && parentSymbol->parent->symbolType == SYMBOL_BLOCK && !parentSymbol->isLoop) {
-                    parentSymbol = parentSymbol->parent;
-                }
-                if (parentSymbol->defers->size == 0) {
-                    fprintf(out, "continue;\n");
-                } else {
-                    fprintf(out, "goto continue_block_%s;\n", parentSymbol->name);
-                }
-            }
-
-            fprintf(out, "} else {\n");
-            generateDefers(out, symbolTree->defers);
-            fprintf(out, "}\n");
-        } else {
-            generateDefers(out, symbolTree->defers);
         }
+        fprintf(out, "continue_%s:;\n", symbolTree->name);
+        generateDefers(out, symbolTree->defers);
         break;
     }
     case AST_IF: {
@@ -379,9 +361,9 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
         ASTNode* elseBody = List_Begin(node->children)->next->next->data;
         SymbolNode* bodySymbol = body->data;
         int conditionID = generateAST(out, condition, false);
-        fprintf(out, "\tif (!%d) goto begin_%s;\n", conditionID, bodySymbol->name);
+        fprintf(out, "\tif (!_%d) goto else_%s;\n", conditionID, bodySymbol->name);
         generateAST(out, body, false);
-        fprintf(out, "\tgoto end_%s;\nbegin_%s:;\n", bodySymbol->name, bodySymbol->name);
+        fprintf(out, "\tgoto end_%s;\nelse_%s:;\n", bodySymbol->name, bodySymbol->name);
         generateAST(out, elseBody, false);
         fprintf(out, "end_%s:;\n", bodySymbol->name);
         break;
@@ -398,7 +380,6 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
         int conditionID = generateAST(out, condition, 0, false);
         fprintf(out, "\tif (!_%d) goto end_%s;\n", conditionID, bodySymbol->name);
         generateAST(out, body, false);
-        fprintf(out, "continue_%s:;\n", bodySymbol->name);
         generateAST(out, post, 0, false);
         fprintf(out, "\tgoto begin_%s;\nend_%s:;\n", bodySymbol->name, bodySymbol->name);
         break;
@@ -449,11 +430,14 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
     case AST_BREAK: {
         ASTNode* parentBlock = List_Peek(blockStack);
         SymbolNode* parentSymbol = parentBlock->data;
-        //while (parentSymbol->defers->size == 0 && parentSymbol->parent->symbolType == SYMBOL_BLOCK && !parentSymbol->isLoop) {
-        while (parentSymbol->parent->symbolType == SYMBOL_BLOCK && !parentSymbol->isLoop) {
+        while (parentSymbol->defers->size == 0 && parentSymbol->parent->symbolType == SYMBOL_BLOCK && !parentSymbol->isLoop) {
             parentSymbol = parentSymbol->parent;
         }
-        fprintf(out, "\tgoto end_%s;\n", parentSymbol->name);
+        if (parentSymbol->defers->size == 0) {
+            fprintf(out, "\tgoto end_%s;\n", parentSymbol->name);
+        } else {
+            fprintf(out, "\tgoto break_defer_%s;\n", parentSymbol->name);
+        }
     } break;
     case AST_CONTINUE: {
         ASTNode* parentBlock = List_Peek(blockStack);
@@ -463,12 +447,19 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
         }
         fprintf(out, "\tgoto continue_%s;\n", parentSymbol->name);
     } break;
+    case AST_DEFER: {
+        fprintf(out, "\tdefer_%d = 1;\n", (int)node->data);
+        return -1;
+    }
+    case AST_DEFINE:
+        SymbolNode* var = node->data;
+        if (!((var->symbolType == SYMBOL_PROCEDURE || var->symbolType == SYMBOL_FUNCTION) && var->type->isConst)) {
+            generateDefine(out, var, false);
+        }
+        break;
     case AST_NEW: {
         ASTNode* type = List_Get(node->children, 0);
-        int id = printTempVar(out, node);
-        fprintf(out, "calloc(sizeof(");
-        printType(out, type);
-        fprintf(out, "), 1);\n");
+        int id = -1;
         if (type->astType == AST_ARRAY) {
             ASTNode* dataDefine = List_Get(type->children, 1);
             SymbolNode* dataSymbol = dataDefine->data;
@@ -476,23 +467,35 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
             ASTNode* dataType = List_Get(dataAddrType->children, 0);
             ASTNode* dataLength = List_Get(dataAddrType->children, 1);
             int lengthID = generateAST(out, dataLength, false);
+            id = printTempVar(out, node);
+            fprintf(out, "malloc(sizeof(signed int) + sizeof(");
+            printType(out, dataType);
+            fprintf(out, ") * _%d);\n", lengthID);
             fprintf(out, "\t_%d->length = _%d;\n", id, lengthID);
             fprintf(out, "\tfor(int i = 0; i < _%d; i++) {_%d->data[i] = ", lengthID, id);
             generateDefaultValue(out, dataType);
             fprintf(out, ";}\n");
         } else if (type->astType == AST_PARAMLIST) {
+            id = printTempVar(out, node);
+            fprintf(out, "calloc(sizeof(");
+            printType(out, type);
+            fprintf(out, "), 1);\n");
             fprintf(out, "\t*_%d = ", id);
             generateDefaultValue(out, type);
             fprintf(out, ";\n");
+        } else {
+            id = printTempVar(out, node);
+            fprintf(out, "calloc(sizeof(");
+            printType(out, type);
+            fprintf(out, "), 1);\n");
         }
         return id;
     }
     case AST_FREE: {
         ASTNode* child = List_Get(node->children, 0);
-        fprintf(out, "free(");
-        generateAST(out, child, false);
-        fprintf(out, ")");
-        break;
+        int leftID = generateAST(out, child, false);
+        fprintf(out, "\tfree(_%d);\n", leftID);
+        return -1;
     }
     case AST_IDENT: {
         SymbolNode* var = Symbol_Find(node->data, node->scope);
@@ -514,10 +517,6 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
             fprintf(out, ";\n");
         }
         return id;
-    }
-    case AST_DEFER: {
-        fprintf(out, "defer_%d = 1;", (int)node->data);
-        return -1;
     }
     case AST_NULL:
     case AST_TRUE:
@@ -587,38 +586,34 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
         List_Destroy(ids);
         return id;
     }
-    case AST_DEFINE:
-        SymbolNode* var = node->data;
-        if (!((var->symbolType == SYMBOL_PROCEDURE || var->symbolType == SYMBOL_FUNCTION) && var->type->isConst)) {
-            generateDefine(out, var, false);
-        }
-        break;
     case AST_INDEX: {
         ASTNode* left = List_Begin(node->children)->data;
         ASTNode* right = List_Begin(node->children)->next->data;
         ASTNode* leftType = left->type;
 
         int indexID = generateAST(out, right, false);
+        int arrID = -1;
+        if (leftType->astType != AST_ARRAY) {
+            arrID = generateAST(out, left, false);
+        }
         int id = -1;
+
         if (!isLValue) {
-            int arrID = generateAST(out, left, false);
             id = printTempVar(out, node);
-            if (leftType->astType == AST_ARRAY) {
+        } else if (printTab) {
+            fprintf(out, "\t");
+            printTab = false;
+        }
+
+        if (leftType->astType == AST_ARRAY) {
+            if (arrID != -1) {
                 fprintf(out, "_%d.data", arrID);
-            } else if (leftType->astType == AST_ADDR && ((ASTNode*)List_Get(leftType->children, 0))->astType == AST_ARRAY) {
-                fprintf(out, "_%d->data", arrID);
-            }
-        } else {
-            if (printTab) {
-                fprintf(out, "\t");
-                printTab = false;
-            }
-            generateAST(out, left, true);
-            if (leftType->astType == AST_ARRAY) {
+            } else {
+                generateAST(out, left, true);
                 fprintf(out, ".data");
-            } else if (leftType->astType == AST_ADDR && ((ASTNode*)List_Get(leftType->children, 0))->astType == AST_ARRAY) {
-                fprintf(out, "->data");
             }
+        } else if (leftType->astType == AST_ADDR && ((ASTNode*)List_Get(leftType->children, 0))->astType == AST_ARRAY) {
+            fprintf(out, "_%d->data", arrID);
         }
         fprintf(out, "[_%d]", indexID);
         if (!isLValue) {
@@ -630,7 +625,7 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
         int id = -1;
         if (!isLValue) {
             int leftID = generateAST(out, node->children->head.next->data, false);
-            int id = printTempVar(out, node);
+            id = printTempVar(out, node);
             fprintf(out, "_%d;\n", leftID);
         } else {
             if (printTab) {
@@ -785,6 +780,14 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
             fprintf(out, "%s", node->data);
             generateAST(out, node->children->head.next->data, true);
         }
+        return id;
+    }
+    case AST_TERNARY: {
+        int conditionID = generateAST(out, List_Get(node->children, 0), false);
+        int leftID = generateAST(out, List_Get(node->children, 1), false);
+        int rightID = generateAST(out, List_Get(node->children, 2), false);
+        int id = printTempVar(out, node);
+        fprintf(out, "_%d ? _%d : _%d;\n", conditionID, leftID, rightID);
         return id;
     }
     case AST_CAST: {

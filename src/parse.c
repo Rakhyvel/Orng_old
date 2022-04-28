@@ -22,7 +22,7 @@ static Token* nextToken;
 // Pointer to the token that is just after the front of the token queue
 static Token* nextNextToken;
 // The next unique identifier used for indexing blocks
-static int blockUID = 1;
+int blockUID = 1;
 static int arrayUID = 1;
 
 /*
@@ -83,7 +83,7 @@ static Token* expect2(_TokenType type, _TokenType type2)
     }
 }
 
-static void rebaseScope(ASTNode* node, SymbolNode* newScope)
+void rebaseScope(ASTNode* node, SymbolNode* newScope)
 {
     node->scope = newScope;
     if (node->astType == AST_DEFINE) {

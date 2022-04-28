@@ -370,6 +370,10 @@ char* AST_GetString(enum astType type)
         return "AST_BIT_XOR";
     case AST_BIT_AND:
         return "AST_BIT_AND";
+    case AST_ADD_ASSIGN:
+        return "AST_ADD_ASSIGN";
+    case AST_SUB_ASSIGN:
+        return "AST_SUB_ASSIGN";
     case AST_MULT_ASSIGN:
         return "AST_DIV_ASSIGN";
     case AST_DIV_ASSIGN:
@@ -390,6 +394,8 @@ char* AST_GetString(enum astType type)
         return "AST_ASSIGN";
     case AST_IF:
         return "AST_IF";
+    case AST_IFELSE:
+        return "AST_IFELSE";
     case AST_FOR:
         return "AST_FOR";
     case AST_SWITCH:
@@ -398,6 +404,10 @@ char* AST_GetString(enum astType type)
         return "AST_CASE";
     case AST_RETURN:
         return "AST_RETURN";
+    case AST_BREAK:
+        return "AST_BREAK";
+    case AST_CONTINUE:
+        return "AST_CONTINUE";
     case AST_NEW:
         return "AST_NEW";
     case AST_FREE:
@@ -422,6 +432,8 @@ char* AST_GetString(enum astType type)
         return "AST_ENUM";
     case AST_EXTERN:
         return "AST_EXTERN";
+    case AST_DEFER:
+        return "AST_DEFER";
     default:
         return "Unknown ASTNode type";
     }
