@@ -25,9 +25,16 @@ symbol tree to the given node out to the given file.
 */
 static void printPath(FILE* out, SymbolNode* symbol)
 {
+	// Local variables
     if (symbol->symbolType == SYMBOL_VARIABLE && symbol->parent && symbol->parent->symbolType == SYMBOL_BLOCK) {
         fprintf(out, "_%s_%s", symbol->parent->name, symbol->name);
-    } else if (symbol->parent && (symbol->parent->symbolType != SYMBOL_TYPE || symbol->symbolType == SYMBOL_PROCEDURE) && symbol->parent->parent && !symbol->isExtern) {
+    } 
+	// Parameters
+	else if (symbol->symbolType == SYMBOL_VARIABLE && symbol->parent && (symbol->parent->symbolType == SYMBOL_FUNCTION || symbol->parent->symbolType == SYMBOL_PROCEDURE)) {
+        fprintf(out, "_%s", symbol->name);
+    }
+	// Everything else
+	else if (symbol->parent && (symbol->parent->symbolType != SYMBOL_TYPE || symbol->symbolType == SYMBOL_PROCEDURE) && symbol->parent->parent && !symbol->isExtern) {
         if (symbol->parent->symbolType != SYMBOL_VARIABLE) { // Done so that fields in anon structs collected by variable types don't have their variable names appended
             // Done so that inner functions print correctly (i think)
             if (symbol->symbolType == SYMBOL_VARIABLE || (symbol->parent->parent->symbolType != SYMBOL_BLOCK && symbol->parent->symbolType != SYMBOL_PROCEDURE && symbol->parent->symbolType != SYMBOL_FUNCTION)) {
@@ -320,8 +327,8 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
         // Print each child of the block
         for (ListElem* elem = List_Begin(node->children); elem != List_End(node->children); elem = elem->next) {
             ASTNode* statement = elem->data;
-            fprintf(out, "// %s\n", AST_GetString(statement->astType));
-            fprintf(out, "// %s:%d\n", getRelPath(statement->pos.filename), statement->pos.start_line);
+            //fprintf(out, "// %s\n", AST_GetString(statement->astType));
+            //fprintf(out, "// %s:%d\n", getRelPath(statement->pos.filename), statement->pos.start_line);
             generateAST(out, elem->data, false);
         }
         List_Pop(blockStack);
@@ -591,29 +598,40 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
         ASTNode* right = List_Begin(node->children)->next->data;
         ASTNode* leftType = left->type;
 
+
         int indexID = generateAST(out, right, false);
         int arrID = -1;
-        if (leftType->astType != AST_ARRAY) {
+        if (leftType->astType != AST_ARRAY || !isLValue) { // Expensive to copy arrays, just index it directly
             arrID = generateAST(out, left, false);
         }
         int id = -1;
 
         if (!isLValue) {
             id = printTempVar(out, node);
-        } else if (printTab) {
-            fprintf(out, "\t");
-            printTab = false;
         }
 
         if (leftType->astType == AST_ARRAY) {
             if (arrID != -1) {
+                if (printTab) {
+                    fprintf(out, "\t");
+                    printTab = false;
+                }
                 fprintf(out, "_%d.data", arrID);
             } else {
                 generateAST(out, left, true);
                 fprintf(out, ".data");
             }
         } else if (leftType->astType == AST_ADDR && ((ASTNode*)List_Get(leftType->children, 0))->astType == AST_ARRAY) {
-            fprintf(out, "_%d->data", arrID);
+            if (arrID != -1) {
+                if (printTab) {
+                    fprintf(out, "\t");
+                    printTab = false;
+                }
+                fprintf(out, "_%d->data", arrID);
+            } else {
+                generateAST(out, left, true);
+                fprintf(out, "->data");
+            }
         }
         fprintf(out, "[_%d]", indexID);
         if (!isLValue) {
@@ -923,22 +941,6 @@ static void generateStruct(FILE* out, DGraph* graphNode)
         }
     }
     fprintf(out, "};\n\n");
-
-    if (_struct->astType == AST_ARRAY) {
-        ASTNode* leftDef = List_Get(_struct->children, 0);
-        SymbolNode* leftSymbol = leftDef->data;
-        ASTNode* rightDef = List_Get(_struct->children, 1);
-        SymbolNode* rightSymbol = rightDef->data;
-        fprintf(out, "struct struct_%s* new_struct_%s(int count)\n{\n\tstruct struct_%s* retval = malloc(sizeof(signed int) + sizeof(", structOrdStr, structOrdStr, structOrdStr);
-        printType(out, rightSymbol->type);
-        fprintf(out, ") * count);\n\tfor(int i = 0; i < count; i++) {\n\t\tretval->data[i] = ");
-        generateDefaultValue(out, rightSymbol);
-        fprintf(out, ";\n\t}\n\tretval->length = count;\n\treturn retval;\n}\n\n");
-    } else {
-        fprintf(out, "struct struct_%s* new_struct_%s()\n{\n\tstruct struct_%s* retval = malloc(sizeof(struct struct_%s));\n\t*retval = ", structOrdStr, structOrdStr, structOrdStr, structOrdStr);
-        generateDefaultValue(out, _struct);
-        fprintf(out, ";\n\treturn retval;\n}\n\n");
-    }
 }
 
 void generateStructDefinitions(FILE* out, List* depenGraph)
@@ -1206,7 +1208,7 @@ void generateFunctionDefinitions(FILE* out, List* functions)
                 fprintf(out, "    return retval;\n");
             }
         }
-        fprintf(out, "}\n");
+        fprintf(out, "}\n\n");
     }
 }
 

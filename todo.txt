@@ -234,11 +234,10 @@ x procedures inside structs
 	x enums have length field and toString procedure
 - imitation LLVM
 	x basic blocks that either call another block or return from the function
-	- all ASTs store their temporary values in temporary variables marked _x where x is a number
+	x all ASTs store their temporary values in temporary variables marked _x where x is a number
 		x lvalues
-		- short circuit && and ||?
-		- recycle unused variables, depends on AST height
-		- calculate sizeof during validation, output int
+		- short circuit && and ||
+		- calculate sizeof during validation, output int AST
 	- statements are expressions, return is implied = almost functional programming
 		- blocks evaluate to the last expression in the block
 		- if-else as a ternary operator
@@ -253,9 +252,9 @@ x procedures inside structs
 		- can't mix directionality (ie chaining < and >)
 		- have to be transitive operators (== < <= > >=)
 	- array bounds checking
-	- remove new struct functions, since it can now be done inline
-	- remove parens AST as it isn't necessary anymore
+	x remove new struct functions, since it can now be done inline
 	- breaks should bust out of switches inside loops
+		- change case syntax?
 - unions like in julia and haskell
 	- Only practical uses are Either, and Maybe. Either is only ever used to pass error messages
 	- Tagged union and enums

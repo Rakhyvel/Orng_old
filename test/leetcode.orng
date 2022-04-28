@@ -95,23 +95,23 @@ leetcode::Module = (
     }
 
 
-    -- The characters in str from i to j are unique
-    areDistinct::(str:String, i:Int, j:Int)->Bool = {
-        -- Note : Default values in visited are false
-        visited:[256]Bool
-        for k := i; k <= j; k += 1 {
-            charCode := str[k]:Int
-            if visited[charCode] {
-                return false
-            }
-            visited[charCode] = true
-        }
-        return true
-    }
     -- Given a string str, find the length of the longest substring without 
     -- repeating characters.
     -- https://leetcode.com/problems/longest-substring-without-repeating-characters/
     + lengthOfLongestSubstring::(str:String)->Int = {
+        -- The characters in str from i to j are unique
+        areDistinct::(str:String, i:Int, j:Int)->Bool = {
+            -- Note : Default values in visited are false
+            visited:[256]Bool
+            for k := i; k <= j; k += 1 {
+                charCode := str[k]:Int
+                if visited[charCode] {
+                    return false
+                }
+                visited[charCode] = true
+            }
+            return true
+        }
         n := str.length;
         res := 0; 
         
