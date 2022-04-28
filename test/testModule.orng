@@ -1,6 +1,6 @@
 testModule::Module = (
 	+ main::(args:[]String)->Int = {
-		leetcode.test_all()
+		x := new (z:Int = 3, y:Int = 10)
 		return 0
 	}
 )

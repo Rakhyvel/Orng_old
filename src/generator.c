@@ -176,7 +176,7 @@ static void generateDefaultValue(FILE* out, ASTNode* type)
                     fprintf(out, ", ");
                 }
             } else if (!((var->symbolType == SYMBOL_PROCEDURE || var->symbolType == SYMBOL_FUNCTION) && var->type->isConst)) {
-                generateAST(out, var->def, false);
+                generateAST(out, var->def, true);
                 if (elem->next != List_End(type->children)) {
                     fprintf(out, ", ");
                 }
@@ -471,29 +471,27 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
     } break;
     case AST_NEW: {
         ASTNode* type = List_Get(node->children, 0);
+        int id = printTempVar(out, node);
+        fprintf(out, "calloc(sizeof(");
+        printType(out, type);
+        fprintf(out, "), 1);\n");
         if (type->astType == AST_ARRAY) {
             ASTNode* dataDefine = List_Get(type->children, 1);
             SymbolNode* dataSymbol = dataDefine->data;
             ASTNode* dataAddrType = dataSymbol->type;
             ASTNode* dataType = List_Get(dataAddrType->children, 0);
             ASTNode* dataLength = List_Get(dataAddrType->children, 1);
-            if (dataLength->astType != AST_UNDEF) {
-                fprintf(out, "new_");
-                printStructOrd(out, type);
-                fprintf(out, "(");
-                generateAST(out, dataLength, false);
-                fprintf(out, ")");
-            } else {
-                fprintf(out, "calloc(sizeof(");
-                printType(out, type);
-                fprintf(out, "), 1)");
-            }
-        } else {
-            fprintf(out, "calloc(sizeof(");
-            printType(out, type);
-            fprintf(out, "), 1)");
+            int lengthID = generateAST(out, dataLength, false);
+            fprintf(out, "\t_%d->length = _%d;\n", id, lengthID);
+            fprintf(out, "\tfor(int i = 0; i < _%d; i++) {_%d->data[i] = ", lengthID, id);
+            generateDefaultValue(out, dataType);
+            fprintf(out, ";}\n");
+        } else if (type->astType == AST_PARAMLIST) {
+            fprintf(out, "\t*_%d = ", id);
+            generateDefaultValue(out, type);
+            fprintf(out, ";\n");
         }
-        break;
+        return id;
     }
     case AST_FREE: {
         ASTNode* child = List_Get(node->children, 0);
@@ -762,7 +760,7 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
         int rightID = generateAST(out, node->children->head.next->next->data, false);
         printTab = true;
         generateAST(out, node->children->head.next->data, true);
-        fprintf(out, "%s _%d;\n", node->data, rightID);
+        fprintf(out, " %s _%d;\n", node->data, rightID);
         return rightID;
     }
     case AST_NEG:
