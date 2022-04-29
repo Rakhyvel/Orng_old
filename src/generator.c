@@ -363,7 +363,7 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
         List_Pop(blockStack);
 
         if (!List_IsEmpty(blockStack) && (node->containsReturn || node->containsContinue || node->containsBreak) && symbolTree->defers->size > 0) {
-            fprintf(out, "\t goto continue_%s;\n", symbolTree->name);
+            fprintf(out, "\tgoto continue_%s;\n", symbolTree->name);
             if (node->containsReturn) {
                 fprintf(out, "return_block_%s:;\n", symbolTree->name);
                 generateDefers(out, symbolTree->defers);
@@ -444,6 +444,7 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
     }
     case AST_SWITCH: {
         ASTNode* expr = List_Begin(node->children)->data;
+        ASTNode* body = List_Get(node->children, 1);
         int id = -1;
         if (node->type->astType != AST_UNDEF) {
             id = printTempVarUndef(out, node);
@@ -459,13 +460,16 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
                 fprintf(out, "\n");
                 fprintf(out, "\tdefault:\n\t{\n");
                 ASTNode* body = List_Get(child->children, 0);
+                SymbolNode* blockSymbol = body->data;
                 int bodyID = generateAST(out, body, false);
                 if (bodyID != -1 && id != -1) {
                     fprintf(out, "\t_%d = _%d;\n", id, bodyID);
                 }
-                fprintf(out, "\tbreak;\n\t}");
+                fprintf(out, "end_%s:;\n\tbreak;\n\t}", blockSymbol->name);
             } else {
                 ListElem* elem = List_Begin(child->children);
+                ASTNode* block = List_Get(child->children, child->children->size - 1);
+				SymbolNode* blockSymbol = block->data;
                 for (; elem != List_End(child->children)->prev; elem = elem->next) {
                     fprintf(out, "\n");
                     fprintf(out, "\tcase ");
@@ -477,7 +481,7 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
                 if (bodyID != -1 && id != -1) {
                     fprintf(out, "\t_%d = _%d;\n", id, bodyID);
                 }
-                fprintf(out, "\tbreak;\n\t}");
+                fprintf(out, "end_%s:;\n\tbreak;\n\t}", blockSymbol->name);
             }
         }
         fprintf(out, "\n\t}\n");

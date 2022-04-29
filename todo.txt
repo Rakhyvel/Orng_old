@@ -247,7 +247,7 @@ x procedures inside structs
 		x returns set the return value of the function, jump to return path like normal
 	x remove new struct functions, since it can now be done inline
 	x defer, return, break, continue paths are correct?
-	- breaks should bust out of switches inside loops
+	x breaks should bust out of switches
 	- relational operator chainings
 		- wasn't possible before because of duplication of code. Now that can be inlined
 		- can't mix directionality (ie chaining < and >)

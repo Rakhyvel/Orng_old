@@ -775,7 +775,10 @@ static ASTNode* parseCase(SymbolNode* scope)
         }
         expect(TOKEN_LBRACE);
     }
-    appendAndMerge(caseNode, parseBlock(scope));
+    ASTNode* block = parseBlock(scope);
+    SymbolNode* blockSymbol = block->data;
+    blockSymbol->isLoop = true;
+    appendAndMerge(caseNode, block);
     return caseNode;
 }
 

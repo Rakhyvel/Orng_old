@@ -1226,7 +1226,7 @@ void validateAST(ASTNode* node)
     node->isValid = true;
 
     if (node->astType != AST_DOT && node->astType != AST_SIZEOF && node->astType != AST_CAST && node->astType != AST_NEW && node->astType != AST_ENUM) {
-        if (node->astType == AST_FOR) {
+        if (node->astType == AST_FOR || node->astType == AST_CASE) {
             ASTNode* lastNode = List_Get(node->children, node->children->size - 2);
             List_Push(loops, lastNode->data);
         }
@@ -1238,7 +1238,7 @@ void validateAST(ASTNode* node)
             node->containsBreak |= statement->astType == AST_BREAK || statement->containsBreak;
             node->containsContinue |= statement->astType == AST_CONTINUE || statement->containsContinue;
             node->containsReturn |= statement->astType == AST_RETURN || statement->containsReturn;
-            if (i == node->children->size - 1 && node->astType == AST_FOR) {
+            if (i == node->children->size - 1 && (node->astType == AST_FOR || node->astType == AST_CASE)) {
                 List_Pop(loops);
             }
             i++;

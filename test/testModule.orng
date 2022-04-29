@@ -1,6 +1,13 @@
 testModule::Module = (
 	+ main::(args:[]String)->Int = {
-		leetcode.test_all()
+		switch 3 {
+		case 3 {
+			defer stdlib.system.println("haha")
+			break
+		}
+		else {
+			break
+		}}
 		0
 	}
 )
