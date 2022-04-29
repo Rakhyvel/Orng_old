@@ -118,10 +118,8 @@ Token* Lexer_GetNextToken(FILE* in)
     token->pos.end_span = span;
 
     // Skip space characters to get to begining of next token
-    int spaces = 0;
     while (isspace(nextChar = fgetc(in)) && (nextChar == ' ' || nextChar == '\t')) {
         span++;
-        spaces++;
     }
     ungetc(nextChar, in);
 
@@ -168,13 +166,15 @@ Token* Lexer_GetNextToken(FILE* in)
     }
     // Ignore tokens until newline if line comment
     else if (token->type == TOKEN_DMINUS) {
-        Token* junk;
-        inComment = true;
-        do {
-            junk = Lexer_GetNextToken(in);
-        } while (junk->type != TOKEN_NEWLINE && junk->type != TOKEN_EOF);
-        inComment = false;
-        return junk;
+        while (fgetc(in) != '\n')
+            ;
+        line++;
+        span = 1;
+        while (isspace(nextChar = fgetc(in)) && (nextChar == ' ' || nextChar == '\t')) {
+            span++;
+        }
+        ungetc(nextChar, in);
+        token->type = TOKEN_NEWLINE;
     }
     //printf("%d: [%s]:%s\n", line, token->data, Token_GetString(token->type));
     return token;

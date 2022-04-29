@@ -1,22 +1,6 @@
 testModule::Module = (
 	+ main::(args:[]String)->Int = {
-		stdlib.system.println("%d", true || true || true)
-		stdlib.system.println("%d", true || true || false)
-		stdlib.system.println("%d", true || false || true)
-		stdlib.system.println("%d", true || false || false)
-		stdlib.system.println("%d", false || true || true)
-		stdlib.system.println("%d", false || true || false)
-		stdlib.system.println("%d", false || false || true)
-		stdlib.system.println("%d", false || false || false)
-		
-		stdlib.system.println("%d", true && true && true)
-		stdlib.system.println("%d", true && true && false)
-		stdlib.system.println("%d", true && false && true)
-		stdlib.system.println("%d", true && false && false)
-		stdlib.system.println("%d", false && true && true)
-		stdlib.system.println("%d", false && true && false)
-		stdlib.system.println("%d", false && false && true)
-		stdlib.system.println("%d", false && false && false)
-		return 0
+		leetcode.test_all()
+		0
 	}
 )

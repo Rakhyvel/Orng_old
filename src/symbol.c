@@ -53,7 +53,7 @@ void Symbol_Print(SymbolNode* root, wchar_t* prefix, wchar_t* childrenPrefix)
 {
     ASSERT(root != NULL);
 
-    printf("%s%s %d", prefix, root->name);
+    printf("%s%s", prefix, root->name);
     switch (root->symbolType) {
     case SYMBOL_MODULE:
         printf("[SYMBOL_MODULE]\n");

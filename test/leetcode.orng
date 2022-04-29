@@ -16,15 +16,14 @@ leetcode::Module = (
     -- the two numbers such that they add up to target.
     -- https://leetcode.com/problems/two-sum/
     + twoSum::(nums:[]Int, target:Int)->[2]Int = {
-        ans: [2]Int = [-1, -1]
         for i := 0; i < nums.length - 1; i += 1 {
             for j := i + 1; j < nums.length; j += 1 {
                 if nums[i] + nums[j] == target {
-                    ans = [i, j]
+                    return [i, j]
                 }
             }
         }
-        return ans
+        return [-1, -1]
     }
 
     + test_twoSum::()->() = {
@@ -50,14 +49,13 @@ leetcode::Module = (
         val:Int
         next:&ListNode
     )
-    convertToInt::(l:&ListNode)->Int = {
+    convertToInt::(l:&ListNode)->Int =
         if l.next == null {
-            return l.val
+            l.val
         } else {
-            bottom := convertToInt(l.next)
-            return l.val + bottom * 10
+            l.val + convertToInt(l.next) * 10
         }
-    }
+
     convertToList::(i:Int)->&ListNode = {
         retval := new ListNode
         if i < 10 {
@@ -67,9 +65,9 @@ leetcode::Module = (
         }
         return retval
     }
-    + addTwoNumbers::(l1:&ListNode, l2:&ListNode)->&ListNode = {
-        return convertToList(convertToInt(l1) + convertToInt(l2))
-    }
+
+    + addTwoNumbers::(l1:&ListNode, l2:&ListNode)->&ListNode = 
+        convertToList(convertToInt(l1) + convertToInt(l2))
 
     + test_addTwoNumbers::()->() = {
         l1_c := new ListNode
@@ -169,9 +167,9 @@ leetcode::Module = (
         }
 
         if merged.length % 2 == 0 {
-            return (merged[merged.length / 2] + merged[merged.length / 2 + 1]) / 2.0
+            (merged[merged.length / 2] + merged[merged.length / 2 + 1]) / 2.0
         } else {
-            return merged[merged.length / 2]:Real
+            merged[merged.length / 2]:Real
         }
     }
 
@@ -199,7 +197,7 @@ leetcode::Module = (
                 L -= 1
                 R += 1
             }
-            return R - L - 1
+            R - L - 1
         }
 
         start := 0
@@ -213,7 +211,7 @@ leetcode::Module = (
                 end = i + len / 2
             }
         }
-        return stdlib.string.substring(s, start, end + 1)
+        stdlib.string.substring(s, start, end + 1)
     }
 
     + test_longestPalindrome::()->() = {
@@ -276,7 +274,7 @@ leetcode::Module = (
             }
         }
 
-        return retval
+        retval
     }
 
     + test_convert::()->() = {
@@ -307,7 +305,7 @@ leetcode::Module = (
         list = prev
         return list
     }
-    + reverse::(x:Int)->Int = return convertToInt(reverseList(convertToList(x)))
+    + reverse::(x:Int)->Int = convertToInt(reverseList(convertToList(x)))
 
     + test_reverse::()->() = {
         ans := reverse(123)
@@ -347,7 +345,7 @@ leetcode::Module = (
             x = x * 10 + s[i]:Int - '0':Int
         }
 
-        return sign ? x ; -x
+        if sign; x else -x
     }
 
     + test_myAtoi::()->() = {
@@ -370,12 +368,13 @@ leetcode::Module = (
         max := 0
         for i := 0; i < accounts.length; i += 1 {
             sum := 0
-            for j := 0; j < accounts[i].length; j += 1 {
-                sum += accounts[i][j]
-            }
-            max = stdlib.math.max(max, sum):Int
+            max = stdlib.math.max(
+                max, 
+                for j := 0; j < accounts[i].length; j += 1{
+                    sum += accounts[i][j]
+                }
+            ):Int
         }
-        return max
     }
 
     
@@ -383,23 +382,17 @@ leetcode::Module = (
     -- Return the maximum parenthesis depth of the string
     -- Ex: (()(()))() is valid
     --     )()(       is invalid
-    + maxParenthesisDepth::(str: String)->Int = {
-        acc: Int = 0
-        max: Int = 0
+    + maxParenthesisDepth::(str: String, acc:Int = 0, max:Int = 0)->Int =
         for i := 0; i < str.length; i += 1 {
-            if acc < 0 {
-                return -1 -- Invalid string
-            } else {
-                max = stdlib.math.max(max, acc):Int
-            }
-
             if str[i] == '(' {
                 acc += 1
             } else if str[i] == ')' {
                 acc -= 1
             }
+            if acc < 0 {
+                return -1 -- Invalid string
+            } else {
+                max = stdlib.math.max(max, acc):Int
+            }
         }
-
-        return max
-    }
 )

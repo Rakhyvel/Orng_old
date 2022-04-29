@@ -75,7 +75,6 @@ enum astType {
     AST_IF,
     AST_IFELSE,
     AST_FOR,
-    AST_TERNARY,
     AST_SWITCH,
     AST_CASE,
     AST_RETURN,

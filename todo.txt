@@ -233,48 +233,51 @@ x procedures inside structs
 		x.fn(4) // equivalent function call
 	x enums have length field and toString procedure
 - imitation LLVM
+	x custom if, while, for loops using gotos(!)
 	x basic blocks that either call another block or return from the function
 	x all ASTs store their temporary values in temporary variables marked _x where x is a number
 		x lvalues
-		- short circuit && and ||
-	- statements are expressions, return is implied = almost functional programming
-		- blocks evaluate to the last expression in the block
-		- if-else as a ternary operator
-		- if evaluates to it's block value
-		- for loops evaluate to their block value
-		- switches evaluate to their case's block's value
-		- restricts evaluate to their block's value
-		- returns set the return value of the function, jump to return path like normal
-	x custom if, while, for loops using gotos(!)
+		x short circuit && and ||
+	x statements are expressions, return is implied = almost functional programming
+		x blocks evaluate to the last expression in the block
+		x if-else as a ternary operator (remove old ternary operator)
+		x for loops evaluate to their block value
+		x switches evaluate to their case's block's value
+		x restricts evaluate to their block's value
+		x returns set the return value of the function, jump to return path like normal
+	x remove new struct functions, since it can now be done inline
+	x defer, return, break, continue paths are correct?
+	- breaks should bust out of switches inside loops
 	- relational operator chainings
 		- wasn't possible before because of duplication of code. Now that can be inlined
 		- can't mix directionality (ie chaining < and >)
 		- have to be transitive operators (== < <= > >=)
-	- array bounds checking
-	x remove new struct functions, since it can now be done inline
-	- breaks should bust out of switches inside loops
-		- change case syntax?
+	- slices now that I can pass along size information with a slice instead
+	- DEREF INFER!!!!!!
 - unions like in julia and haskell
 	- Only practical uses are Either, and Maybe. Either is only ever used to pass error messages
 	- Tagged union and enums
+		Syntax: (|| <ident> (:<type>)? (=<constexpr int>)?)+
 		- void type is implied if no type is given
-		- void fields in unions aren't generated
+		- void fields in unions aren't generated, but their type is still used
+		- number is assigned if none is given. Clashes are not permitted
+		- accessing the identifier through a union namespace evaluates to the type_id for that identifier
 		- enums are tagged unions with the identifiers having a default void value
-		- enums shouldn't coerce to int anymore
-	- type switch switches on the type of an union/enum
-		union: 
-		switch union
+		MyUnion::Type = || int:Int || char:Char || nothing
+		MyEnum::Type = || RED || BLUE || GREEN
 	- runtime errors
-		- !<Type> which is just shorthand for Error | <Type>
-		- return an error code
+		- !<Type> which is just shorthand for || Error || <Type>
+		- return an error code, maybe with a message? (how do stack traces error messages work?)
 		- try unwraps value if no error, or returns the error
 		- catch unwraps value if no error, or evaluates to default expression
 		- errdefer is another return exit path if return is an error, a subset of defers (ie it defers all defers, and also errdefers if return is error)
-		- array indexing checks array size, returns error if out of bounds
-			- implies any function that indexes returns an error??
+		- array indexing checks array size, returns error if out of bounds (panic instead of giving an option to catch)
+		- panic if new fails
 	- Void type union
-		- ?<Type> which is just shorthand for Nothing | <Type>
+		- ?<Type> which is just shorthand for || Nothing || <Type>
 		- only void typed symbols can be null, null is of type void
+		- else-less if statements give optional types
+			x: ?Int = if true; 5
 - compile time evaluation
 	- validate that all switch cases are unique numbers
 	- validate that all switch case exprs are comptime
