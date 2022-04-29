@@ -237,7 +237,6 @@ x procedures inside structs
 	x all ASTs store their temporary values in temporary variables marked _x where x is a number
 		x lvalues
 		- short circuit && and ||
-		- calculate sizeof during validation, output int AST
 	- statements are expressions, return is implied = almost functional programming
 		- blocks evaluate to the last expression in the block
 		- if-else as a ternary operator

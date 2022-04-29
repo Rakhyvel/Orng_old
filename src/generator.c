@@ -25,16 +25,16 @@ symbol tree to the given node out to the given file.
 */
 static void printPath(FILE* out, SymbolNode* symbol)
 {
-	// Local variables
+    // Local variables
     if (symbol->symbolType == SYMBOL_VARIABLE && symbol->parent && symbol->parent->symbolType == SYMBOL_BLOCK) {
         fprintf(out, "_%s_%s", symbol->parent->name, symbol->name);
-    } 
-	// Parameters
-	else if (symbol->symbolType == SYMBOL_VARIABLE && symbol->parent && (symbol->parent->symbolType == SYMBOL_FUNCTION || symbol->parent->symbolType == SYMBOL_PROCEDURE)) {
+    }
+    // Parameters
+    else if (symbol->symbolType == SYMBOL_VARIABLE && symbol->parent && (symbol->parent->symbolType == SYMBOL_FUNCTION || symbol->parent->symbolType == SYMBOL_PROCEDURE)) {
         fprintf(out, "_%s", symbol->name);
     }
-	// Everything else
-	else if (symbol->parent && (symbol->parent->symbolType != SYMBOL_TYPE || symbol->symbolType == SYMBOL_PROCEDURE) && symbol->parent->parent && !symbol->isExtern) {
+    // Everything else
+    else if (symbol->parent && (symbol->parent->symbolType != SYMBOL_TYPE || symbol->symbolType == SYMBOL_PROCEDURE) && symbol->parent->parent && !symbol->isExtern) {
         if (symbol->parent->symbolType != SYMBOL_VARIABLE) { // Done so that fields in anon structs collected by variable types don't have their variable names appended
             // Done so that inner functions print correctly (i think)
             if (symbol->symbolType == SYMBOL_VARIABLE || (symbol->parent->parent->symbolType != SYMBOL_BLOCK && symbol->parent->symbolType != SYMBOL_PROCEDURE && symbol->parent->symbolType != SYMBOL_FUNCTION)) {
@@ -285,6 +285,13 @@ int printTempVar(FILE* out, ASTNode* node)
     } else {
         return -1;
     }
+}
+
+void printID(FILE* out, ASTNode* node, int id)
+{
+    fprintf(out, "\t");
+    printType(out, node->type);
+    fprintf(out, " _%d = ", id);
 }
 
 int newLabel(ASTNode* node)
@@ -598,7 +605,6 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
         ASTNode* right = List_Begin(node->children)->next->data;
         ASTNode* leftType = left->type;
 
-
         int indexID = generateAST(out, right, false);
         int arrID = -1;
         if (leftType->astType != AST_ARRAY || !isLValue) { // Expensive to copy arrays, just index it directly
@@ -636,6 +642,25 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
         fprintf(out, "[_%d]", indexID);
         if (!isLValue) {
             fprintf(out, ";\n");
+        }
+        return id;
+    }
+    case AST_SIZEOF: {
+        int id = -1;
+        ASTNode* type = List_Get(node->children, 0);
+        if (!isLValue) {
+            id = printTempVar(out, node);
+            fprintf(out, "sizeof(");
+            printType(out, type);
+            fprintf(out, ");\n");
+        } else {
+            if (printTab) {
+                fprintf(out, "\t");
+                printTab = false;
+            }
+            fprintf(out, "sizeof(");
+            printType(out, type);
+            fprintf(out, ");\n");
         }
         return id;
     }
@@ -739,8 +764,38 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
         }
         return id;
     }
-    case AST_OR:
-    case AST_AND:
+    case AST_AND: {
+        ASTNode* left = List_Begin(node->children)->data;
+        ASTNode* right = List_Begin(node->children)->next->data;
+
+        int overLabel = newLabel(node);
+
+        int id = printTempVar(out, node);
+        fprintf(out, "0;\n");
+        int leftID = generateAST(out, left, false);
+
+        fprintf(out, "\tif (!_%d) goto over_%d;\n", leftID, overLabel);
+        int rightID = generateAST(out, right, false);
+        fprintf(out, "\t_%d = _%d;\n", id, rightID);
+        fprintf(out, "over_%d:;\n", overLabel);
+        return id;
+    }
+    case AST_OR: {
+        ASTNode* left = List_Begin(node->children)->data;
+        ASTNode* right = List_Begin(node->children)->next->data;
+
+        int overLabel = newLabel(node);
+
+        int id = printTempVar(out, node);
+        fprintf(out, "1;\n");
+        int leftID = generateAST(out, left, false);
+
+        fprintf(out, "\tif (_%d) goto over_%d;\n", leftID, overLabel);
+        int rightID = generateAST(out, right, false);
+        fprintf(out, "\t_%d = _%d;\n", id, rightID);
+        fprintf(out, "over_%d:;\n", overLabel);
+        return id;
+    }
     case AST_BIT_OR:
     case AST_BIT_XOR:
     case AST_BIT_AND:
