@@ -1,7 +1,6 @@
 testModule::Module = (
 	+ main::(args:[]String)->Int = {
 		leetcode.test_all()
-		std.system.println("Hello, World!")
 		0
 	}
 )

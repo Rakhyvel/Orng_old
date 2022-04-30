@@ -1673,8 +1673,12 @@ void validateAST(ASTNode* node)
         ASTNode* cast = elem->data;
         validateType(cast);
 
+
         // cannot cast between function addr and data addr
         ASTNode* exprType = getType(expr, false, false);
+        if (cast->isConst && !exprType->isConst) {
+            error(cast->pos, "cast from variable type to constant type");
+        }
         if (exprType->astType == AST_ADDR && cast->astType == AST_FUNCTION) {
             error(node->pos, "cast from data address to function address");
         }

@@ -221,6 +221,8 @@ const char* Token_GetRepr(_TokenType type)
         return ">>=";
     case TOKEN_PLUS:
         return "+";
+    case TOKEN_DPLUS:
+        return "++";
     case TOKEN_MINUS:
         return "-";
     case TOKEN_DMINUS:

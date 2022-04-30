@@ -3,6 +3,7 @@ Reads in two tokens at a time from the token queue (see lexer.c) and creates one
 symbol tree that points to many abstract syntax trees
 */
 
+#define _CRT_SECURE_NO_WARNINGS
 #include "parse.h"
 #include "../util/debug.h"
 #include "./ast.h"
@@ -177,6 +178,12 @@ static ASTNode* parseFactor(SymbolNode* scope)
         child = AST_Create(AST_REAL, data, scope, token->pos, false);
     } else if ((token = accept(TOKEN_STR)) != NULL) {
         child = AST_Create(AST_STRING, token->data, scope, token->pos, false);
+        while (accept(TOKEN_DPLUS)) {
+            while (accept(TOKEN_NEWLINE))
+                ;
+            token = expect(TOKEN_STR);
+            strcat(child->data, token->data);
+        }
     } else if ((token = accept(TOKEN_CHAR)) != NULL) {
         child = AST_Create(AST_CHAR, token->data, scope, token->pos, false);
     } else if ((token = accept(TOKEN_LPAREN)) != NULL) {

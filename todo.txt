@@ -269,8 +269,6 @@ x procedures inside structs
 	x no syntactical difference between procedures and functions, just confuses things. Just check if FUNCTION is stateless (remove procedure)
 	x shorten stdlib to std
 	x rework restrictions to only restrict sibling symbols. Error if a symbol is not a sibling?
-	- can only cast between types where the behavior is relatively well known
-		- cannot cast away const
 	- find a way to make multi line strings, the way I have it now isnt tokenizable line-by-line
 - unions like in julia and haskell
 	- Only practical uses are Either, and Maybe. Either is only ever used to pass error messages
