@@ -92,7 +92,7 @@ enum astType {
 	AST_PROCEDURE,
     AST_FUNCTION,
     AST_ADDR,
-	AST_C_ARRAY,
+	//AST_C_ARRAY,
     AST_ARRAY,
     AST_ENUM,
 	AST_EXTERN
@@ -123,6 +123,7 @@ typedef struct astNode {
 const ASTNode* INT8_TYPE;
 const ASTNode* INT16_TYPE;
 const ASTNode* INT32_TYPE;
+const ASTNode* CONST_INT64_TYPE;
 const ASTNode* INT64_TYPE;
 const ASTNode* CONST_STRING_TYPE;
 const ASTNode* STRING_TYPE;

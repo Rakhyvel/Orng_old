@@ -248,12 +248,39 @@ x procedures inside structs
 	x remove new struct functions, since it can now be done inline
 	x defer, return, break, continue paths are correct?
 	x breaks should bust out of switches
-	- relational operator chainings
-		- wasn't possible before because of duplication of code. Now that can be inlined
-		- can't mix directionality (ie chaining < and >)
-		- have to be transitive operators (== < <= > >=)
-	- slices now that I can pass along size information with a slice instead
+	- slices now that I can initialize arrays as expressions
+		x slices are a pointer to an array and a length
+		- syntax to create slices
+			arr: [4]Int
+			subArr := arr[2:4] -- Includes arr[2], does not include arr[4] obviously
+			internally: 
+			struct struct_3 _172_arr = {4, (int64_t[]){0, 0, 0, 0}}
+			int64_t _0 = 4;
+			int64_t _1 = 2;
+			_172_subArr = {_0 - _1, arr.data + _1};
+		- can omit either side
+			arr: [4]Int
+			sli := arr[0:4]
+			sli := arr[:4] -- here 0 is infered
+			sli := arr[0:] -- here the length of the base array is used
+			sli := arr[:]  -- here both 0 and length of base array is used
+		- syntax to initialize arrays on new, and structs as well
 	- DEREF INFER!!!!!!
+		- mem leak?
+		x:Int = new Int
+		-- translates to
+		x:Int = *(new Int)
+		-- memory is copied and then lost!
+		why did i want deref infer in the first place?
+	- no syntactical difference between procedures and functions, just confuses things. Just check if FUNCTION is stateless (remove procedure)
+	- please write the grammar :) and make sure there are no "subsets" or possible stylistic arguments between people
+		- fix parser so that it accepts binary operators on new lines
+	- shorten stdlib to std
+	- rework restrictions to only restrict sibling symbols. Error if a symbol is not a sibling?
+	- symbol alias cannot be made public
+	- can only cast between types where the behavior is relatively well known
+	- cannot cast away const
+	- find a way to make multi line strings, the way I have it now isnt tokenizable line-by-line
 - unions like in julia and haskell
 	- Only practical uses are Either, and Maybe. Either is only ever used to pass error messages
 	- Tagged union and enums
@@ -279,53 +306,66 @@ x procedures inside structs
 		- else-less if statements give optional types
 			x: ?Int = if true; 5
 - compile time evaluation
+	- GOOD RULE OF THUMB:
+		if it'd be a pain to implement for compile-time evaluation, don't add it as a feature
+		LESS features is better!
+	- for every compile-time constant variable, validate it's AST and evaluate it, replacing it's AST with the result
+	- setup a runtime environment with stackframes and a map of variable names to a "value" union
+		- values can be integer, string, array literal, whatever
+		- probably can't be pointers since that would be hard (but jai does it somehow...)
 	- validate that all switch cases are unique numbers
 	- validate that all switch case exprs are comptime
 	- validate that default function parameters and struct fields are constant expressions
 	- if index is comptime, must be postive
 	- if denominator is comptime, must not be 0
-	- dead code trimming (A MUST! one of the only reasons to have comptime eval)
-	- calls to functions (not procedures) are memoized (needed for generics)
+	- dead code trimming
+	- calls to functions with all comptime parameters are memoized
+		- map input parameter values -> output value or AST (choose)
 - generics
 	- you would need a function that 'returns' a type
-	- make type and expr syntax the same so that `return <type>` works
+		- make type and expr syntax the same so that `return <type>` works
 	- if comptime, acts as generics
-	- if runtime, acts as a normal parameter to a function (it is)
-	- this applies to normal functions too
-	- replace keywords with functions (like new, free)
+	- if runtime, a separate function is "stamped" and memoized, this function is called
 - interfaces (traits in rust https://theburningmonk.com/2015/05/rust-memory-safety-without-gc/)
 	- https://www.nmichaels.org/zig/interfaces.html interfaces in Zig
 		- compose an interface within each struct
 		- requires in-struct function definitions, which shouldn't be too much of a problem
 	- interfaces define a list of functions for a struct type
 	- if there exists function definitions for the struct type ANYWHERE in the program, the struct type implements the interface
-- quantifiers from Alloy
+- quantifiers from Alloy- or maybe these would be better as interfaces?
 	- basically just iterators, use interface above
 	- should be expressions, generate as a function call
 	- for x : X  {}		# for each loop
 	- all x : X, P		# all x in X satisfy P
 	- some x : X, P		# one or more x in X satisfy P
-- LLVM
-- test suite with @[...] for attributes
-	test::Attribute = ()->()! # What type do symbols with this attribute have?
-	@[test]
-	test_something::()->()! = {
-		stdlib.debug.assert(4 == 5)
-	}
+- LLVM (?)
+- @attributes
+	- define a type, can then congregate those symbols at compiletime in an array
+	- global namespace? or maybe a separate namespace from other identifiers
+	- @[stdlib.main] for main function
+		@main::Attribute = :(args:[]String)->!()
+		@[stdlib.main]
+		whateverName::(args:[]String)->!() = { ... }
+	- test suite with @[...] for attributes
+		test::Attribute = ()->()! # What type do symbols with this attribute have?
+		@[test]
+		test_something::()->!() = {
+			stdlib.debug.assert(4 == 5)
+		}
 
-	main::(args:String[])->Int = {
-		tests ::= thisModule@test # an array of the test functions, maybe with some wrapper stuff like name, filename, line etc (what symbols have (give the user complete access to symbol tree/ASTs?))
-		for t : tests {
-			failed := false
-			try t() catch {
-				stdlib.system.println("Error")
-				failed = true
-			}
-			if !failed {
-				stdlib.system.println("Success")
+		main::(args:String[])->Int = {
+			tests ::= thisModule@test # an array of the test functions, maybe with some wrapper stuff like name, filename, line etc (what symbols have (give the user complete access to symbol tree/ASTs?))
+			for t : tests {
+				failed := false
+				try t() catch {
+					stdlib.system.println("Error")
+					failed = true
+				}
+				if !failed {
+					stdlib.system.println("Success")
+				}
 			}
 		}
-	}
 - rewrite in Orng
 - `if let` from zig or odin or whatever
 	// Wrap if in a separate scope
@@ -334,42 +374,34 @@ x procedures inside structs
 	} else if node % 2 != 0 {
 		
 	}
+- pre and post condition contracts
+	- are an expression, need another expression after them
+	- can chain them and other expressions together
+	arcsin::(x:Real)->Real = 
+	|>	-1 <= x <= 1		-- this expression is evaluated, if its false program hard crashes
+	|<	y; sin(y) == x		-- post conditions capture the return value, then have the expression
+	{
+		-- do math here
+	}
+	- |> for pre condition (like input)
+	- |< for post condition (like output!)
+	- maybe a post condition built in expression for like "|< no IO output happened during this function"
+	- conceptually, |> evaluates itself, then evaluates child
+	- |< evaluates its child at the end of the chain, captures it and performs condition
 
-No prereqs:
-- type unions
-	- hard
-- return inference
-	- easy
-- function composition operator
-	- easy
-- no syntactical difference between procedures and functions, just confuses things
-	- true, easy, if symbol's type is constant make sure def is stateless
+	
+- relational operator chainings ????
+	- wasn't possible before because of duplication of code. Now that can be inlined
+	- have to be transitive operators (== < <= > >=)
+		_0 = 0 -- init chain result as false
+		_1 = 0 -- init first child
 
-Compile-time eval:
-- setup a runtime, interpret program at runtime and simplify/prune
+		_2 = x	-- basic pattern is init next child, comp with prev child
+		if !(_1 < _2) goto over_1 -- if any comparison is false, jump to false
 
-Generics:
-- generic types and functions
-	- requires 'stamping'
-	- I prefer the Zig way of doing it with compile-time compilation, requires compile-time compilation
-- x, y: Type
-	- syntax change, combine type and expression syntax (after generics) and make grammar before this
-- subset/predicate set-builder notation
-	- generics
+		_3 = 100 -- init next child
+		if !(_2 < 100) goto over_1
 
-Interfaces:
-- lazy evaluated lists
-	- Can be achieved with iterator interface, or some other form of interface
-- all, some quantifiers
-	- interfaces
-- summation, products, union, intersection, complement (map, reduce)
-	- interfaces
-- subset operator
-	- interfaces
-	- all a : A, a is in B
-
-Move to LLVM:
-- if-else as ternary operator
-	- syntax change, may need to move to LLVM for this since it might require control-flows that aren't possible in C
-- relational operator chaining
-	- need to wait until move to LLVM, control-flow not possible in C
+		_0 = 1	-- If we get here, result is true
+	over_1:; -- end of chain
+	- Syntax is weird to parse, need to loop over possible chains, but how to keep track of the symbols for each operator?

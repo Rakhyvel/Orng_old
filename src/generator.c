@@ -119,9 +119,6 @@ static void printType(FILE* out, ASTNode* type)
         printType(out, List_Get(type->children, 0));
         fprintf(out, "*");
         break;
-    case AST_C_ARRAY:
-        printType(out, List_Get(type->children, 0));
-        break;
     case AST_ARRAY:
     case AST_PARAMLIST: {
         fprintf(out, "struct ");
@@ -148,7 +145,7 @@ static void printType(FILE* out, ASTNode* type)
         break;
     }
     default: {
-        fprintf(out, "%s", AST_GetString(type->astType));
+        fprintf(out, "Not a type: %s", AST_GetString(type->astType));
     }
     }
 }
@@ -160,19 +157,28 @@ static void generateDefaultValue(FILE* out, ASTNode* type)
         fprintf(out, "0");
         break;
     case AST_ARRAY: {
+        ASTNode* lengthDefine = List_Get(type->children, 0);
+        SymbolNode* lengthSymbol = lengthDefine->data;
+        ASTNode* lengthCode = lengthSymbol->def;
         ASTNode* dataDefine = List_Get(type->children, 1);
         SymbolNode* dataSymbol = dataDefine->data;
-        ASTNode* dataAddrType = dataSymbol->type;
-        ASTNode* dataType = List_Get(dataAddrType->children, 0);
-        ASTNode* dataLength = List_Get(dataAddrType->children, 1);
+        ASTNode* dataType = dataSymbol->type;
         fprintf(out, "((");
         printType(out, type);
-        fprintf(out, "){%d", (int)dataLength->data);
-        for (int i = 0; i < (int)dataLength->data; i++) {
-            fprintf(out, ", ");
-            generateDefaultValue(out, dataType);
-        }
-        fprintf(out, "})");
+        if (lengthCode->astType == AST_INT && lengthCode->data != 0) {
+            fprintf(out, "){%d, (", (int)lengthCode->data);
+            printType(out, dataType);
+            fprintf(out, "[]){");
+            for (int i = 0; i < (int)lengthCode->data; i++) {
+                generateDefaultValue(out, dataType);
+                if (i + 1 < lengthCode->data) {
+                    fprintf(out, ", ");
+                }
+            }
+            fprintf(out, "}})");
+        } else {
+            fprintf(out, "){0, 0})");
+		}
     } break;
     case AST_PARAMLIST: {
         fprintf(out, "((");
@@ -219,14 +225,6 @@ static void generateDefine(FILE* out, SymbolNode* var, bool param)
         ASTNode* params = List_Get(var->type->children, 0);
         generateParamList(out, params);
         fprintf(out, ")");
-    }
-    if (var->type->astType == AST_C_ARRAY) {
-        ASTNode* length = List_Get(var->type->children, 1);
-        if (length->astType == AST_INT) {
-            fprintf(out, "[%d]", (int)length->data);
-        } else {
-            fprintf(out, "[]");
-        }
     }
     if (var->isVararg) {
         fprintf(out, ", ...");
@@ -469,7 +467,7 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
             } else {
                 ListElem* elem = List_Begin(child->children);
                 ASTNode* block = List_Get(child->children, child->children->size - 1);
-				SymbolNode* blockSymbol = block->data;
+                SymbolNode* blockSymbol = block->data;
                 for (; elem != List_End(child->children)->prev; elem = elem->next) {
                     fprintf(out, "\n");
                     fprintf(out, "\tcase ");
@@ -536,18 +534,19 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
         ASTNode* type = List_Get(node->children, 0);
         int id = -1;
         if (type->astType == AST_ARRAY) {
+            ASTNode* lengthDefine = List_Get(type->children, 0);
+            SymbolNode* lengthSymbol = lengthDefine->data;
+            ASTNode* lengthCode = lengthSymbol->def;
             ASTNode* dataDefine = List_Get(type->children, 1);
             SymbolNode* dataSymbol = dataDefine->data;
-            ASTNode* dataAddrType = dataSymbol->type;
-            ASTNode* dataType = List_Get(dataAddrType->children, 0);
-            ASTNode* dataLength = List_Get(dataAddrType->children, 1);
-            int lengthID = generateAST(out, dataLength, false);
+            ASTNode* dataType = List_Get(dataSymbol->type->children, 0);
+            int lengthID = generateAST(out, lengthCode, false);
             id = printTempVar(out, node);
-            fprintf(out, "malloc(sizeof(signed int) + sizeof(");
+            fprintf(out, "{_%d, malloc(sizeof(", lengthID);
             printType(out, dataType);
-            fprintf(out, ") * _%d);\n", lengthID);
-            fprintf(out, "\t_%d->length = _%d;\n", id, lengthID);
-            fprintf(out, "\tfor(int i = 0; i < _%d; i++) {_%d->data[i] = ", lengthID, id);
+            fprintf(out, ") * _%d)};\n", lengthID);
+            fprintf(out, "\t_%d.length = _%d;\n", id, lengthID);
+            fprintf(out, "\tfor(int i = 0; i < _%d; i++) {_%d.data[i] = ", lengthID, id);
             generateDefaultValue(out, dataType);
             fprintf(out, ";}\n");
         } else if (type->astType == AST_PARAMLIST) {
@@ -569,7 +568,13 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
     case AST_FREE: {
         ASTNode* child = List_Get(node->children, 0);
         int leftID = generateAST(out, child, false);
-        fprintf(out, "\tfree(_%d);\n", leftID);
+        ASTNode* type = child->type;
+        int id = -1;
+        if (type->astType != AST_ARRAY) {
+            fprintf(out, "\tfree(_%d);\n", leftID);
+        } else {
+            fprintf(out, "\tfree(_%d.data);\n", leftID);
+        }
         return -1;
     }
     case AST_IDENT: {
@@ -623,7 +628,7 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
         if (!isLValue) {
             id = printTempVar(out, node);
         }
-        fprintf(out, "&string_%d", node->pos.start_line);
+        fprintf(out, "string_%d", node->pos.start_line);
         if (!isLValue) {
             fprintf(out, ";\n");
         }
@@ -649,12 +654,14 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
             List_Append(ids, ptr);
         }
         int id = printTempVar(out, node);
-        fprintf(out, "{%d, {", node->children->size);
+        fprintf(out, "{%d, (", node->children->size);
+        printType(out, ((ASTNode*)List_Begin(node->children)->data)->type);
+		fprintf(out, "[]){");
         for (ListElem* elem = List_Begin(ids); elem != List_End(ids); elem = elem->next) {
             int* elemID = elem->data;
             fprintf(out, "_%d", *elemID);
             if (elem->next != List_End(ids)) {
-                fprintf(out, ", ", *elemID);
+                fprintf(out, ", ");
             }
         }
         fprintf(out, "}};\n");
@@ -1080,7 +1087,7 @@ void generateString(FILE* out, char* string)
             backslashes++;
         }
     }
-    fprintf(out, "{%d, {", strlen(string) - backslashes);
+    fprintf(out, "{%d, (char[]){", strlen(string) - backslashes);
     for (int j = 0; j < strlen(string); j++) {
         char c = string[j];
         if (c == '\\') {
@@ -1099,14 +1106,13 @@ void generateForwardStrings(FILE* out, List* strings)
     fprintf(out, "/* Forward string declarations */\n");
     ListElem* elem = List_Begin(strings);
     int i = -1;
-    ASTNode* stringRawType = List_Get(STRING_TYPE->children, 0);
     for (; elem != List_End(strings); elem = elem->next) {
         i++;
         ASTNode* node = elem->data;
         if (!node->scope->isReachable) {
             continue;
         }
-        printType(out, stringRawType);
+        printType(out, STRING_TYPE);
         fprintf(out, " string_%d;\n", i);
     }
     fprintf(out, "\n");
@@ -1117,14 +1123,13 @@ void generateStrings(FILE* out, List* strings)
     fprintf(out, "/* String definitions */\n");
     ListElem* elem = List_Begin(strings);
     int i = -1;
-    ASTNode* stringRawType = List_Get(STRING_TYPE->children, 0);
     for (; elem != List_End(strings); elem = elem->next) {
         i++;
         ASTNode* node = elem->data;
         if (!node->scope->isReachable) {
             continue;
         }
-        printType(out, stringRawType);
+        printType(out, STRING_TYPE);
         fprintf(out, " string_%d = ", i);
         generateString(out, node->data);
     }
@@ -1323,21 +1328,6 @@ void generateFunctionDefinitions(FILE* out, List* functions)
 
 void generateMainFunction(FILE* out, SymbolNode* mainFunction)
 {
-    /*
-	int main(int argc, char** argv)
-	{
-		struct struct_5* args = calloc(sizeof(struct struct_5) + sizeof(struct struct_1*) * argc, 1);
-		args->length = argc;
-		for (int i = 0; i < argc; i++) {
-			args->data[i] = calloc(sizeof(struct struct_1) + sizeof(char) * strlen(argv[i]) + 1, 1);
-			args->data[i]->length = strlen(argv[i] + 1);
-			memcpy(&args->data[i]->data, argv[i], strlen(argv[i]) + 1);
-		}
-		int retval = test_testModule_main(*args);
-		free(args);
-		return retval;
-	}
-	*/
     fprintf(out, "\int main(int argc, char** argv)\n");
 
     fprintf(out, "{\n");
@@ -1346,23 +1336,19 @@ void generateMainFunction(FILE* out, SymbolNode* mainFunction)
 
     fprintf(out, "\t");
     printType(out, STRING_ARR_TYPE);
-    fprintf(out, " args = calloc(sizeof(");
-    printType(out, STRING_ARR_TYPE);
-    fprintf(out, ") + sizeof(");
+    fprintf(out, " args = {argc, calloc(sizeof(");
     printType(out, STRING_TYPE);
-    fprintf(out, ") * argc, 1);\n");
-
-    fprintf(out, "\targs->length = argc;\n");
+    fprintf(out, ") * argc, 1)};\n");
 
     fprintf(out, "\tfor (int  i = 0; i < argc; i++) {\n");
 
-    fprintf(out, "\t\targs->data[i] = calloc(sizeof(");
+	fprintf(out, "\t\tint length = strlen(argv[i]);\n");
+
+    fprintf(out, "\t\targs.data[i] = (");
     printType(out, STRING_TYPE);
-    fprintf(out, ") + sizeof(char) * strlen(argv[i]) + 1, 1);\n");
+	fprintf(out, "){length, calloc(sizeof(char) * length, 1)};\n");
 
-    fprintf(out, "\t\targs->data[i]->length = strlen(argv[i] + 1);\n");
-
-    fprintf(out, "\t\tmemcpy(&args->data[i]->data, argv[i], strlen(argv[i]) + 1);\n");
+    fprintf(out, "\t\tmemcpy(args.data[i].data, argv[i], length);\n");
 
     fprintf(out, "\t}\n");
 
@@ -1370,7 +1356,13 @@ void generateMainFunction(FILE* out, SymbolNode* mainFunction)
     printPath(out, mainFunction);
     fprintf(out, "(args);\n");
 
-    fprintf(out, "\tfree(args);\n");
+    fprintf(out, "\tfor (int  i = 0; i < argc; i++) {\n");
+
+    fprintf(out, "\t\tfree(args.data[i].data);\n");
+
+    fprintf(out, "\t}\n");
+
+    fprintf(out, "\tfree(args.data);\n");
 
     fprintf(out, "\treturn retval;\n");
 

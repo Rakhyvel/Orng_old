@@ -403,11 +403,19 @@ static ASTNode* parseShiftExpr(SymbolNode* scope)
 }
 
 // Returns the first conditional, or the first integer expression if none can be found
+// <shiftExpr> (<condition-token> <shiftExpr>)*
 static ASTNode* parseConditional(SymbolNode* scope)
 {
     ASTNode* child = parseShiftExpr(scope);
     Token* token = NULL;
-    if ((token = accept(TOKEN_GTR)) != NULL) {
+    if ((token = accept(TOKEN_DEQ)) != NULL) {
+        ASTNode* parent = AST_Create(AST_EQ, "==", scope, token->pos, false);
+        appendAndMerge(parent, child);
+        while (accept(TOKEN_NEWLINE))
+            ;
+        appendAndMerge(parent, parseConditional(scope));
+        return parent;
+    } else if ((token = accept(TOKEN_GTR)) != NULL) {
         ASTNode* parent = AST_Create(AST_GTR, ">", scope, token->pos, false);
         appendAndMerge(parent, child);
         while (accept(TOKEN_NEWLINE))
@@ -446,14 +454,7 @@ static ASTNode* parseEqExpr(SymbolNode* scope)
     ASTNode* child = parseConditional(scope);
     Token* token = NULL;
     while (true) {
-        if ((token = accept(TOKEN_DEQ)) != NULL) {
-            ASTNode* parent = AST_Create(AST_EQ, "==", scope, token->pos, false);
-            appendAndMerge(parent, child);
-            while (accept(TOKEN_NEWLINE))
-                ;
-            appendAndMerge(parent, parseConditional(scope));
-            return parent;
-        } else if ((token = accept(TOKEN_NEQ)) != NULL) {
+        if ((token = accept(TOKEN_NEQ)) != NULL) {
             ASTNode* parent = AST_Create(AST_NEQ, "!=", scope, token->pos, false);
             appendAndMerge(parent, child);
             while (accept(TOKEN_NEWLINE))
@@ -669,26 +670,20 @@ static ASTNode* parseIf(SymbolNode* scope)
     ASTNode* ifNode = AST_Create(AST_IF, 0, scope, prevToken->pos, false);
 
     ASTNode* condition = parseExpr(scope);
-    if (nextToken->type != TOKEN_LBRACE) {
-        expect(TOKEN_SEMICOLON);
-    }
-    ASTNode* body = parseExpr(scope);
-
-    if (body->astType != AST_BLOCK) {
-        SymbolNode* blockScope = Symbol_Create(myItoa(blockUID++), SYMBOL_BLOCK, scope, prevToken->pos);
-        ASTNode* block = AST_Create(AST_BLOCK, blockScope, scope, prevToken->pos, false);
-        blockScope->def = block;
-        appendAndMerge(block, body);
-        rebaseScope(body, scope);
-        body = block;
-    }
+    expect(TOKEN_LBRACE);
+    ASTNode* body = parseBlock(scope);
 
     appendAndMerge(ifNode, condition);
     appendAndMerge(ifNode, body);
 
     if (accept(TOKEN_ELSE)) {
         ifNode->astType = AST_IFELSE;
-        appendAndMerge(ifNode, parseExpr(scope));
+        if (accept(TOKEN_IF)) {
+            appendAndMerge(ifNode, parseIf(scope));
+        } else {
+            expect(TOKEN_LBRACE);
+            appendAndMerge(ifNode, parseBlock(scope));
+        }
     }
 
     return ifNode;
@@ -1223,14 +1218,10 @@ ASTNode* parseTypeNonConst(SymbolNode* scope, bool isPublic)
 
         SymbolNode* dataSymbol = Symbol_Create("data", SYMBOL_VARIABLE, NULL, arrStruct->pos);
         ASTNode* dataDefine = AST_Create(AST_DEFINE, dataSymbol, scope, token->pos, false);
-        ASTNode* dataType = AST_Create(AST_C_ARRAY, NULL, scope, token->pos, false);
+        ASTNode* dataType = AST_Create(AST_ADDR, NULL, scope, token->pos, false);
         appendAndMerge(dataType, parseType(scope, isPublic));
         arrStruct->pos = merge(arrStruct->pos, dataType->pos);
-        if (lengthCode->astType != AST_UNDEF) {
-            appendAndMerge(dataType, lengthCode);
-        } else {
-            appendAndMerge(dataType, AST_Create(AST_UNDEF, 0, scope, token->pos, false));
-        }
+
         ASTNode* dataCode = AST_Create(AST_UNDEF, 0, scope, token->pos, false);
         dataSymbol->def = dataCode;
         dataSymbol->type = dataType;
@@ -1239,13 +1230,7 @@ ASTNode* parseTypeNonConst(SymbolNode* scope, bool isPublic)
         appendAndMerge(arrStruct, lengthDefine);
         appendAndMerge(arrStruct, dataDefine);
 
-        if (lengthCode->astType == AST_UNDEF) {
-            ASTNode* addr = AST_Create(AST_ADDR, 0, scope, arrStruct->pos, false);
-            appendAndMerge(addr, arrStruct);
-            return addr;
-        } else {
-            return arrStruct;
-        }
+        return arrStruct;
     } else {
         return parseTypeFunction(scope, isPublic);
     }
