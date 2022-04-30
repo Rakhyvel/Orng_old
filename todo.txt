@@ -250,7 +250,7 @@ x procedures inside structs
 	x breaks should bust out of switches
 	- slices now that I can initialize arrays as expressions
 		x slices are a pointer to an array and a length
-		- syntax to create slices
+		x syntax to create slices
 			arr: [4]Int
 			subArr := arr[2:4] -- Includes arr[2], does not include arr[4] obviously
 			internally: 
@@ -258,20 +258,14 @@ x procedures inside structs
 			int64_t _0 = 4;
 			int64_t _1 = 2;
 			_172_subArr = {_0 - _1, arr.data + _1};
-		- can omit either side
+		x can omit either side
 			arr: [4]Int
 			sli := arr[0:4]
 			sli := arr[:4] -- here 0 is infered
 			sli := arr[0:] -- here the length of the base array is used
 			sli := arr[:]  -- here both 0 and length of base array is used
-		- syntax to initialize arrays on new, and structs as well
-	- DEREF INFER!!!!!!
-		- mem leak?
-		x:Int = new Int
-		-- translates to
-		x:Int = *(new Int)
-		-- memory is copied and then lost!
-		why did i want deref infer in the first place?
+		x syntax to initialize arrays on new, and structs as well
+		<new> <type> (<array-literal> | <arglist>)?
 	- no syntactical difference between procedures and functions, just confuses things. Just check if FUNCTION is stateless (remove procedure)
 	- please write the grammar :) and make sure there are no "subsets" or possible stylistic arguments between people
 		- fix parser so that it accepts binary operators on new lines
@@ -309,10 +303,22 @@ x procedures inside structs
 	- GOOD RULE OF THUMB:
 		if it'd be a pain to implement for compile-time evaluation, don't add it as a feature
 		LESS features is better!
+	- convert AST to IR before, evaluate this, then 1:1 generate it out
+		- simpler to generate
+		- this could also be part of the validation step
+		  0. memoize IR if it's already converted
+		  1. validate AST
+		  2. convert to IR
+		  2.5. do optimizations?
+		  3. evaluate IR
+		  4. store IR back into function
+		     if function has comptime parameters, memoize arguments to result
+			 if variable, create new IR with constant evaluate value
+		- this way the evalator CAN use pointers and allocate memory intermediately, just cannot be lasting value
 	- for every compile-time constant variable, validate it's AST and evaluate it, replacing it's AST with the result
 	- setup a runtime environment with stackframes and a map of variable names to a "value" union
 		- values can be integer, string, array literal, whatever
-		- probably can't be pointers since that would be hard (but jai does it somehow...)
+		- probably can't be pointers since that would be hard (but Jai does it somehow...)
 	- validate that all switch cases are unique numbers
 	- validate that all switch case exprs are comptime
 	- validate that default function parameters and struct fields are constant expressions
@@ -323,9 +329,10 @@ x procedures inside structs
 		- map input parameter values -> output value or AST (choose)
 - generics
 	- you would need a function that 'returns' a type
-		- make type and expr syntax the same so that `return <type>` works
+		- make types expressions so that `return <type>` works
 	- if comptime, acts as generics
 	- if runtime, a separate function is "stamped" and memoized, this function is called
+	- allocators with free and new methods that take in addrs and types, replace free and new
 - interfaces (traits in rust https://theburningmonk.com/2015/05/rust-memory-safety-without-gc/)
 	- https://www.nmichaels.org/zig/interfaces.html interfaces in Zig
 		- compose an interface within each struct

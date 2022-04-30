@@ -212,6 +212,11 @@ static ASTNode* parseFactor(SymbolNode* scope)
         strcat_s(str, 255, "arr");
         SymbolNode* dumbyScope = Symbol_Create(str, SYMBOL_VARIABLE, scope, child->pos);
         appendAndMerge(child, parseType(dumbyScope, false));
+        if (nextToken->type == TOKEN_LSQUARE || nextToken->type == TOKEN_LPAREN) {
+            appendAndMerge(child, parseFactor(scope));
+        } else {
+            appendAndMerge(child, AST_Create(AST_UNDEF, NULL, scope, child->pos, false));
+        }
     } else if ((token = accept(TOKEN_FREE)) != NULL) {
         child = AST_Create(AST_FREE, NULL, scope, prevToken->pos, false);
         appendAndMerge(child, parseExpr(scope));
@@ -239,14 +244,31 @@ static ASTNode* parsePostfix(SymbolNode* scope)
             appendAndMerge(parent, parseArgList(scope));
             child = parent;
         } else if ((token = accept(TOKEN_LSQUARE)) != NULL) {
+            // [ <expr>? :? <expr>? ]
             ASTNode* parent = AST_Create(AST_INDEX, 0, scope, token->pos, false);
-            appendAndMerge(parent, child);
-            while (accept(TOKEN_NEWLINE))
-                ;
-            appendAndMerge(parent, parseExpr(scope));
-            while (accept(TOKEN_NEWLINE))
-                ;
-            token = expect(TOKEN_RSQUARE);
+            appendAndMerge(parent, child); // arr
+            if (accept(TOKEN_SEMICOLON)) { // no lower bound
+                List_Append(parent->children, AST_Create(AST_UNDEF, NULL, scope, parent->pos, false)); // lowerbound
+                parent->astType = AST_SLICE;
+                if (!accept(TOKEN_RSQUARE)) { // upper bound
+                    appendAndMerge(parent, parseExpr(scope));
+                    token = expect(TOKEN_RSQUARE);
+                } else {
+                    List_Append(parent->children, AST_Create(AST_UNDEF, NULL, scope, parent->pos, false));
+                }
+            } else { // a lowerbound or subscript
+                appendAndMerge(parent, parseExpr(scope)); // either lowerbound or subscript
+                if (!accept(TOKEN_RSQUARE)) { // there is an upper bound
+                    parent->astType = AST_SLICE;
+                    expect(TOKEN_SEMICOLON);
+                    if ((token = accept(TOKEN_RSQUARE)) == NULL) {
+                        appendAndMerge(parent, parseExpr(scope)); // Append the upper bound
+                        token = expect(TOKEN_RSQUARE);
+                    } else { // No upper bound
+                        List_Append(parent->children, AST_Create(AST_UNDEF, NULL, scope, parent->pos, false)); // undef upper bound
+                    }
+                }
+            }
             parent->pos = merge(parent->pos, token->pos);
             child = parent;
         } else if ((token = accept(TOKEN_COLON)) != NULL) {

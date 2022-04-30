@@ -31,19 +31,14 @@ leetcode::Module = (
     -- the two numbers such that they add up to target.
     -- https://leetcode.com/problems/two-sum/
     twoSum::(nums:[]Int, target:Int)->[2]Int = {
-        ans := new [2]Int
-        ans[0] = -1
-        ans[1] = -1
         for i := 0; i < nums.length - 1; i += 1 {
             for j := i + 1; j < nums.length; j += 1 {
                 if nums[i] + nums[j] == target {
-                    ans[0] = i
-                    ans[1] = j
-                    return ans
+                    return new [2]Int[i, j]
                 }
             }
         }
-        return ans
+        return new [2]Int[-1, -1]
     }
 
     + test_twoSum::()->() = {
@@ -76,32 +71,23 @@ leetcode::Module = (
             l.val + convertToInt(l.next) * 10
         }
 
-    convertToList::(i:Int)->&ListNode = {
-        retval := new ListNode
+    convertToList::(i:Int)->&ListNode =
         if i < 10 {
-            *retval = (i, null):ListNode
+            new ListNode(i, null)
         } else {
-            *retval = (i % 10, convertToList(i / 10)):ListNode
+            new ListNode(i % 10, convertToList(i / 10))
         }
-        return retval
-    }
 
     addTwoNumbers::(l1:&ListNode, l2:&ListNode)->&ListNode = 
         convertToList(convertToInt(l1) + convertToInt(l2))
 
     + test_addTwoNumbers::()->() = {
-        l1_c := new ListNode
-        *l1_c = (3, null):ListNode
-        l1_b := new ListNode
-        *l1_b = (4, l1_c):ListNode
-        l1 := new ListNode
-        *l1 = (2, l1_b):ListNode
-        l2_c := new ListNode
-        *l2_c = (4, null):ListNode
-        l2_b := new ListNode
-        *l2_b = (6, l2_c):ListNode
-        l2 := new ListNode
-        *l2 = (5, l2_b):ListNode
+        l1_c := new ListNode(3, null)
+        l1_b := new ListNode(4, l1_c)
+        l1   := new ListNode(2, l1_b)
+        l2_c := new ListNode(4, null)
+        l2_b := new ListNode(6, l2_c)
+        l2   := new ListNode(5, l2_b)
 
         ans := addTwoNumbers(l1, l2)
 
@@ -231,7 +217,7 @@ leetcode::Module = (
                 end = i + len / 2
             }
         }
-        stdlib.string.substring(s, start, end + 1)
+        s[start;end]
     }
 
     + test_longestPalindrome::()->() = {

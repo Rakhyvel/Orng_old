@@ -322,6 +322,8 @@ char* AST_GetString(enum astType type)
         return "AST_PAREN";
     case AST_INDEX:
         return "AST_INDEX";
+    case AST_SLICE:
+        return "AST_SLICE";
     case AST_DEREF:
         return "AST_DEREF";
     case AST_ADDROF:

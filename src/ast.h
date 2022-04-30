@@ -37,6 +37,7 @@ enum astType {
     AST_ADDROF,
     AST_DEREF,
     AST_INDEX,
+	AST_SLICE,
     AST_NULL,
     AST_SIZEOF,
     // Boolean
@@ -78,8 +79,8 @@ enum astType {
     AST_SWITCH,
     AST_CASE,
     AST_RETURN,
-    AST_NEW,
-    AST_FREE,
+    AST_NEW,         // Replace with allocator method 
+    AST_FREE,        // Replace with allocator method
 	AST_DEFER,
 	AST_BREAK,
 	AST_CONTINUE,

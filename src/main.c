@@ -46,6 +46,7 @@ To run a function at compiletime:
 #include <stdlib.h>
 #include <string.h>
 #include <windows.h>
+#include <time.h>
 
 #include <io.h> // For access().
 #include <sys/stat.h> // For stat().
@@ -355,6 +356,9 @@ Translates an input file to a C output file
 */
 int main(int argc, char** argv)
 {
+    clock_t t;
+    t = clock();
+
     printf("started...\n");
     if (argc != 2) {
         gen_error("expected project directory as command line argument");
@@ -408,6 +412,9 @@ int main(int argc, char** argv)
             exit(1);
         }
     }
+    t = clock() - t;
+    double time_taken = ((double)t) / CLOCKS_PER_SEC; // in seconds
+    printf("%d ms\n", (int)(time_taken * 1000.0));
 
     system("pause");
 }

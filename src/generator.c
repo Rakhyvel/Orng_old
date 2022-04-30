@@ -178,7 +178,7 @@ static void generateDefaultValue(FILE* out, ASTNode* type)
             fprintf(out, "}})");
         } else {
             fprintf(out, "){0, 0})");
-		}
+        }
     } break;
     case AST_PARAMLIST: {
         fprintf(out, "((");
@@ -295,6 +295,22 @@ int printTempVarUndef(FILE* out, ASTNode* node)
     }
     if (scope) {
         fprintf(out, " _%d;\n", scope->tempVars);
+        return scope->tempVars++;
+    } else {
+        return -1;
+    }
+}
+
+int printTempVarType(FILE* out, ASTNode* node, ASTNode* type)
+{
+    fprintf(out, "\t");
+    printType(out, type);
+    SymbolNode* scope = node->scope;
+    while (scope && scope->symbolType != SYMBOL_FUNCTION && scope->symbolType != SYMBOL_PROCEDURE) {
+        scope = scope->parent;
+    }
+    if (scope) {
+        fprintf(out, " _%d = ", scope->tempVars);
         return scope->tempVars++;
     } else {
         return -1;
@@ -532,7 +548,12 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
         break;
     case AST_NEW: {
         ASTNode* type = List_Get(node->children, 0);
+        ASTNode* init = List_Get(node->children, 1);
         int id = -1;
+        int initID = -1;
+        if (init->astType != AST_UNDEF) {
+            initID = generateAST(out, init, false);
+        }
         if (type->astType == AST_ARRAY) {
             ASTNode* lengthDefine = List_Get(type->children, 0);
             SymbolNode* lengthSymbol = lengthDefine->data;
@@ -547,7 +568,11 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
             fprintf(out, ") * _%d)};\n", lengthID);
             fprintf(out, "\t_%d.length = _%d;\n", id, lengthID);
             fprintf(out, "\tfor(int i = 0; i < _%d; i++) {_%d.data[i] = ", lengthID, id);
-            generateDefaultValue(out, dataType);
+            if (initID == -1) {
+                generateDefaultValue(out, dataType);
+            } else {
+                fprintf(out, "_%d.data[i]", initID);
+			}
             fprintf(out, ";}\n");
         } else if (type->astType == AST_PARAMLIST) {
             id = printTempVar(out, node);
@@ -555,7 +580,11 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
             printType(out, type);
             fprintf(out, "), 1);\n");
             fprintf(out, "\t*_%d = ", id);
-            generateDefaultValue(out, type);
+            if (initID == -1) {
+                generateDefaultValue(out, type);
+            } else {
+                fprintf(out, "_%d", initID);
+			}
             fprintf(out, ";\n");
         } else {
             id = printTempVar(out, node);
@@ -656,7 +685,7 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
         int id = printTempVar(out, node);
         fprintf(out, "{%d, (", node->children->size);
         printType(out, ((ASTNode*)List_Begin(node->children)->data)->type);
-		fprintf(out, "[]){");
+        fprintf(out, "[]){");
         for (ListElem* elem = List_Begin(ids); elem != List_End(ids); elem = elem->next) {
             int* elemID = elem->data;
             fprintf(out, "_%d", *elemID);
@@ -711,6 +740,35 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
         if (!isLValue) {
             fprintf(out, ";\n");
         }
+        return id;
+    }
+    case AST_SLICE: {
+        /*
+		struct struct_3 _172_arr = {4, (int64_t[]){0, 0, 0, 0}}
+		int64_t _0 = 4;
+		int64_t _1 = 2;
+		_172_subArr = {_0 - _1, arr.data + _1};
+		*/
+        ASTNode* arr = List_Get(node->children, 0);
+        ASTNode* lowerBound = List_Get(node->children, 1);
+        ASTNode* upperBound = List_Get(node->children, 2);
+        int arrID = generateAST(out, arr, false);
+        int lowerBoundID = -1;
+        int upperBoundID = -1;
+        if (lowerBound->astType != AST_UNDEF) {
+            lowerBoundID = generateAST(out, lowerBound, false);
+        } else {
+            lowerBoundID = printTempVarType(out, lowerBound, INT64_TYPE);
+            fprintf(out, "0;\n");
+        }
+        if (upperBound->astType != AST_UNDEF) {
+            upperBoundID = generateAST(out, upperBound, false);
+        } else {
+            upperBoundID = printTempVarType(out, upperBound, INT64_TYPE);
+            fprintf(out, "_%d.length;\n", arrID);
+        }
+        int id = printTempVar(out, node);
+        fprintf(out, "{_%d - _%d, _%d.data + _%d};\n", upperBoundID, lowerBoundID, arrID, lowerBoundID);
         return id;
     }
     case AST_SIZEOF: {
@@ -1342,11 +1400,11 @@ void generateMainFunction(FILE* out, SymbolNode* mainFunction)
 
     fprintf(out, "\tfor (int  i = 0; i < argc; i++) {\n");
 
-	fprintf(out, "\t\tint length = strlen(argv[i]);\n");
+    fprintf(out, "\t\tint length = strlen(argv[i]);\n");
 
     fprintf(out, "\t\targs.data[i] = (");
     printType(out, STRING_TYPE);
-	fprintf(out, "){length, calloc(sizeof(char) * length, 1)};\n");
+    fprintf(out, "){length, calloc(sizeof(char) * length, 1)};\n");
 
     fprintf(out, "\t\tmemcpy(args.data[i].data, argv[i], length);\n");
 

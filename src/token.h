@@ -79,9 +79,9 @@ typedef enum {
     TOKEN_CASE,
     TOKEN_NULL,
     TOKEN_RETURN,
-	TOKEN_NEW,
-	TOKEN_FREE,
-	TOKEN_DEFER,
+    TOKEN_DEFER,
+    TOKEN_NEW,
+    TOKEN_FREE,
     // Types
     TOKEN_ARROW,
 	TOKEN_BIG_ARROW,
