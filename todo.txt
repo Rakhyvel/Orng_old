@@ -266,14 +266,11 @@ x procedures inside structs
 			sli := arr[:]  -- here both 0 and length of base array is used
 		x syntax to initialize arrays on new, and structs as well
 		<new> <type> (<array-literal> | <arglist>)?
-	- no syntactical difference between procedures and functions, just confuses things. Just check if FUNCTION is stateless (remove procedure)
-	- please write the grammar :) and make sure there are no "subsets" or possible stylistic arguments between people
-		- fix parser so that it accepts binary operators on new lines
-	- shorten stdlib to std
-	- rework restrictions to only restrict sibling symbols. Error if a symbol is not a sibling?
-	- symbol alias cannot be made public
+	x no syntactical difference between procedures and functions, just confuses things. Just check if FUNCTION is stateless (remove procedure)
+	x shorten stdlib to std
+	x rework restrictions to only restrict sibling symbols. Error if a symbol is not a sibling?
 	- can only cast between types where the behavior is relatively well known
-	- cannot cast away const
+		- cannot cast away const
 	- find a way to make multi line strings, the way I have it now isnt tokenizable line-by-line
 - unions like in julia and haskell
 	- Only practical uses are Either, and Maybe. Either is only ever used to pass error messages
@@ -330,6 +327,7 @@ x procedures inside structs
 - generics
 	- you would need a function that 'returns' a type
 		- make types expressions so that `return <type>` works
+		- may need to write out grammar for this to work, but after this is should be pretty much solidified
 	- if comptime, acts as generics
 	- if runtime, a separate function is "stamped" and memoized, this function is called
 	- allocators with free and new methods that take in addrs and types, replace free and new

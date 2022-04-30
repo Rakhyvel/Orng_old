@@ -217,19 +217,11 @@ int AST_TypeRepr(char* str, ASTNode* type)
             }
         }
         break;
-    case AST_PROCEDURE: {
-        ASTNode* input = List_Get(type->children, 0);
-        ASTNode* output = List_Get(type->children, 1);
-        str += AST_TypeRepr(str, input);
-        str += sprintf(str, "->");
-        str += AST_TypeRepr(str, output);
-        break;
-    }
     case AST_FUNCTION: {
         ASTNode* input = List_Get(type->children, 0);
         ASTNode* output = List_Get(type->children, 1);
         str += AST_TypeRepr(str, input);
-        str += sprintf(str, "=>");
+        str += sprintf(str, "->");
         str += AST_TypeRepr(str, output);
         break;
     }

@@ -123,7 +123,7 @@ void List_Destroy(List* list)
 bool List_Contains(List* list, void* data)
 {
     for (ListElem* e = List_Begin(list); e != List_End(list); e = e->next) {
-        if (e->data = data) {
+        if (e->data == data) {
             return true;
         }
     }

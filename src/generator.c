@@ -30,14 +30,14 @@ static void printPath(FILE* out, SymbolNode* symbol)
         fprintf(out, "_%s_%s", symbol->parent->name, symbol->name);
     }
     // Parameters
-    else if (symbol->symbolType == SYMBOL_VARIABLE && symbol->parent && (symbol->parent->symbolType == SYMBOL_FUNCTION || symbol->parent->symbolType == SYMBOL_PROCEDURE)) {
+    else if (symbol->symbolType == SYMBOL_VARIABLE && symbol->parent && symbol->parent->symbolType == SYMBOL_FUNCTION) {
         fprintf(out, "_%s", symbol->name);
     }
     // Everything else
-    else if (symbol->parent && (symbol->parent->symbolType != SYMBOL_TYPE || symbol->symbolType == SYMBOL_PROCEDURE) && symbol->parent->parent && !symbol->isExtern) {
+    else if (symbol->parent && (symbol->parent->symbolType != SYMBOL_TYPE || symbol->symbolType == SYMBOL_FUNCTION) && symbol->parent->parent && !symbol->isExtern) {
         if (symbol->parent->symbolType != SYMBOL_VARIABLE) { // Done so that fields in anon structs collected by variable types don't have their variable names appended
             // Done so that inner functions print correctly (i think)
-            if (symbol->symbolType == SYMBOL_VARIABLE || (symbol->parent->parent->symbolType != SYMBOL_BLOCK && symbol->parent->symbolType != SYMBOL_PROCEDURE && symbol->parent->symbolType != SYMBOL_FUNCTION)) {
+            if (symbol->symbolType == SYMBOL_VARIABLE || (symbol->parent->parent->symbolType != SYMBOL_BLOCK && symbol->parent->symbolType != SYMBOL_FUNCTION)) {
                 printPath(out, symbol->parent);
             }
             fprintf(out, "_%s", symbol->name);
@@ -56,7 +56,7 @@ static int sprintPath(char* str, SymbolNode* symbol)
 {
     char* origStr = str;
     if (symbol->parent && symbol->parent->symbolType != SYMBOL_TYPE && symbol->parent->parent && !symbol->isExtern) {
-        if (symbol->parent->parent->symbolType != SYMBOL_BLOCK && symbol->parent->symbolType != SYMBOL_PROCEDURE && symbol->parent->symbolType != SYMBOL_FUNCTION) {
+        if (symbol->parent->parent->symbolType != SYMBOL_BLOCK && symbol->parent->symbolType != SYMBOL_FUNCTION) {
             str += sprintPath(str, symbol->parent);
         }
         str += sprintf(str, "_%s", symbol->name);
@@ -129,7 +129,6 @@ static void printType(FILE* out, ASTNode* type)
         break;
     }
     case AST_FUNCTION:
-    case AST_PROCEDURE:
         // The second child in a function is the return type
         ASTNode* ret = List_Get(type->children, 1);
         printType(out, ret);
@@ -192,7 +191,7 @@ static void generateDefaultValue(FILE* out, ASTNode* type)
                 if (elem->next != List_End(type->children)) {
                     fprintf(out, ", ");
                 }
-            } else if (!((var->symbolType == SYMBOL_PROCEDURE || var->symbolType == SYMBOL_FUNCTION) && var->type->isConst)) {
+            } else if (!(var->symbolType == SYMBOL_FUNCTION && var->type->isConst)) {
                 generateAST(out, var->def, true);
                 if (elem->next != List_End(type->children)) {
                     fprintf(out, ", ");
@@ -215,7 +214,7 @@ static void generateDefine(FILE* out, SymbolNode* var, bool param)
     }
     printType(out, var->type);
     fprintf(out, " ");
-    bool functionPtr = !var->type->isConst && (var->type->astType == AST_PROCEDURE || var->type->astType == AST_FUNCTION);
+    bool functionPtr = !var->type->isConst && var->type->astType == AST_FUNCTION;
     if (functionPtr) {
         fprintf(out, "(*");
     }
@@ -274,7 +273,7 @@ int printTempVar(FILE* out, ASTNode* node)
     fprintf(out, "\t");
     printType(out, node->type);
     SymbolNode* scope = node->scope;
-    while (scope && scope->symbolType != SYMBOL_FUNCTION && scope->symbolType != SYMBOL_PROCEDURE) {
+    while (scope && scope->symbolType != SYMBOL_FUNCTION) {
         scope = scope->parent;
     }
     if (scope) {
@@ -290,7 +289,7 @@ int printTempVarUndef(FILE* out, ASTNode* node)
     fprintf(out, "\t");
     printType(out, node->type);
     SymbolNode* scope = node->scope;
-    while (scope && scope->symbolType != SYMBOL_FUNCTION && scope->symbolType != SYMBOL_PROCEDURE) {
+    while (scope && scope->symbolType != SYMBOL_FUNCTION) {
         scope = scope->parent;
     }
     if (scope) {
@@ -306,7 +305,7 @@ int printTempVarType(FILE* out, ASTNode* node, ASTNode* type)
     fprintf(out, "\t");
     printType(out, type);
     SymbolNode* scope = node->scope;
-    while (scope && scope->symbolType != SYMBOL_FUNCTION && scope->symbolType != SYMBOL_PROCEDURE) {
+    while (scope && scope->symbolType != SYMBOL_FUNCTION) {
         scope = scope->parent;
     }
     if (scope) {
@@ -327,7 +326,7 @@ void printID(FILE* out, ASTNode* node, int id)
 int newLabel(ASTNode* node)
 {
     SymbolNode* scope = node->scope;
-    while (scope && scope->symbolType != SYMBOL_FUNCTION && scope->symbolType != SYMBOL_PROCEDURE) {
+    while (scope && scope->symbolType != SYMBOL_FUNCTION) {
         scope = scope->parent;
     }
     if (scope) {
@@ -542,7 +541,7 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
     }
     case AST_DEFINE:
         SymbolNode* var = node->data;
-        if (!((var->symbolType == SYMBOL_PROCEDURE || var->symbolType == SYMBOL_FUNCTION) && var->type->isConst)) {
+        if (!(var->symbolType == SYMBOL_FUNCTION && var->type->isConst)) {
             generateDefine(out, var, false);
         }
         break;
@@ -849,7 +848,7 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
                     printTab = false;
                 }
                 printPath(out, dotSymbol);
-            } else if (dotSymbol && dotSymbol->type->isConst && (dotSymbol->type->astType == AST_PROCEDURE || dotSymbol->type->astType == AST_FUNCTION)) {
+            } else if (dotSymbol && dotSymbol->type->isConst && dotSymbol->type->astType == AST_FUNCTION) {
                 if (!isLValue) {
                     id = printTempVar(out, node);
                 } else if (printTab) {
@@ -1107,7 +1106,7 @@ static void generateStruct(FILE* out, DGraph* graphNode)
     for (; paramElem != List_End(_struct->children); paramElem = paramElem->next) {
         ASTNode* define = paramElem->data;
         SymbolNode* var = define->data;
-        if (!((var->symbolType == SYMBOL_PROCEDURE || var->symbolType == SYMBOL_FUNCTION) && var->type->isConst)) {
+        if (!(var->symbolType == SYMBOL_FUNCTION && var->type->isConst)) {
             fprintf(out, "\t");
             generateDefine(out, var, true);
             fprintf(out, ";\n");
@@ -1274,7 +1273,7 @@ static int getPathLength(SymbolNode* symbol)
 {
     if (symbol->parent->parent != NULL && !symbol->isExtern) {
         int length = 0;
-        if (symbol->parent->symbolType != SYMBOL_PROCEDURE && symbol->parent->symbolType != SYMBOL_FUNCTION) {
+        if (symbol->parent->symbolType != SYMBOL_FUNCTION) {
             length += getPathLength(symbol->parent);
         }
         return length + strlen(symbol->name) + 1;

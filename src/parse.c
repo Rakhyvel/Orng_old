@@ -987,7 +987,7 @@ ASTNode* parseDefine(SymbolNode* scope, bool isPublic)
         while (!accept(TOKEN_RSQUARE)) {
             while (accept(TOKEN_NEWLINE))
                 ;
-            ASTNode* expr = parseExpr(scope);
+            ASTNode* expr = parseFactor(scope);
             List_Append(restrictionExpr, expr);
             if (!accept(TOKEN_NEWLINE)) {
                 if (!accept(TOKEN_COMMA)) {
@@ -1073,8 +1073,6 @@ ASTNode* parseDefine(SymbolNode* scope, bool isPublic)
             symbol->symbolType = SYMBOL_TYPE;
         } else if (type->astType == AST_IDENT && !strcmp(type->data, "Enum")) {
             symbol->symbolType = SYMBOL_ENUM;
-        } else if (type->astType == AST_PROCEDURE && type->isConst) {
-            symbol->symbolType = SYMBOL_PROCEDURE;
         } else if (type->astType == AST_FUNCTION && type->isConst) {
             symbol->symbolType = SYMBOL_FUNCTION;
         } else {
@@ -1178,19 +1176,7 @@ ASTNode* parseTypeFunction(SymbolNode* scope, bool isPublic)
         if ((token = accept(TOKEN_ARROW)) != NULL) {
             while (accept(TOKEN_NEWLINE))
                 ;
-            if (child->astType != AST_PROCEDURE && child->astType != AST_FUNCTION && child->astType != AST_PARAMLIST && child->astType != AST_VOID) {
-                error(child->pos, "expected parameter list or function");
-            }
-            ASTNode* parent = AST_Create(AST_PROCEDURE, 0, scope, token->pos, false);
-            SymbolNode* hiddenSymbol = Symbol_Create("", SYMBOL_BLOCK, scope, parent->pos); // So that paramlist members are not visible in function
-            ASTNode* right = parseType(hiddenSymbol, isPublic);
-            appendAndMerge(parent, child);
-            appendAndMerge(parent, right);
-            child = parent;
-        } else if ((token = accept(TOKEN_BIG_ARROW)) != NULL) {
-            while (accept(TOKEN_NEWLINE))
-                ;
-            if (child->astType != AST_PROCEDURE && child->astType != AST_FUNCTION && child->astType != AST_PARAMLIST && child->astType != AST_VOID) {
+            if (child->astType != AST_FUNCTION && child->astType != AST_PARAMLIST && child->astType != AST_VOID) {
                 error(child->pos, "expected parameter list or function");
             }
             ASTNode* parent = AST_Create(AST_FUNCTION, 0, scope, token->pos, false);

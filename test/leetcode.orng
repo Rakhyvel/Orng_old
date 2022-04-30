@@ -23,13 +23,14 @@ leetcode::Module = (
         } else if n % 5 == 0 {
             "buzz"
         } else {
-            stdlib.string.format(255, "%d", n)
+            std.string.format(255, "%d", n)
         }
 
 
     -- Given an array of integers nums and an integer target, return indices of
     -- the two numbers such that they add up to target.
     -- https://leetcode.com/problems/two-sum/
+    -[]
     twoSum::(nums:[]Int, target:Int)->[2]Int = {
         for i := 0; i < nums.length - 1; i += 1 {
             for j := i + 1; j < nums.length; j += 1 {
@@ -41,6 +42,7 @@ leetcode::Module = (
         return new [2]Int[-1, -1]
     }
 
+    -[twoSum]
     + test_twoSum::()->() = {
         nums: [4]Int = [2, 7, 11, 15]
         target := 9
@@ -48,9 +50,9 @@ leetcode::Module = (
         ans := twoSum(nums, target)
 
         if nums[ans[0]] + nums[ans[1]] == target {
-            stdlib.system.println("twoSum: Passed!")
+            std.system.println("twoSum: Passed!")
         } else {
-            stdlib.system.println("twoSum: Failed")
+            std.system.println("twoSum: Failed")
         }
     }
 
@@ -64,6 +66,7 @@ leetcode::Module = (
         val:Int
         next:&ListNode
     )
+
     convertToInt::(l:&ListNode)->Int =
         if l.next == null {
             l.val
@@ -92,9 +95,9 @@ leetcode::Module = (
         ans := addTwoNumbers(l1, l2)
 
         if ans.val == 7 && ans.next.val == 0 && ans.next.next.val == 8 {
-            stdlib.system.println("addTwoNumbers: Passed!")
+            std.system.println("addTwoNumbers: Passed!")
         } else {
-            stdlib.system.println("addTwoNumbers: Failed")
+            std.system.println("addTwoNumbers: Failed")
         }
     }
 
@@ -124,7 +127,7 @@ leetcode::Module = (
         for i := 0; i < n; i += 1 {
             for j := i; j < n; j += 1 {
                 if areDistinct(str, i, j) {
-                    res = stdlib.math.max(res, j - i + 1):Int
+                    res = std.math.max(res, j - i + 1):Int
                 }
             }
         }
@@ -138,9 +141,9 @@ leetcode::Module = (
         ans := lengthOfLongestSubstring(s)
 
         if ans == 3 {
-            stdlib.system.println("lengthOfLongestSubstring: Passed!")
+            std.system.println("lengthOfLongestSubstring: Passed!")
         } else {
-            stdlib.system.println("lengthOfLongestSubstring: Failed %d", ans)
+            std.system.println("lengthOfLongestSubstring: Failed %d", ans)
         }
     }
 
@@ -186,9 +189,9 @@ leetcode::Module = (
         ans := findMedianSortedArrays(nums1, nums2)
 
         if ans == 2.0 {
-            stdlib.system.println("findMedianSortedArrays: Passed!")
+            std.system.println("findMedianSortedArrays: Passed!")
         } else {
-            stdlib.system.println("findMedianSortedArrays: Failed %f", ans)
+            std.system.println("findMedianSortedArrays: Failed %f", ans)
         }
     }
 
@@ -211,7 +214,7 @@ leetcode::Module = (
         for i := 0; i < s.length; i += 1 {
             len1 := expandAroundCenter(s, i, i)
             len2 := expandAroundCenter(s, i, i + 1)
-            len := stdlib.math.max(len1, len2):Int
+            len := std.math.max(len1, len2):Int
             if len > end - start {
                 start = i - (len - 1) / 2
                 end = i + len / 2
@@ -225,10 +228,10 @@ leetcode::Module = (
 
         ans := longestPalindrome(s)
 
-        if stdlib.string.equals(ans, "bab") || stdlib.string.equals(ans, "aba") {
-            stdlib.system.println("longestPalindrome: Passed!")
+        if std.string.equals(ans, "bab") || std.string.equals(ans, "aba") {
+            std.system.println("longestPalindrome: Passed!")
         } else {
-            stdlib.system.println("longestPalindrome: Failed")
+            std.system.println("longestPalindrome: Failed")
         }
     }
 
@@ -286,10 +289,10 @@ leetcode::Module = (
     + test_convert::()->() = {
         ans := convert("PAYPALISHIRING", 3)
 
-        if stdlib.string.equals(ans, "PAHNAPLSIIGYIR") {
-            stdlib.system.println("convert: Passed!")
+        if std.string.equals(ans, "PAHNAPLSIIGYIR") {
+            std.system.println("convert: Passed!")
         } else {
-            stdlib.system.println("convert: Failed")
+            std.system.println("convert: Failed")
         }
     }
 
@@ -317,9 +320,9 @@ leetcode::Module = (
         ans := reverse(123)
 
         if ans == 321 {
-            stdlib.system.println("reverse: Passed!")
+            std.system.println("reverse: Passed!")
         } else {
-            stdlib.system.println("reverse: Failed")
+            std.system.println("reverse: Failed")
         }
     }
 
@@ -347,7 +350,7 @@ leetcode::Module = (
         }
 
         -- Read in next few digits as integer
-        for ; i < s.length && stdlib.string.isdigit(s[i]); i += 1 {
+        for ; i < s.length && std.string.isdigit(s[i]); i += 1 {
             x = x * 10 + s[i]:Int - '0':Int
         }
 
@@ -360,9 +363,9 @@ leetcode::Module = (
         ans := myAtoi(s)
 
         if ans == 42 {
-            stdlib.system.println("myAtoi: Passed!")
+            std.system.println("myAtoi: Passed!")
         } else {
-            stdlib.system.println("myAtoi: Failed")
+            std.system.println("myAtoi: Failed")
         }
     }
 
@@ -386,9 +389,9 @@ leetcode::Module = (
         ans := isPalindrome(x)
 
         if ans {
-            stdlib.system.println("isPalindrome: Passed!")
+            std.system.println("isPalindrome: Passed!")
         } else {
-            stdlib.system.println("isPalindrome: Failed")
+            std.system.println("isPalindrome: Failed")
         }
     }
 )
