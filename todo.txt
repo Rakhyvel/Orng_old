@@ -270,7 +270,7 @@ x procedures inside structs
 	x shorten stdlib to std
 	x rework restrictions to only restrict sibling symbols. Error if a symbol is not a sibling?
 	x find a way to make multi line strings, the way I have it now isnt tokenizable line-by-line
-- Rework the compiler to be better
+- Rework the compiler to be better [ast-union-type]
 	- use a union for AST Nodes, like you would if you were to rewrite this in Orng
 		- create function to create an AST for every possible AST type
 		- no more guessing the child element in a list! Can now just use it
