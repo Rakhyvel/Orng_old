@@ -1,6 +1,6 @@
 testModule::Module = (
 	+ main::(args:[]String)->Int = {
-		leetcode.test_all()
+		leetcode.test_maxArea()
 		0
 	}
 )

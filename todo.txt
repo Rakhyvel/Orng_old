@@ -269,11 +269,23 @@ x procedures inside structs
 	x no syntactical difference between procedures and functions, just confuses things. Just check if FUNCTION is stateless (remove procedure)
 	x shorten stdlib to std
 	x rework restrictions to only restrict sibling symbols. Error if a symbol is not a sibling?
-	- find a way to make multi line strings, the way I have it now isnt tokenizable line-by-line
+	x find a way to make multi line strings, the way I have it now isnt tokenizable line-by-line
+- Rework the compiler to be better
+	- use a union for AST Nodes, like you would if you were to rewrite this in Orng
+		- create function to create an AST for every possible AST type
+		- no more guessing the child element in a list! Can now just use it
+	- convert AST to IR before, evaluate this, then 1:1 generate it out
+		1. For each symbol, flatten it's AST definition to an untyped IR list
+			- IR instructions should have a union with the different instructions too, like ASTs
+		2. perform semantic analysis on the untyped IR list
+			- Two different types for untyped IR instr and analyzed IR instr
+			- Have a function that takes in untyped IR, analyzes it, emits an error or returns the new analyzed IR
+			- untyped IRs have ptrs to the analyzed IR, so that IRs that refered to the untyped version can get the typed version
+	- ASTs will likely not be typed, however, types will always be represented with ASTs I think
 - unions like in julia and haskell
 	- Only practical uses are Either, and Maybe. Either is only ever used to pass error messages
 	- Tagged union and enums
-		Syntax: (|| <ident> (:<type>)? (=<constexpr int>)?)+
+		Syntax: (|<ident> (:<type>)? (=<constexpr int>)?)+
 		- void type is implied if no type is given
 		- void fields in unions aren't generated, but their type is still used
 		- number is assigned if none is given. Clashes are not permitted
@@ -298,19 +310,6 @@ x procedures inside structs
 	- GOOD RULE OF THUMB:
 		if it'd be a pain to implement for compile-time evaluation, don't add it as a feature
 		LESS features is better!
-	- convert AST to IR before, evaluate this, then 1:1 generate it out
-		- simpler to generate
-		- this could also be part of the validation step
-		  0. memoize IR if it's already converted
-		  1. validate AST
-		  2. convert to IR
-		  2.5. do optimizations?
-		  3. evaluate IR
-		  4. store IR back into function
-		     if function has comptime parameters, memoize arguments to result
-			 if variable, create new IR with constant evaluate value
-		- this way the evalator CAN use pointers and allocate memory intermediately, just cannot be lasting value
-	- for every compile-time constant variable, validate it's AST and evaluate it, replacing it's AST with the result
 	- setup a runtime environment with stackframes and a map of variable names to a "value" union
 		- values can be integer, string, array literal, whatever
 		- probably can't be pointers since that would be hard (but Jai does it somehow...)
@@ -321,7 +320,7 @@ x procedures inside structs
 	- if denominator is comptime, must not be 0
 	- dead code trimming
 	- calls to functions with all comptime parameters are memoized
-		- map input parameter values -> output value or AST (choose)
+		- map input parameter values -> output instruction
 - generics
 	- you would need a function that 'returns' a type
 		- make types expressions so that `return <type>` works

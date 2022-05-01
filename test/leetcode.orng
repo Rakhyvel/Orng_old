@@ -11,6 +11,8 @@ leetcode::Module = (
         test_reverse()
         test_myAtoi()
         test_isPalindrome()
+        test_isMatch()
+        test_maxArea()
     }
 
 
@@ -314,6 +316,7 @@ leetcode::Module = (
         list = prev
         return list
     }
+    
     reverse::(x:Int)->Int = convertToInt(reverseList(convertToList(x)))
 
     + test_reverse::()->() = {
@@ -370,6 +373,8 @@ leetcode::Module = (
     }
 
 
+    -- Given an integer x, return true if x is palindrome integer.
+    -- An integer is a palindrome when it reads the same backward as forward.
     isPalindrome::(x:Int)->Bool = {
         list := convertToList(x)
         reversedList := reverseList(convertToList(x))
@@ -392,6 +397,74 @@ leetcode::Module = (
             std.system.println("isPalindrome: Passed!")
         } else {
             std.system.println("isPalindrome: Failed")
+        }
+    }
+
+
+    -- Given an input string s and a pattern p, implement regular expression 
+    -- matching with support for '.' and '*' where:
+    -- '.' Matches any single character.​​​​
+    -- '*' Matches zero or more of the preceding element.
+    -- The matching should cover the entire input string (not partial).
+    isMatch::(s: String, p: String)->Bool = {
+        i := 0 -- s index
+        j := 0 -- p index
+
+        for i < s.length {
+            repeat::Bool = if j + 1 == p.length {false} else {p[j + 1] == '*'}
+
+            if p[j] != '.' && s[i] != p[j] {
+                if repeat {
+                    j += 1
+                } else {
+                    return false
+                }
+            } else {
+                i += 1
+                if !repeat {
+                    j += 1
+                }
+            }
+        }
+        true
+    }
+
+    + test_isMatch::()->() = {
+        s := "aa"
+        p := "a*"
+
+        ans := isMatch(s, p)
+
+        if ans {
+            std.system.println("isMatch: Passed!")
+        } else {
+            std.system.println("isMatch: Failed")
+        }
+    }
+
+
+    -- You are given an integer array height of length n. There are n vertical 
+    -- lines drawn such that the two endpoints of the ith line are (i, 0) and 
+    -- (i, height[i]).
+    -- Find two lines that together with the x-axis form a container, such that
+    -- the container contains the most water.
+    -- Return the maximum amount of water a container can store.
+    maxArea::(height:[]Int, max:Int=0)->Int =
+        for i := 0; i < height.length - 1; i += 1 {
+            for j := i + 1; j < height.length; j += 1 {
+                max = std.math.max(max, std.math.abs(i - j) * std.math.min(height[i], height[j])):Int
+            }
+        }
+
+    + test_maxArea::()->() = {
+        height := [1,8,6,2,5,4,8,3,7]
+
+        ans := maxArea(height)
+
+        if ans == 49 {
+            std.system.println("maxArea: Passed!")
+        } else {
+            std.system.println("maxArea: Failed")
         }
     }
 )
