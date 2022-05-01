@@ -138,9 +138,9 @@ typedef struct astNode_namedArg {
     struct astNode* expr; // expression this argument is set to
 } astNode_namedArg;
 
-typedef struct astNode_arrayliteral {
+typedef struct astNode_arrayLiteral {
     List* members; // members in the array literal, all of which are the same type
-} astNode_arrayliteral;
+} astNode_arrayLiteral;
 
 typedef struct astNode_true {
     int no_data;
@@ -285,11 +285,11 @@ typedef struct astNode_rshift {
 
 typedef struct astNode_block {
     List* children;
-    SymbolNode* blockSymbol; // The symbol node for this block ast, possibly unneeded?
+    struct symbolNode* blockSymbol; // The symbol node for this block ast, possibly unneeded?
 } astNode_block;
 
 typedef struct astNode_define {
-    SymbolNode* symbol;
+    struct symbolNode* symbol;
 } astNode_define;
 
 typedef struct astNode_assign {
@@ -381,7 +381,7 @@ typedef struct astNode_new {
 } astNode_new;
 
 typedef struct astNode_free {
-    struct astNode* free;
+    struct astNode* expr;
 } astNode_free;
 
 typedef struct astNode_defer {
@@ -422,7 +422,7 @@ typedef struct astNode_paramlist {
 typedef struct astNode_function {
     struct astNode* domainType;
     struct astNode* codomainType;
-    // field that says if function is tateless?
+    // field that says if function is stateless?
 } astNode_function;
 
 typedef struct astNode_addr {
@@ -460,8 +460,9 @@ typedef struct astNode {
         astNode_string string;
         astNode_char _char;
         astNode_real real;
+        astNode_arglist arglist;
         astNode_namedArg namedArg;
-        astNode_arrayliteral arrayliteral;
+        astNode_arrayLiteral arrayLiteral;
         astNode_true _true;
         astNode_false _false;
         astNode_null null;
@@ -546,9 +547,79 @@ const ASTNode* UNDEF_TYPE;
 const ASTNode* VOID_ADDR_TYPE;
 const ASTNode* ENUM_TYPE;
 
+ASTNode* AST_Create_ident(char* data, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_call(struct astNode* functionExpr, struct astNode* arglist, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_int(int64_t data, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_string(char* data, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_char(char data, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_real(double data, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_arglist(struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_namedArg(char* name, struct astNode* expr, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_arrayLiteral(struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_true(struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_false(struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_null(struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_undef(struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_neg(struct astNode* right, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_add(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_subtract(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_multiply(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_divide(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_modulus(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_paren(struct astNode* expr, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_addrOf(struct astNode* lvalue, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_deref(struct astNode* expr, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_index(struct astNode* arrayExpr, struct astNode* subscript, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_slice(struct astNode* arrayExpr, struct astNode* lowerBound, struct astNode* upperBound, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_not(struct astNode* expr, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_or(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_and(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_eq(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_neq(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_gtr(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_gte(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_lsr(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_lte(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_bitNot(struct astNode* expr, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_bitOr(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_bitXor(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_bitAnd(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_lshift(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_rshift(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_block(struct symbolNode* block, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_define(struct symbolNode* symbol, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_assign(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_addAssign(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_subAssign(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_multAssign(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_divAssign(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_modAssign(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_andAssign(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_orAssign(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_xorAssign(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_lshiftAssign(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_rshiftAssign(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_if(struct astNode* condition, struct astNode* bodyBlock, struct astNode* elseBlock, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_for(struct astNode* pre, struct astNode* condition, struct astNode* post, struct astNode* bodyBlock, struct astNode* elseBlock, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_switch(struct astNode* expr, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_case(struct astNode* block, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_new(struct astNode* type, struct astNode* init, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_free(struct astNode* expr, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_defer(struct astNode* expr, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_break(struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_continue(struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_dot(struct astNode* container, struct astNode* identifier, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_sizeof(struct astNode* type, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_void(struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_cast(struct astNode* expr, struct astNode* type, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_paramlist(struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_function(struct astNode* domain, struct astNode* codomain, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_addr(struct astNode* type, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_extern(struct symbolNode* externSymbol, struct symbolNode* scope, struct position pos);
+
 // Functions that are defined in the file ast.c
 ASTNode* createArrayTypeNode(ASTNode* baseType, int length);
-ASTNode* AST_Create(enum astType type, uint64_t data, SymbolNode* scope, struct position pos, bool isConst);
+ASTNode* AST_Create(enum astType type, SymbolNode* scope, struct position pos);
 void AST_Print(ASTNode* root, char* prefix, char* childrenPrefix);
 int AST_TypeRepr(char* str, ASTNode* type);
 char* AST_GetString(enum astType type);

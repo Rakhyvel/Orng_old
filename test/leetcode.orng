@@ -202,13 +202,11 @@ leetcode::Module = (
     -- https://leetcode.com/problems/longest-palindromic-substring/
     longestPalindrome::(s:String)->String = {
         expandAroundCenter::(s:String, left:Int, right:Int)->Int = {
-            L := left
-            R := right
-            for L >= 0 && R < s.length && s[L] == s[R] {
-                L -= 1
-                R += 1
+            for left >= 0 && right < s.length && s[left] == s[right] {
+                left -= 1
+                right += 1
             }
-            R - L - 1
+            right - left - 1
         }
 
         start := 0

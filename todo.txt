@@ -232,7 +232,7 @@ x procedures inside structs
 		MyStruct.fn(x, 4) // x's state increments by 4
 		x.fn(4) // equivalent function call
 	x enums have length field and toString procedure
-- imitation LLVM
+x imitation LLVM
 	x custom if, while, for loops using gotos(!)
 	x basic blocks that either call another block or return from the function
 	x all ASTs store their temporary values in temporary variables marked _x where x is a number
@@ -248,7 +248,7 @@ x procedures inside structs
 	x remove new struct functions, since it can now be done inline
 	x defer, return, break, continue paths are correct?
 	x breaks should bust out of switches
-	- slices now that I can initialize arrays as expressions
+	x slices now that I can initialize arrays as expressions
 		x slices are a pointer to an array and a length
 		x syntax to create slices
 			arr: [4]Int
@@ -274,6 +274,7 @@ x procedures inside structs
 	- use a union for AST Nodes, like you would if you were to rewrite this in Orng
 		- create function to create an AST for every possible AST type
 		- no more guessing the child element in a list! Can now just use it
+	- remove x_assign ast nodes, have the parser create the actual assignment subtree
 	- convert AST to IR before, evaluate this, then 1:1 generate it out
 		1. For each symbol, flatten it's AST definition to an untyped IR list
 			- IR instructions should have a union with the different instructions too, like ASTs
@@ -282,6 +283,8 @@ x procedures inside structs
 			- Have a function that takes in untyped IR, analyzes it, emits an error or returns the new analyzed IR
 			- untyped IRs have ptrs to the analyzed IR, so that IRs that refered to the untyped version can get the typed version
 	- ASTs will likely not be typed, however, types will always be represented with ASTs I think
+	- analyzed IR instructions probably will be typed, if they can be
+	- make types expressions
 - unions like in julia and haskell
 	- Only practical uses are Either, and Maybe. Either is only ever used to pass error messages
 	- Tagged union and enums
