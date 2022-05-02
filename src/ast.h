@@ -602,9 +602,10 @@ ASTNode* AST_Create_rshiftAssign(struct astNode* left, struct astNode* right, st
 ASTNode* AST_Create_if(struct astNode* condition, struct astNode* bodyBlock, struct astNode* elseBlock, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_for(struct astNode* pre, struct astNode* condition, struct astNode* post, struct astNode* bodyBlock, struct astNode* elseBlock, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_switch(struct astNode* expr, struct symbolNode* scope, struct position pos);
-ASTNode* AST_Create_case(struct astNode* block, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_case(struct astNode* block, List* exprs, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_new(struct astNode* type, struct astNode* init, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_free(struct astNode* expr, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_return(struct astNode* expr, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_defer(struct astNode* expr, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_break(struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_continue(struct symbolNode* scope, struct position pos);
@@ -613,6 +614,7 @@ ASTNode* AST_Create_sizeof(struct astNode* type, struct symbolNode* scope, struc
 ASTNode* AST_Create_void(struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_cast(struct astNode* expr, struct astNode* type, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_paramlist(struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_array(struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_function(struct astNode* domain, struct astNode* codomain, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_addr(struct astNode* type, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_extern(struct symbolNode* externSymbol, struct symbolNode* scope, struct position pos);

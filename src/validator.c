@@ -268,7 +268,7 @@ static ASTNode* resolveDotTypes(ASTNode* node, bool reassigning)
             error(node->pos, "dot expression doesn't resolve to a symbol");
         }
         if (reassigning && dotSymbol->isExtern) {
-            return AST_Create(AST_EXTERN, dotSymbol, dotSymbol, dotSymbol->pos, false);
+            return AST_Create_extern(dotSymbol, dotSymbol, dotSymbol->pos);
         } else {
             return dotSymbol->def;
         }
@@ -297,10 +297,10 @@ static ASTNode* expandTypeIdent(ASTNode* type, bool reassigning)
                 }
             }
             if (var->symbolType == SYMBOL_ENUM) {
-                expanded = AST_Create(AST_ENUM, var, type->scope, type->pos, false);
+                // expanded = AST_Create_enum(AST_ENUM, var, type->scope, type->pos, false);
             } else {
                 if (reassigning && var->isExtern) {
-                    expanded = AST_Create(AST_EXTERN, var, type->scope, type->pos, false);
+                    expanded = AST_Create_extern(var, type->scope, type->pos);
                     break;
                 } else {
                     expanded = var->def;
@@ -483,8 +483,7 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
     }
     case AST_ADDROF: {
         ASTNode* innerType = getType(List_Get(node->children, 0), false, reassigning);
-        ASTNode* addrType = AST_Create(AST_ADDR, 0, node->scope, (Position) { 0, 0, 0, 0 }, true);
-        List_Append(addrType->children, innerType);
+        ASTNode* addrType = AST_Create_addr(innerType, node->scope, (Position) { 0, 0, 0, 0 });
         type = addrType;
         break;
     }
@@ -507,8 +506,8 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
         break;
     }
     case AST_NULL: {
-        ASTNode* voidPtr = AST_Create(AST_VOID, 0, node->scope, (Position) { 0, 0, 0, 0 }, true);
-        ASTNode* addrType = AST_Create(AST_ADDR, 0, node->scope, (Position) { 0, 0, 0, 0 }, true);
+        ASTNode* voidPtr = AST_Create_void(node->scope, (Position) { 0, 0, 0, 0 });
+        ASTNode* addrType = AST_Create_addr(voidPtr, node->scope, (Position) { 0, 0, 0, 0 });
         List_Append(addrType->children, voidPtr);
         type = addrType;
         break;
@@ -699,8 +698,7 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
     case AST_NEW: {
         ASTNode* newType = List_Get(node->children, 0);
         if (newType->astType != AST_ARRAY) {
-            ASTNode* addr = AST_Create(AST_ADDR, NULL, node->scope, node->pos, false);
-            List_Append(addr->children, newType);
+            ASTNode* addr = AST_Create_addr(newType, node->scope, node->pos);
             type = addr;
         } else {
             type = newType;
@@ -2142,15 +2140,13 @@ Program Validator_Validate(SymbolNode* symbol)
 
         types = List_Create();
 
-        mainFunctionType = AST_Create(AST_FUNCTION, 0, NULL, (Position) { 0, 0, 0, 0 }, true);
-        ASTNode* mainFunctionParams = AST_Create(AST_PARAMLIST, 0, NULL, (Position) { 0, 0, 0, 0 }, true);
+        ASTNode* mainFunctionParams = AST_Create_paramlist(NULL, (Position) { 0, 0, 0, 0 });
         SymbolNode* argsDefineSymbol = Symbol_Create("args", SYMBOL_VARIABLE, NULL, (Position) { 0, 0, 0, 0 });
         argsDefineSymbol->type = STRING_ARR_TYPE;
-        argsDefineSymbol->def = AST_Create(AST_UNDEF, 0, NULL, (Position) { 0, 0, 0, 0 }, false);
-        ASTNode* argsDefine = AST_Create(AST_DEFINE, argsDefineSymbol, NULL, (Position) { 0, 0, 0, 0 }, false);
+        argsDefineSymbol->def = AST_Create_undef(NULL, (Position) { 0, 0, 0, 0 });
+        ASTNode* argsDefine = AST_Create_define(argsDefineSymbol, NULL, (Position) { 0, 0, 0, 0 });
         List_Append(mainFunctionParams->children, argsDefine);
-        List_Append(mainFunctionType->children, mainFunctionParams);
-        List_Append(mainFunctionType->children, INT32_TYPE);
+        mainFunctionType = AST_Create_function(mainFunctionParams, INT32_TYPE, NULL, (Position) { 0, 0, 0, 0 });
         resolveRestrictions(symbol);
     }
 
