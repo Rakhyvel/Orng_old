@@ -410,3 +410,16 @@ x imitation LLVM
 		_0 = 1	-- If we get here, result is true
 	over_1:; -- end of chain
 	- Syntax is weird to parse, need to loop over possible chains, but how to keep track of the symbols for each operator?
+
+- implicit dereferencing, like how C++ uses references
+	- there is a sharp distinction between C++ references and pointers
+	- references cannot be reassigned
+	- perhaps references can be thought of as constant addresses
+	- addrOf returns a constant address
+	- these will not be memoized during comptime eval, because addresses aren't comptime constant, but they could be runtime constant in the scope of the function
+	- maybe even a different syntax, with ^ for pointers and & for references, with references having implicit dereference and pointers not having that
+	- & operator would give "reference", where as ^ would give pointer type, dereferencing a pointer would use * as normal
+	- Was is the valid use case for this?? Seems kind of useless when pointers work fine, and there is no pointer arithmetic
+		- A pointer now can be marked as &:T, so that T is constant and cannot be changed by the callee
+		- however, this would require coercing T to :T, which is not possible
+		- maybe T <: :T, and &T = &:T ?? strange

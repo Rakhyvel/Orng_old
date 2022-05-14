@@ -1,4 +1,3 @@
 -- This package is used to test the Orange programming language
 -- @author Joseph Shimel
--[std, util]
-test::Package = ()
+test -[std, util, sdl, apricot]::Package = ()

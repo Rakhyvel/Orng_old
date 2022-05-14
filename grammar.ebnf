@@ -1,0 +1,127 @@
+(* grammar for Orng syntax *)
+
+(* each file has exactly one definition, with the same name as the file *)
+(* can ALWAYS tell a definition by an ident followed by a ?, @, -[, : *)
+definition = ident, 
+             ["-[", [ident, {",", ident}], "]"],
+             ["?", ["[", ident, "]"]],            
+             ["@", "[", ident, {"," ident}, "]"], 
+          (* ["~"] for mutable symbols? maybe this is a type modifier *)
+             ":", [prefixExpr], ["=", expr];
+
+statement = definition
+          | "free", expr
+          | "return", expr
+          | "defer", expr
+          | "continue"
+          | "break"
+          | expr, "=", expr                        (* assignment *)
+          | expr, "+=", expr                       (* add-assign *)
+          | expr, "-=", expr                       (* subtract-assign *)
+          | expr, "*=", expr                       (* multiply-assign *)
+          | expr, "/=", expr                       (* divide-assign *)
+          | expr, "%=", expr                       (* modulus-assign *)
+          | expr, "&=", expr                       (* and-assign *)
+          | expr, "|=", expr                       (* or-assign *)
+          | expr, "^=", expr                       (* xor-assign *)
+          | expr, "<<=", expr                      (* left-shift-assign *)
+          | expr, ">>=", expr                      (* right-shift-assign *)
+          | expr;
+
+expr = expr, "||", andExpr                                      (* boolean or *)
+       | andExpr;
+
+andExpr = andExpr, "&&", bitOrExpr                              (* boolean and *)
+        | bitOrExpr;
+
+bitOrExpr = bitOrExpr, "|", bitXorExpr                          (* bitwise or *)
+          | bitXorExpr;
+
+bitXorExpr = bitXorExpr, "^", bitAndExpr                        (* bitwise xor *)
+           | bitAndExpr;
+
+bitAndExpr = bitAndExpr, "&", neqExpr                           (* bitwise and *)
+           | neqExpr;
+
+neqExpr = conditionalExpr, "!=", conditionalExpr;               (* not-equals *)
+
+conditionalExpr = conditionalExpr, "==", shiftExpr              (* equals *)
+                | conditionalExpr, "<", shiftExpr               (* greater than *)
+                | conditionalExpr, ">", shiftExpr               (* less than *)
+                | conditionalExpr, "<=", shiftExpr              (* greater than or equal to *)
+                | conditionalExpr, ">=", shiftExpr              (* less than or equal to *)
+                | shiftExpr;
+
+shiftExpr = shiftExpr, "<<", intExpr                            (* left-shift *)
+          | shiftExpr, ">>", intExpr                            (* right-shift *)
+          | intExpr;
+
+intExpr = intExpr, "+", termExpr                                (* addition *)
+        | intExpr, "-", termExpr                                (* subtraction *)
+        | termExpr;
+
+termExpr = termExpr, "*", prefixExpr                            (* multiplication *)
+         | termExpr, "/", prefixExpr                            (* division *)
+         | termExpr, "%", prefixExpr                            (* modulus *)
+         | prefixExpr;
+
+(* prefix expression OR type expression start here *)
+prefixExpr = "!", prefixExpr                                    (* boolean not, error type union *)
+           | "&", prefixExpr                                    (* address of, pointer *)
+           | "&&", prefixExpr                                   (* double pointer *)
+           | ":", type                                          (* constant type expression *)
+           | "?", prefixExpr                                    (* optional type union *)
+           | "*", prefixExpr                                    (* dereference *)
+           | "-", prefixExpr                                    (* negative *)
+           | "~", prefixExpr                                    (* bitwise not *)
+           | "sizeof", type                                     (* sizeof a type *)
+           | postfixExpr;
+
+postfixExpr = postfixExpr, arglist                              (* function call *)
+            | postfixExpr, "[" [expr], [":", [expr]], "]"       (* array index or slice creation *)
+            | postfixExpr, ":", type                            (* cast *)
+            | postfixExpr, "->", type                           (* function type *)
+            | postfixExpr, ".", ident                           (* dot *)
+            | factor;
+
+factor = 
+         "true"                                                 (* true value *)
+       | "false"                                                (* false value *)
+       | "nothing"                                              (* no value *)
+       | ident                                                  (* identifier *)
+       | int                                                    (* integer literal *)
+       | hex                                                    (* hexadecimal literal *)
+       | bin                                                    (* binary literal *)
+       | real                                                   (* real literal *)
+       | char                                                   (* character literal *)
+       | string, {"++", string}                                 (* string literal, possible concat. *)
+       | arrayliteral                                           (* array literal *)
+       | ".", ident, "=", expr                                  (* named arg *)
+       | "new", prefixExpr, [argList | arrayliteral]            (* new *)
+       | argList
+       | "{", blockExpr
+       | "if", ifExpr
+       | "for", ((statement, "{", loopBlockExpr) | (statement, ";", statement, ";", statement, "{", loopBlockExpr))
+       | "case", expr, "{", {((expr, {"," expr}) | ("else")), "->", expr} "}";                                               (* argument list *)
+
+blockExpr = [statement, {statement}], "}";
+
+ifExpr = expr, "{", blockExpr, ["else", (("if", ifExpr) | ("{", blockExpr))];
+
+arrayliteral = "[", [expr, {[","], expr}], "]"
+
+argList = "(", [expr, {[","], expr}], ")";
+
+type = "!", type
+     | "&", type
+     | "&&", type
+     | ":", type
+     | "?", type
+     | typePostfix;
+
+typePostfix = typePostfix, "->", typeFactor
+            | typePostfix, ".", ident
+            | typePostfix, argList
+            | ident
+            | "(", [definition, {[","], definition}], ")"
+            | "(|", [definition, {[","], definition}], ")";

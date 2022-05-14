@@ -49,7 +49,6 @@ ASTNode* createArrayTypeNode(ASTNode* baseType, int length)
     }
     lengthSymbol->def = lengthCode;
     lengthSymbol->type = lengthType;
-    lengthSymbol->isPublic = true;
     lengthType->isConst = true;
 
     SymbolNode* dataSymbol = Symbol_Create("data", SYMBOL_VARIABLE, NULL, (Position) { NULL, 0, 0, 0 });
@@ -58,7 +57,6 @@ ASTNode* createArrayTypeNode(ASTNode* baseType, int length)
     ASTNode* dataCode = AST_Create_undef(NULL, (Position) { NULL, 0, 0, 0 });
     dataSymbol->def = dataCode;
     dataSymbol->type = dataType;
-    dataSymbol->isPublic = true;
 
     List_Append(array->paramlist.defines, lengthDefine);
     List_Append(array->paramlist.defines, dataDefine);
@@ -122,8 +120,8 @@ ASTNode* AST_Create_ident(char* data, struct symbolNode* scope, struct position 
 ASTNode* AST_Create_call(struct astNode* functionExpr, struct astNode* arglist, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_CALL, scope, pos);
-    retval->call.functionExpr = functionExpr;
-    retval->call.arglist = arglist;
+    retval->binop.left = functionExpr;
+    retval->binop.right = arglist;
     return retval;
 }
 
@@ -202,76 +200,69 @@ ASTNode* AST_Create_undef(struct symbolNode* scope, struct position pos)
 ASTNode* AST_Create_neg(struct astNode* right, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_NEG, scope, pos);
-    retval->neg.right = right;
+    retval->unop.expr = right;
     return retval;
 }
 
 ASTNode* AST_Create_add(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_ADD, scope, pos);
-    retval->add.left = left;
-    retval->add.right = right;
+    retval->binop.left = left;
+    retval->binop.right = right;
     return retval;
 }
 
 ASTNode* AST_Create_subtract(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_SUBTRACT, scope, pos);
-    retval->subtract.left = left;
-    retval->subtract.right = right;
+    retval->binop.left = left;
+    retval->binop.right = right;
     return retval;
 }
 
 ASTNode* AST_Create_multiply(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_MULTIPLY, scope, pos);
-    retval->multiply.left = left;
-    retval->multiply.right = right;
+    retval->binop.left = left;
+    retval->binop.right = right;
     return retval;
 }
 
 ASTNode* AST_Create_divide(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_DIVIDE, scope, pos);
-    retval->divide.left = left;
-    retval->divide.right = right;
+    retval->binop.left = left;
+    retval->binop.right = right;
     return retval;
 }
 
 ASTNode* AST_Create_modulus(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_MODULUS, scope, pos);
-    retval->modulus.left = left;
-    retval->modulus.right = right;
+    retval->binop.left = left;
+    retval->binop.right = right;
     return retval;
 }
 
 ASTNode* AST_Create_paren(struct astNode* expr, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_PAREN, scope, pos);
-    retval->paren.expr = expr;
-    return retval;
-}
-
-ASTNode* AST_Create_addrOf(struct astNode* lvalue, struct symbolNode* scope, struct position pos)
-{
-    ASTNode* retval = AST_Create(AST_ADDROF, scope, pos);
-    retval->addrOf.lvalue = lvalue;
+    retval->unop.expr = expr;
     return retval;
 }
 
 ASTNode* AST_Create_deref(struct astNode* expr, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_DEREF, scope, pos);
-    retval->deref.expr = expr;
+    retval->unop.expr = expr;
     return retval;
 }
 
 ASTNode* AST_Create_index(struct astNode* arrayExpr, struct astNode* subscript, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_INDEX, scope, pos);
-    retval->index.arrayExpr = arrayExpr;
-    retval->index.subscript = subscript;
+    retval->binop.left = arrayExpr;
+    retval->binop.right = subscript;
     return retval;
 }
 
@@ -287,118 +278,118 @@ ASTNode* AST_Create_slice(struct astNode* arrayExpr, struct astNode* lowerBound,
 ASTNode* AST_Create_not(struct astNode* expr, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_NOT, scope, pos);
-    retval->not .expr = expr;
+    retval->unop.expr = expr;
     return retval;
 }
 
 ASTNode* AST_Create_or(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_OR, scope, pos);
-    retval->or.left = left;
-    retval->or.right = right;
+    retval->binop.left = left;
+    retval->binop.right = right;
     return retval;
 }
 
 ASTNode* AST_Create_and(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_AND, scope, pos);
-    retval->and.left = left;
-    retval->and.right = right;
+    retval->binop.left = left;
+    retval->binop.right = right;
     return retval;
 }
 
 ASTNode* AST_Create_eq(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_EQ, scope, pos);
-    retval->eq.left = left;
-    retval->eq.right = right;
+    retval->binop.left = left;
+    retval->binop.right = right;
     return retval;
 }
 
 ASTNode* AST_Create_neq(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_NEQ, scope, pos);
-    retval->neq.left = left;
-    retval->neq.right = right;
+    retval->binop.left = left;
+    retval->binop.right = right;
     return retval;
 }
 
 ASTNode* AST_Create_gtr(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_GTR, scope, pos);
-    retval->gtr.left = left;
-    retval->gtr.right = right;
+    retval->binop.left = left;
+    retval->binop.right = right;
     return retval;
 }
 
 ASTNode* AST_Create_gte(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_GTE, scope, pos);
-    retval->gte.left = left;
-    retval->gte.right = right;
+    retval->binop.left = left;
+    retval->binop.right = right;
     return retval;
 }
 
 ASTNode* AST_Create_lsr(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_LSR, scope, pos);
-    retval->lsr.left = left;
-    retval->lsr.right = right;
+    retval->binop.left = left;
+    retval->binop.right = right;
     return retval;
 }
 
 ASTNode* AST_Create_lte(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_LTE, scope, pos);
-    retval->lte.left = left;
-    retval->lte.right = right;
+    retval->binop.left = left;
+    retval->binop.right = right;
     return retval;
 }
 
 ASTNode* AST_Create_bitNot(struct astNode* expr, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_BIT_NOT, scope, pos);
-    retval->bitNot.expr = expr;
+    retval->unop.expr = expr;
     return retval;
 }
 
 ASTNode* AST_Create_bitOr(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_BIT_OR, scope, pos);
-    retval->bitAnd.left = left;
-    retval->bitAnd.right = right;
+    retval->binop.left = left;
+    retval->binop.right = right;
     return retval;
 }
 
 ASTNode* AST_Create_bitXor(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_BIT_XOR, scope, pos);
-    retval->bitXor.left = left;
-    retval->bitXor.right = right;
+    retval->binop.left = left;
+    retval->binop.right = right;
     return retval;
 }
 
 ASTNode* AST_Create_bitAnd(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_BIT_AND, scope, pos);
-    retval->bitAnd.left = left;
-    retval->bitAnd.right = right;
+    retval->binop.left = left;
+    retval->binop.right = right;
     return retval;
 }
 
 ASTNode* AST_Create_lshift(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_LSHIFT, scope, pos);
-    retval->lshift.left = left;
-    retval->lshift.right = right;
+    retval->binop.left = left;
+    retval->binop.right = right;
     return retval;
 }
 
 ASTNode* AST_Create_rshift(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_RSHIFT, scope, pos);
-    retval->rshift.left = left;
-    retval->rshift.right = right;
+    retval->binop.left = left;
+    retval->binop.right = right;
     return retval;
 }
 
@@ -406,7 +397,7 @@ ASTNode* AST_Create_block(struct symbolNode* block, struct symbolNode* scope, st
 {
     ASTNode* retval = AST_Create(AST_BLOCK, scope, pos);
     retval->block.children = List_Create();
-    retval->block.blockSymbol = block;
+    retval->block.symbol = block;
     return retval;
 }
 
@@ -420,88 +411,88 @@ ASTNode* AST_Create_define(struct symbolNode* symbol, struct symbolNode* scope, 
 ASTNode* AST_Create_assign(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_ASSIGN, scope, pos);
-    retval->assign.left = left;
-    retval->assign.right = right;
+    retval->binop.left = left;
+    retval->binop.right = right;
     return retval;
 }
 
 ASTNode* AST_Create_addAssign(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_ADD_ASSIGN, scope, pos);
-    retval->addAssign.left = left;
-    retval->addAssign.right = right;
+    retval->binop.left = left;
+    retval->binop.right = right;
     return retval;
 }
 
 ASTNode* AST_Create_subAssign(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_SUB_ASSIGN, scope, pos);
-    retval->subAssign.left = left;
-    retval->subAssign.right = right;
+    retval->binop.left = left;
+    retval->binop.right = right;
     return retval;
 }
 
 ASTNode* AST_Create_multAssign(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_MULT_ASSIGN, scope, pos);
-    retval->multAssign.left = left;
-    retval->multAssign.right = right;
+    retval->binop.left = left;
+    retval->binop.right = right;
     return retval;
 }
 
 ASTNode* AST_Create_divAssign(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_DIV_ASSIGN, scope, pos);
-    retval->divAssign.left = left;
-    retval->divAssign.right = right;
+    retval->binop.left = left;
+    retval->binop.right = right;
     return retval;
 }
 
 ASTNode* AST_Create_modAssign(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_MOD_ASSIGN, scope, pos);
-    retval->modAssign.left = left;
-    retval->modAssign.right = right;
+    retval->binop.left = left;
+    retval->binop.right = right;
     return retval;
 }
 
 ASTNode* AST_Create_andAssign(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_AND_ASSIGN, scope, pos);
-    retval->andAssign.left = left;
-    retval->andAssign.right = right;
+    retval->binop.left = left;
+    retval->binop.right = right;
     return retval;
 }
 
 ASTNode* AST_Create_orAssign(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_OR_ASSIGN, scope, pos);
-    retval->orAssign.left = left;
-    retval->orAssign.right = right;
+    retval->binop.left = left;
+    retval->binop.right = right;
     return retval;
 }
 
 ASTNode* AST_Create_xorAssign(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_XOR_ASSIGN, scope, pos);
-    retval->xorAssign.left = left;
-    retval->xorAssign.right = right;
+    retval->binop.left = left;
+    retval->binop.right = right;
     return retval;
 }
 
 ASTNode* AST_Create_lshiftAssign(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_LSHIFT_ASSIGN, scope, pos);
-    retval->lshiftAssign.left = left;
-    retval->lshiftAssign.right = right;
+    retval->binop.left = left;
+    retval->binop.right = right;
     return retval;
 }
 
 ASTNode* AST_Create_rshiftAssign(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_RSHIFT_ASSIGN, scope, pos);
-    retval->rshiftAssign.left = left;
-    retval->rshiftAssign.right = right;
+    retval->binop.left = left;
+    retval->binop.right = right;
     return retval;
 }
 
@@ -544,29 +535,29 @@ ASTNode* AST_Create_case(struct astNode* block, List* exprs, struct symbolNode* 
 ASTNode* AST_Create_new(struct astNode* type, struct astNode* init, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_NEW, scope, pos);
-    retval->new.type = type;
-    retval->new.init = init;
+    retval->binop.left = type;
+    retval->binop.right = init;
     return retval;
 }
 
 ASTNode* AST_Create_free(struct astNode* expr, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_FREE, scope, pos);
-    retval->free.expr = expr;
+    retval->unop.expr = expr;
     return retval;
 }
 
 ASTNode* AST_Create_return(struct astNode* expr, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_RETURN, scope, pos);
-    retval->_return.expr = expr;
+    retval->unop.expr = expr;
     return retval;
 }
 
 ASTNode* AST_Create_defer(struct astNode* expr, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_DEFER, scope, pos);
-    retval->defer.expr = expr;
+    retval->unop.expr = expr;
     return retval;
 }
 
@@ -585,15 +576,15 @@ ASTNode* AST_Create_continue(struct symbolNode* scope, struct position pos)
 ASTNode* AST_Create_dot(struct astNode* container, struct astNode* identifier, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_DOT, scope, pos);
-    retval->dot.container = container;
-    retval->dot.identifier = identifier;
+    retval->binop.left = container;
+    retval->binop.right = identifier;
     return retval;
 }
 
 ASTNode* AST_Create_sizeof(struct astNode* type, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_SIZEOF, scope, pos);
-    retval->_sizeof.type = type;
+    retval->unop.expr = type;
     return retval;
 }
 
@@ -606,8 +597,8 @@ ASTNode* AST_Create_void(struct symbolNode* scope, struct position pos)
 ASTNode* AST_Create_cast(struct astNode* expr, struct astNode* type, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_CAST, scope, pos);
-    retval->cast.expr = expr;
-    retval->cast.type = type;
+    retval->binop.left = expr;
+    retval->binop.right = type;
     return retval;
 }
 
@@ -636,14 +627,14 @@ ASTNode* AST_Create_function(struct astNode* domain, struct astNode* codomain, s
 ASTNode* AST_Create_addr(struct astNode* type, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_ADDR, scope, pos);
-    retval->addr.type = type;
+    retval->unop.expr = type;
     return retval;
 }
 
 ASTNode* AST_Create_extern(struct symbolNode* externSymbol, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_EXTERN, scope, pos);
-    retval->_extern.externSymbol = externSymbol;
+    retval->_extern.symbol = externSymbol;
     return retval;
 }
 
@@ -664,45 +655,26 @@ void AST_Print(ASTNode* root, char* prefix, char* childrenPrefix)
     // Switch on the type and print the data specific for each node
     switch (root->astType) {
     case AST_INT:
-        printf("%s%s [%d]\n", prefix, AST_GetString(root->astType), root->data);
+        printf("%s%s [%d]\n", prefix, AST_GetString(root->astType), root->_int.data);
         break;
     case AST_STRING:
+        printf("%s%s [%s]\n", prefix, AST_GetString(root->astType), root->_char.data);
+        break;
     case AST_CHAR:
-        printf("%s%s [%s]\n", prefix, AST_GetString(root->astType), root->data);
+        printf("%s%s [%c]\n", prefix, AST_GetString(root->astType), root->_char.data);
         break;
     case AST_DEFINE:
-        printf("%s%s [0x%p]\n", prefix, AST_GetString(root->astType), root->data);
-        Symbol_Print(root->data, prefix, childrenPrefix);
+        printf("%s%s [0x%p]\n", prefix, AST_GetString(root->astType), root->define.symbol);
+        Symbol_Print(root->define.symbol, prefix, childrenPrefix);
         break;
     case AST_BLOCK:
-        printf("%s%s [0x%p]\n", prefix, AST_GetString(root->astType), root->data);
+        printf("%s%s [0x%p]\n", prefix, AST_GetString(root->astType), root->block.symbol);
         break;
     case AST_IDENT:
-        printf("%s%s [%s]\n", prefix, AST_GetString(root->astType), root->data);
+        printf("%s%s [%s]\n", prefix, AST_GetString(root->astType), root->ident.data);
         break;
     default:
         printf("%s%s []\n", prefix, AST_GetString(root->astType));
-    }
-    // Go through each child of the node in the tree
-    for (ListElem* elem = List_Begin(root->children); elem != List_End(root->children); elem = elem->next) {
-        bool hasNext = elem->next != List_End(root->children);
-        char newPrefix[255];
-        char newChildrenPrefix[255];
-        if (hasNext) {
-            // Some children will be printed after this
-            strncpy_s(newPrefix, 255, childrenPrefix, 254);
-            strncat_s(newPrefix, 255, "+--", 254);
-            strncpy_s(newChildrenPrefix, 255, childrenPrefix, 254);
-            strncat_s(newChildrenPrefix, 255, "|  ", 254);
-        } else {
-            // No children after this
-            strncpy_s(newPrefix, 255, childrenPrefix, 254);
-            strncat_s(newPrefix, 255, "\\--", 254);
-            strncpy_s(newChildrenPrefix, 255, childrenPrefix, 254);
-            strncat_s(newChildrenPrefix, 255, "   ", 254);
-        }
-        // Recursively call on child
-        AST_Print(elem->data, newPrefix, newChildrenPrefix);
     }
 }
 
@@ -713,18 +685,14 @@ int AST_TypeRepr(char* str, ASTNode* type)
         str += sprintf(str, ":");
     }
     switch (type->astType) {
-    case AST_ENUM: {
-        SymbolNode* symbol = type->data;
-        str += sprintf(str, "%s", symbol->name);
-    } break;
     case AST_VOID:
-        str += sprintf(str, "()", (char*)type->data);
+        str += sprintf(str, "()");
         break;
     case AST_IDENT:
-        str += sprintf(str, "%s", (char*)type->data);
+        str += sprintf(str, "%s", type->ident.data);
         break;
     case AST_DEFINE:
-        SymbolNode* symbol = type->data;
+        SymbolNode* symbol = type->define.symbol;
         ASTNode* type2 = symbol->type;
         str += sprintf(str, "%s:", symbol->name);
         if (symbol->type->astType != AST_PARAMLIST) {
@@ -737,10 +705,10 @@ int AST_TypeRepr(char* str, ASTNode* type)
         break;
     case AST_PARAMLIST:
         str += sprintf(str, "(");
-        for (struct listElem* elem = List_Begin(type->children); elem != List_End(type->children); elem = elem->next) {
+        for (struct listElem* elem = List_Begin(type->paramlist.defines); elem != List_End(type->paramlist.defines); elem = elem->next) {
             ASTNode* param = elem->data;
             str += AST_TypeRepr(str, param);
-            if (elem->next == List_End(type->children)) {
+            if (elem->next == List_End(type->paramlist.defines)) {
                 str += sprintf(str, ")");
             } else {
                 str += sprintf(str, ", ");
@@ -748,15 +716,15 @@ int AST_TypeRepr(char* str, ASTNode* type)
         }
         break;
     case AST_FUNCTION: {
-        ASTNode* input = List_Get(type->children, 0);
-        ASTNode* output = List_Get(type->children, 1);
+        ASTNode* input = type->function.domainType;
+        ASTNode* output = type->function.codomainType;
         str += AST_TypeRepr(str, input);
         str += sprintf(str, "->");
         str += AST_TypeRepr(str, output);
         break;
     }
     case AST_ADDR: {
-        ASTNode* child = List_Get(type->children, 0);
+        ASTNode* child = type->unop.expr;
         str += sprintf(str, "&");
         if (child->visited) {
             str += sprintf(str, "..");
@@ -766,29 +734,29 @@ int AST_TypeRepr(char* str, ASTNode* type)
         }
     } break;
     case AST_ARRAY: {
-        ASTNode* lengthDefine = List_Get(type->children, 0);
-        SymbolNode* lengthSymbol = lengthDefine->data;
+        ASTNode* lengthDefine = List_Get(type->paramlist.defines, 0);
+        SymbolNode* lengthSymbol = lengthDefine->define.symbol;
         ASTNode* lengthCode = lengthSymbol->def;
-        ASTNode* dataDefine = List_Get(type->children, 1);
-        SymbolNode* dataSymbol = dataDefine->data;
+        ASTNode* dataDefine = List_Get(type->paramlist.defines, 1);
+        SymbolNode* dataSymbol = dataDefine->define.symbol;
         ASTNode* dataType = dataSymbol->type;
         if (lengthCode->astType == AST_INT) {
-            str += sprintf(str, "[%d]", (int)lengthCode->data);
+            str += sprintf(str, "[%d]", (int)lengthCode->_int.data);
         } else {
             str += sprintf(str, "[]");
         }
         str += AST_TypeRepr(str, dataType);
     } break;
     case AST_EXTERN: {
-        SymbolNode* var = type->data;
+        SymbolNode* var = type->_extern.symbol;
         str += AST_TypeRepr(str, var->type);
     } break;
     case AST_UNDEF: {
         str += sprintf(str, "Undef");
     } break;
     case AST_DOT: {
-        ASTNode* left = List_Get(type->children, 0);
-        ASTNode* right = List_Get(type->children, 1);
+        ASTNode* left = type->binop.left;
+        ASTNode* right = type->binop.right;
         str += AST_TypeRepr(str, left);
         str += sprintf(str, ".");
         str += AST_TypeRepr(str, right);
@@ -848,8 +816,6 @@ char* AST_GetString(enum astType type)
         return "AST_SLICE";
     case AST_DEREF:
         return "AST_DEREF";
-    case AST_ADDROF:
-        return "AST_ADDROF";
     case AST_NULL:
         return "AST_NULL";
     case AST_SIZEOF:

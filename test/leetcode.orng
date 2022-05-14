@@ -1,7 +1,7 @@
 -- Some example solutions to LeetCode problems written in Orng
 -- https://leetcode.com/problemset/all/
 leetcode::Module = (
-    + test_all::()->() = {
+    test_all::()->() = {
         test_twoSum()
         test_addTwoNumbers()
         test_lengthOfLongestSubstring()
@@ -32,20 +32,19 @@ leetcode::Module = (
     -- Given an array of integers nums and an integer target, return indices of
     -- the two numbers such that they add up to target.
     -- https://leetcode.com/problems/two-sum/
-    -[]
     twoSum::(nums:[]Int, target:Int)->[2]Int = {
+        for true; ; false {}
         for i := 0; i < nums.length - 1; i += 1 {
             for j := i + 1; j < nums.length; j += 1 {
                 if nums[i] + nums[j] == target {
-                    return new [2]Int[i, j]
+                    return new [2]Int=[i, j]
                 }
             }
         }
-        return new [2]Int[-1, -1]
+        return new [2]Int=[-1, -1]
     }
 
-    -[twoSum]
-    + test_twoSum::()->() = {
+    test_twoSum::()->() = {
         nums: [4]Int = [2, 7, 11, 15]
         target := 9
 
@@ -70,7 +69,7 @@ leetcode::Module = (
     )
 
     convertToInt::(l:&ListNode)->Int =
-        if l.next == null {
+        if l.next == nothing {
             l.val
         } else {
             l.val + convertToInt(l.next) * 10
@@ -78,21 +77,21 @@ leetcode::Module = (
 
     convertToList::(i:Int)->&ListNode =
         if i < 10 {
-            new ListNode(i, null)
+            new ListNode=(i, nothing)
         } else {
-            new ListNode(i % 10, convertToList(i / 10))
+            new ListNode=(i % 10, convertToList(i / 10))
         }
 
     addTwoNumbers::(l1:&ListNode, l2:&ListNode)->&ListNode = 
         convertToList(convertToInt(l1) + convertToInt(l2))
 
-    + test_addTwoNumbers::()->() = {
-        l1_c := new ListNode(3, null)
-        l1_b := new ListNode(4, l1_c)
-        l1   := new ListNode(2, l1_b)
-        l2_c := new ListNode(4, null)
-        l2_b := new ListNode(6, l2_c)
-        l2   := new ListNode(5, l2_b)
+    test_addTwoNumbers::()->() = {
+        l1_c := new ListNode=(3, nothing)
+        l1_b := new ListNode=(4, l1_c)
+        l1   := new ListNode=(2, l1_b)
+        l2_c := new ListNode=(4, nothing)
+        l2_b := new ListNode=(6, l2_c)
+        l2   := new ListNode=(5, l2_b)
 
         ans := addTwoNumbers(l1, l2)
 
@@ -137,7 +136,7 @@ leetcode::Module = (
         return res;
     }
 
-    + test_lengthOfLongestSubstring::()->() = {
+    test_lengthOfLongestSubstring::()->() = {
         s := "abcabcbb"
 
         ans := lengthOfLongestSubstring(s)
@@ -178,13 +177,13 @@ leetcode::Module = (
         }
 
         if merged.length % 2 == 0 {
-            (merged[merged.length / 2] + merged[merged.length / 2 + 1]) / 2.0
+            {merged[merged.length / 2] + merged[merged.length / 2 + 1]} / 2.0
         } else {
             merged[merged.length / 2]:Real
         }
     }
 
-    + test_findMedianSortedArrays::()->() = {
+    test_findMedianSortedArrays::()->() = {
         nums1: [2]Int = [1, 3]
         nums2: [1]Int = [2]
 
@@ -216,14 +215,14 @@ leetcode::Module = (
             len2 := expandAroundCenter(s, i, i + 1)
             len := std.math.max(len1, len2):Int
             if len > end - start {
-                start = i - (len - 1) / 2
+                start = i - {len - 1} / 2
                 end = i + len / 2
             }
         }
         s[start;end]
     }
 
-    + test_longestPalindrome::()->() = {
+    test_longestPalindrome::()->() = {
         s := "babad"
 
         ans := longestPalindrome(s)
@@ -286,7 +285,7 @@ leetcode::Module = (
         retval
     }
 
-    + test_convert::()->() = {
+    test_convert::()->() = {
         ans := convert("PAYPALISHIRING", 3)
 
         if std.string.equals(ans, "PAHNAPLSIIGYIR") {
@@ -302,10 +301,10 @@ leetcode::Module = (
     -- [-2^31, 2^31 - 1], then return 0.
     -- https://leetcode.com/problems/reverse-integer/
     reverseList::(list:&ListNode)->&ListNode = {
-        prev:&ListNode = null
+        prev:&ListNode = nothing
         curr:&ListNode = list
-        next:&ListNode = null
-        for curr != null {
+        next:&ListNode = nothing
+        for curr != nothing {
             next = curr.next
             curr.next = prev
             prev = curr
@@ -317,7 +316,7 @@ leetcode::Module = (
     
     reverse::(x:Int)->Int = convertToInt(reverseList(convertToList(x)))
 
-    + test_reverse::()->() = {
+    test_reverse::()->() = {
         ans := reverse(123)
 
         if ans == 321 {
@@ -358,7 +357,7 @@ leetcode::Module = (
         if sign {x} else {-x}
     }
 
-    + test_myAtoi::()->() = {
+    test_myAtoi::()->() = {
         s := "42"
 
         ans := myAtoi(s)
@@ -376,7 +375,7 @@ leetcode::Module = (
     isPalindrome::(x:Int)->Bool = {
         list := convertToList(x)
         reversedList := reverseList(convertToList(x))
-        for list != null {
+        for list != nothing {
             if list.val != reversedList.val {
                 return false
             }
@@ -386,7 +385,7 @@ leetcode::Module = (
         return true
     }
 
-    + test_isPalindrome::()->() = {
+    test_isPalindrome::()->() = {
         x := 121
         
         ans := isPalindrome(x)
@@ -427,7 +426,7 @@ leetcode::Module = (
         true
     }
 
-    + test_isMatch::()->() = {
+    test_isMatch::()->() = {
         s := "aa"
         p := "a*"
 
@@ -454,7 +453,7 @@ leetcode::Module = (
             }
         }
 
-    + test_maxArea::()->() = {
+    test_maxArea::()->() = {
         height := [1,8,6,2,5,4,8,3,7]
 
         ans := maxArea(height)

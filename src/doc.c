@@ -8,7 +8,7 @@ char* randomText = "Creates a new IconButton with a path to the icon, a position
 
 static void generateType(FILE* out, SymbolNode* global)
 {
-    if (!global || !global->isPublic || global->symbolType != SYMBOL_TYPE) {
+    if (!global || global->symbolType != SYMBOL_TYPE) {
         return;
     }
     fprintf(out, "<div class=\"member\">");
@@ -20,7 +20,7 @@ static void generateType(FILE* out, SymbolNode* global)
 
 static void generateGlobal(FILE* out, SymbolNode* global)
 {
-    if (!global || !global->isPublic || global->symbolType != SYMBOL_VARIABLE) {
+    if (!global || global->symbolType != SYMBOL_VARIABLE) {
         return;
     }
     fprintf(out, "<div class=\"member\">");
@@ -33,7 +33,7 @@ static void generateGlobal(FILE* out, SymbolNode* global)
 
 static void generateFunction(FILE* out, SymbolNode* global)
 {
-    if (!global || !global->isPublic || global->symbolType != SYMBOL_FUNCTION) {
+    if (!global || global->symbolType != SYMBOL_FUNCTION) {
         return;
     }
 
@@ -47,7 +47,7 @@ static void generateFunction(FILE* out, SymbolNode* global)
 
 static void generateModule(FILE* out, SymbolNode* module)
 {
-    if (!module || !module->isPublic || module->symbolType != SYMBOL_MODULE) {
+    if (!module || module->symbolType != SYMBOL_MODULE) {
         return;
     }
     fprintf(out, "<div class=\"module\" id=\"%s\">", module->name);
@@ -81,7 +81,7 @@ static void generateModule(FILE* out, SymbolNode* module)
 
 static void generatePackage(FILE* out, SymbolNode* symbol)
 {
-    if (!symbol || !symbol->isPublic || symbol->symbolType != SYMBOL_PACKAGE) {
+    if (!symbol  || symbol->symbolType != SYMBOL_PACKAGE) {
         return;
     }
     char typeStr[255];

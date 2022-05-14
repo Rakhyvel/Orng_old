@@ -36,7 +36,6 @@ typedef struct symbolNode {
     struct astNode* def; // SymbolDefine ASTNode where this symbol is defined
 	
 	bool isDeclared;
-    bool isPublic;
     bool isExtern;
     bool isRestricted;
     bool isVararg;
