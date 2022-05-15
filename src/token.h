@@ -76,7 +76,6 @@ typedef enum {
     TOKEN_FOR,
     TOKEN_BREAK,
     TOKEN_CONTINUE,
-    TOKEN_SWITCH,
     TOKEN_CASE,
     TOKEN_NOTHING,
     TOKEN_RETURN,

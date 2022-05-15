@@ -75,8 +75,8 @@ enum astType {
     AST_IF,
     AST_IFELSE,
     AST_FOR,
-    AST_SWITCH,
     AST_CASE,
+    AST_MAPPING,
     AST_RETURN,
     AST_NEW, // Replace with allocator method
     AST_FREE, // Replace with allocator method
@@ -174,15 +174,15 @@ typedef struct astNode_for {
     struct astNode* elseBlock;
 } astNode_for;
 
-typedef struct astNode_switch {
-    struct astNode* expr;
-    List* cases;
-} astNode_switch;
-
 typedef struct astNode_case {
-    List* exprs;
-    struct astNode* block;
+    struct astNode* expr;
+    List* mappings;
 } astNode_case;
+
+typedef struct astNode_mapping {
+    List* exprs;
+    struct astNode* expr;
+} astNode_mapping;
 
 // for parameter lists, modules, structs, arrays, unions, a lot!
 typedef struct astNode_paramlist {
@@ -234,8 +234,8 @@ typedef struct astNode {
         astNode_define define;
         astNode_if _if;
         astNode_for _for;
-        astNode_switch _switch;
         astNode_case _case;
+        astNode_mapping mapping;
         astNode_paramlist paramlist;
         astNode_function function;
         astNode_extern _extern;
@@ -315,8 +315,8 @@ ASTNode* AST_Create_lshiftAssign(struct astNode* left, struct astNode* right, st
 ASTNode* AST_Create_rshiftAssign(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_if(struct astNode* condition, struct astNode* bodyBlock, struct astNode* elseBlock, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_for(struct astNode* pre, struct astNode* condition, struct astNode* post, struct astNode* bodyBlock, struct astNode* elseBlock, struct symbolNode* scope, struct position pos);
-ASTNode* AST_Create_switch(struct astNode* expr, struct symbolNode* scope, struct position pos);
-ASTNode* AST_Create_case(struct astNode* block, List* exprs, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_case(struct astNode* expr, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_mapping(struct astNode* block, List* exprs, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_new(struct astNode* type, struct astNode* init, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_free(struct astNode* expr, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_return(struct astNode* expr, struct symbolNode* scope, struct position pos);

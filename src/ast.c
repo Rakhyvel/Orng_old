@@ -516,19 +516,19 @@ ASTNode* AST_Create_for(struct astNode* pre, struct astNode* condition, struct a
     return retval;
 }
 
-ASTNode* AST_Create_switch(struct astNode* expr, struct symbolNode* scope, struct position pos)
+ASTNode* AST_Create_case(struct astNode* expr, struct symbolNode* scope, struct position pos)
 {
-    ASTNode* retval = AST_Create(AST_SWITCH, scope, pos);
-    retval->_switch.cases = List_Create();
-    retval->_switch.expr = expr;
+    ASTNode* retval = AST_Create(AST_CASE, scope, pos);
+    retval->_case.mappings = List_Create();
+    retval->_case.expr = expr;
     return retval;
 }
 
-ASTNode* AST_Create_case(struct astNode* block, List* exprs, struct symbolNode* scope, struct position pos)
+ASTNode* AST_Create_mapping(struct astNode* expr, List* exprs, struct symbolNode* scope, struct position pos)
 {
-    ASTNode* retval = AST_Create(AST_CASE, scope, pos);
-    retval->_case.exprs = exprs;
-    retval->_case.block = block;
+    ASTNode* retval = AST_Create(AST_MAPPING, scope, pos);
+    retval->mapping.exprs = exprs;
+    retval->mapping.expr = expr;
     return retval;
 }
 
@@ -876,10 +876,10 @@ char* AST_GetString(enum astType type)
         return "AST_IFELSE";
     case AST_FOR:
         return "AST_FOR";
-    case AST_SWITCH:
-        return "AST_SWITCH";
     case AST_CASE:
         return "AST_CASE";
+    case AST_MAPPING:
+        return "AST_MAPPING";
     case AST_RETURN:
         return "AST_RETURN";
     case AST_BREAK:

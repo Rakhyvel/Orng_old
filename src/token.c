@@ -126,8 +126,6 @@ const char* Token_GetString(_TokenType type)
         return "TOKEN_BREAK";
     case TOKEN_CONTINUE:
         return "TOKEN_CONTINUE";
-    case TOKEN_SWITCH:
-        return "TOKEN_SWITCH";
     case TOKEN_CASE:
         return "TOKEN_CASE";
     case TOKEN_NOTHING:
@@ -295,8 +293,6 @@ const char* Token_GetRepr(_TokenType type)
         return "break";
     case TOKEN_CONTINUE:
         return "continue";
-    case TOKEN_SWITCH:
-        return "switch";
     case TOKEN_CASE:
         return "case";
     case TOKEN_NOTHING:

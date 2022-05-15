@@ -271,10 +271,10 @@ x imitation LLVM
 	x rework restrictions to only restrict sibling symbols. Error if a symbol is not a sibling?
 	x find a way to make multi line strings, the way I have it now isnt tokenizable line-by-line
 - Rework the compiler to be better [ast-union-type]
-	- use a union for AST Nodes, like you would if you were to rewrite this in Orng
-		- create function to create an AST for every possible AST type
-		- no more guessing the child element in a list! Can now just use it
-	- remove x_assign ast nodes, have the parser create the actual assignment subtree
+	x case/mapping rather than switch/case
+	x use a union for AST Nodes, like you would if you were to rewrite this in Orng
+		x create function to create an AST for every possible AST type
+		x no more guessing the child element in a list! Can now just use it
 	- convert AST to IR before, evaluate this, then 1:1 generate it out
 		1. For each symbol, flatten it's AST definition to an untyped IR list
 			- IR instructions should have a union with the different instructions too, like ASTs
@@ -284,7 +284,8 @@ x imitation LLVM
 			- untyped IRs have ptrs to the analyzed IR, so that IRs that refered to the untyped version can get the typed version
 	- ASTs will likely not be typed, however, types will always be represented with ASTs I think
 	- analyzed IR instructions probably will be typed, if they can be
-	- make types expressions
+	- make types expressions so that you can return them!
+	- only comptime const expr in modules, packages ARE modules, no Package type
 - unions like in julia and haskell
 	- Only practical uses are Either, and Maybe. Either is only ever used to pass error messages
 	- Tagged union and enums

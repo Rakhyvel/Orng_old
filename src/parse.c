@@ -234,7 +234,7 @@ static ASTNode* parseFor(SymbolNode* scope)
     return AST_Create_for(pre, condition, post, body, elseBlock, scope, prevToken->pos, false);
 }
 
-static ASTNode* parseCase(SymbolNode* scope)
+static ASTNode* parseMapping(SymbolNode* scope)
 {
     List* exprs = List_Create();
     Token* token = NULL;
@@ -243,26 +243,20 @@ static ASTNode* parseCase(SymbolNode* scope)
         while (accept(TOKEN_COMMA)) {
             List_Append(exprs, parseExpr(scope));
         }
-        expect(TOKEN_LBRACE);
+        expect(TOKEN_ARROW);
     }
-    ASTNode* block = parseBlock(scope);
-    SymbolNode* blockSymbol = block->block.symbol;
-    blockSymbol->isLoop = true;
-    return AST_Create_case(block, exprs, scope, prevToken->pos);
+    ASTNode* expr = parseExpr(scope);
+    return AST_Create_mapping(expr, exprs, scope, prevToken->pos);
 }
 
-static ASTNode* parseSwitch(SymbolNode* scope)
+static ASTNode* parseCase(SymbolNode* scope)
 {
-    ASTNode* switchNode = AST_Create_switch(parseExpr(scope), scope, prevToken->pos);
+    ASTNode* switchNode = AST_Create_case(parseExpr(scope), scope, prevToken->pos);
 
     expect(TOKEN_LBRACE);
     Token* token = NULL;
     while (!accept(TOKEN_RBRACE)) {
-        if (((token = accept(TOKEN_CASE)) != NULL) || ((token = accept(TOKEN_ELSE)) != NULL)) {
-            List_Append(switchNode->_switch.cases, parseCase(scope));
-        } else {
-            break;
-        }
+        List_Append(switchNode->_case.mappings, parseMapping(scope));
     }
     return switchNode;
 }
@@ -335,8 +329,8 @@ static ASTNode* parseFactor(SymbolNode* scope)
         return parseIf(scope);
     } else if (accept(TOKEN_FOR)) {
         return parseFor(scope);
-    } else if (accept(TOKEN_SWITCH)) {
-        return parseSwitch(scope);
+    } else if (accept(TOKEN_CASE)) {
+        return parseCase(scope);
     } else {
         error(prevToken->pos, "expected expression, got '%s'", Token_GetErrorMsgRepr(nextToken()->type));
     }
