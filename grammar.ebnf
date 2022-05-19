@@ -8,6 +8,7 @@ definition = ident,
              ["@", "[", ident, {"," ident}, "]"], 
           (* ["~"] for mutable symbols? maybe this is a type modifier *)
              ":", [prefixExpr], ["=", expr];
+             (* lol -[std] ?[idk] @[test]:Module = (..) *)
 
 statement = definition
           | "free", expr

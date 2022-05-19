@@ -24,21 +24,25 @@ static int arrayUID = 1;
 
 static Token* accept(_TokenType type)
 {
+    Token* token;
+    int i = 0;
     while (true) {
-        if (List_IsEmpty(tokens)) {
+        if (List_IsEmpty(tokens) || i >= tokens->size) {
             List_Append(tokens, Lexer_GetNextToken(in));
         }
-        Token* top = List_Peek(tokens);
-        if (top->type == type) {
-            List_Pop(tokens);
-            prevToken = top;
-            return top;
-        } else if (top->type == TOKEN_NEWLINE) {
-            List_Pop(tokens);
-        } else {
+        token = List_Get(tokens, i);
+        if (token->type == type) {
+            break;
+        } else if (token->type != TOKEN_NEWLINE) {
             return NULL;
         }
+        i++;
     }
+    for (; i >= 0; i--) {
+        List_Pop(tokens);
+    }
+    prevToken = token;
+    return token;
 }
 
 static bool nextIsDef()
@@ -135,7 +139,9 @@ static ASTNode* parseArgList(SymbolNode* scope)
         List_Append(arglist->arglist.args, parseExpr(scope));
         accept(TOKEN_COMMA);
     }
-    if (arglist->arglist.args->size != 1) {
+    if (arglist->arglist.args->size == 1) {
+        arglist->astType = AST_PAREN;
+    } else if (arglist->arglist.args->size > 1) {
         arglist->astType = AST_ARGLIST;
     }
     return arglist;
@@ -152,8 +158,8 @@ ASTNode* parseBlock(SymbolNode* scope)
             List_Append(block->block.children, child);
             if (accept(TOKEN_RBRACE)) {
                 break;
-            } else {
-                accept(TOKEN_SEMICOLON);
+            } else if (!accept(TOKEN_SEMICOLON)) {
+                expect(TOKEN_NEWLINE);
             }
         }
     }
@@ -189,13 +195,14 @@ static ASTNode* parseFor(SymbolNode* scope)
     }
     ASTNode* condition = NULL;
     ASTNode* post = NULL;
-    SymbolNode* bodySymbol = Symbol_Create(myItoa(blockUID++), SYMBOL_BLOCK, scope, prevToken->pos);
     ASTNode* body = NULL;
     ASTNode* elseBlock = NULL;
 
     if (pre && accept(TOKEN_LBRACE)) {
-        body = parseBlock(bodySymbol);
-        bodySymbol->isLoop = true;
+        body = parseBlock(scope);
+        body->block.symbol->isLoop = true;
+        condition = pre;
+        pre = NULL;
     } else {
         if (pre) {
             expect(TOKEN_SEMICOLON);
@@ -210,8 +217,8 @@ static ASTNode* parseFor(SymbolNode* scope)
             expect(TOKEN_LBRACE);
         }
 
-        body = parseBlock(bodySymbol);
-        bodySymbol->isLoop = true;
+        body = parseBlock(scope);
+        body->block.symbol->isLoop = true;
     }
 
     if (!pre) {
@@ -238,7 +245,9 @@ static ASTNode* parseMapping(SymbolNode* scope)
 {
     List* exprs = List_Create();
     Token* token = NULL;
-    if (!accept(TOKEN_LBRACE)) {
+    if (accept(TOKEN_ELSE)) {
+        expect(TOKEN_ARROW);
+    } else {
         List_Append(exprs, parseExpr(scope));
         while (accept(TOKEN_COMMA)) {
             List_Append(exprs, parseExpr(scope));
@@ -279,7 +288,7 @@ static ASTNode* parseFactor(SymbolNode* scope)
         int data = strtol(token->data + 2, NULL, 2);
         child = AST_Create_int(data, scope, token->pos);
     } else if ((token = accept(TOKEN_NOTHING)) != NULL) {
-        child = AST_Create_null(scope, token->pos);
+        child = AST_Create_nothing(scope, token->pos);
     } else if ((token = accept(TOKEN_REAL)) != NULL) {
         float data = atof(token->data);
         child = AST_Create_real(data, scope, token->pos);
@@ -606,8 +615,9 @@ static ASTNode* parseDefer(SymbolNode* scope)
     if (deferStatement == NULL) {
         error(prevToken->pos, "expected statement after defer");
     }
+    ASTNode* retval = AST_Create_defer(deferStatement, scope, prevToken->pos);
     List_Append(scope->defers, deferStatement);
-    return AST_Create_defer(deferStatement, scope, prevToken->pos);
+    return retval;
 }
 
 static ASTNode* parseStatement(SymbolNode* scope)
@@ -654,7 +664,7 @@ ASTNode* parseDefine(SymbolNode* scope, bool isPublic)
         }
     } else {
         strcpy_s(symbol->externName, 255, symbol->name);
-	}
+    }
 
     if (temp = accept(TOKEN_RESTRICT)) {
         List* restrictionExpr = List_Create();

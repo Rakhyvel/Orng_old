@@ -20,13 +20,13 @@ enum astType {
     AST_STRING,
     AST_CHAR,
     AST_REAL,
+    AST_NOTHING,
+    AST_TRUE,
+    AST_FALSE,
     AST_ARGLIST,
     AST_NAMED_ARG,
     AST_ARRAY_LITERAL,
-    AST_TRUE,
-    AST_FALSE,
     AST_UNDEF,
-    AST_NULL,
     AST_DOC,
     // Math
     AST_NEG,
@@ -73,7 +73,6 @@ enum astType {
     AST_LSHIFT_ASSIGN,
     AST_RSHIFT_ASSIGN,
     AST_IF,
-    AST_IFELSE,
     AST_FOR,
     AST_CASE,
     AST_MAPPING,
@@ -156,6 +155,11 @@ typedef struct astNode_block {
     struct symbolNode* symbol; // The symbol node for this block ast, possibly unneeded?
 } astNode_block;
 
+typedef struct astNode_defer {
+    struct astNode* statement;
+    int deferID;
+} astNode_defer;
+
 typedef struct astNode_define {
     struct symbolNode* symbol;
 } astNode_define;
@@ -193,7 +197,7 @@ typedef struct astNode_function {
     struct astNode* domainType;
     struct astNode* codomainType;
     // field that says if function is stateless?
-	// field for if the type is const
+    // field for if the type is const
 } astNode_function;
 
 typedef struct astNode_extern {
@@ -231,6 +235,7 @@ typedef struct astNode {
         astNode_binop binop;
         astNode_slice slice;
         astNode_block block;
+        astNode_defer defer;
         astNode_define define;
         astNode_if _if;
         astNode_for _for;
@@ -273,7 +278,7 @@ ASTNode* AST_Create_namedArg(char* name, struct astNode* expr, struct symbolNode
 ASTNode* AST_Create_arrayLiteral(struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_true(struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_false(struct symbolNode* scope, struct position pos);
-ASTNode* AST_Create_null(struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_nothing(struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_undef(struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_neg(struct astNode* right, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_add(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);

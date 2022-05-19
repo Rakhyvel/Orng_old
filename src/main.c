@@ -24,6 +24,7 @@ PHILOSOPHY:
 
 #include "../util/debug.h"
 #include "./doc.h"
+#include "./ir.h"
 #include "./lexer.h"
 #include "./parse.h"
 #include "./symbol.h"
@@ -339,6 +340,25 @@ void unVisitSymbolTree(SymbolNode* node)
     }
 }
 
+void validate(SymbolNode* symbol)
+{
+    List* children = symbol->children->keyList;
+    ListElem* elem = List_Begin(children);
+    for (; elem != List_End(children); elem = elem->next) {
+        SymbolNode* child = Map_Get(symbol->children, elem->data);
+        validate(child);
+    }
+
+    switch (symbol->symbolType) {
+    case SYMBOL_FUNCTION:
+        printf("%s\n", symbol->name);
+        List* instructions = List_Create();
+        ir_id id = flatten(instructions, symbol->def);
+        printInstructionList(instructions);
+        printf("%d\n\n", id);
+    }
+}
+
 /*
 Translates an input file to a C output file
 */
@@ -371,6 +391,7 @@ int main(int argc, char** argv)
         SymbolNode* package = Symbol_Find(packageName, program);
         Doc_Generate(package, argv[1]);
     } else {
+        validate(program);
     }
 
     t = clock() - t;

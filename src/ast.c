@@ -185,9 +185,9 @@ ASTNode* AST_Create_false(struct symbolNode* scope, struct position pos)
     return retval;
 }
 
-ASTNode* AST_Create_null(struct symbolNode* scope, struct position pos)
+ASTNode* AST_Create_nothing(struct symbolNode* scope, struct position pos)
 {
-    ASTNode* retval = AST_Create(AST_NULL, scope, pos);
+    ASTNode* retval = AST_Create(AST_NOTHING, scope, pos);
     return retval;
 }
 
@@ -554,10 +554,11 @@ ASTNode* AST_Create_return(struct astNode* expr, struct symbolNode* scope, struc
     return retval;
 }
 
-ASTNode* AST_Create_defer(struct astNode* expr, struct symbolNode* scope, struct position pos)
+ASTNode* AST_Create_defer(struct astNode* statement, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_DEFER, scope, pos);
-    retval->unop.expr = expr;
+    retval->defer.statement = statement;
+    retval->defer.deferID = scope->defers->size;
     return retval;
 }
 
@@ -816,8 +817,8 @@ char* AST_GetString(enum astType type)
         return "AST_SLICE";
     case AST_DEREF:
         return "AST_DEREF";
-    case AST_NULL:
-        return "AST_NULL";
+    case AST_NOTHING:
+        return "AST_NOTHING";
     case AST_SIZEOF:
         return "AST_SIZEOF";
     case AST_NOT:
@@ -872,8 +873,6 @@ char* AST_GetString(enum astType type)
         return "AST_ASSIGN";
     case AST_IF:
         return "AST_IF";
-    case AST_IFELSE:
-        return "AST_IFELSE";
     case AST_FOR:
         return "AST_FOR";
     case AST_CASE:

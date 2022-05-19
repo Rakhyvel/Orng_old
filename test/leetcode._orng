@@ -18,7 +18,7 @@ leetcode::Module = (
 
     -- not leetcode, but a functional approach to fizzbuzz
     fizzbuzz::(n:Int)->() = 
-        if n % 15 == 0 {
+        if n % 16 == 0 {
             "fizzbuzz"
         } else if n % 3 == 0 {
             "fizz"
@@ -26,6 +26,21 @@ leetcode::Module = (
             "buzz"
         } else {
             std.string.format(255, "%d", n)
+        }
+
+    fizzbuzz2::(n:Int)->String =
+        case n % 15 {
+            0   -> "fizzbuzz"
+
+            3, 
+            6, 
+            9, 
+            12  -> "fizz"
+
+            5, 
+            10  -> "buzz"
+
+            else-> std.string.format(255, "%d", n)
         }
 
 
@@ -120,8 +135,8 @@ leetcode::Module = (
             }
             return true
         }
-        n := str.length;
-        res := 0; 
+        n := str.length
+        res := 0
         
         -- try all possible substrings
         -- for each unique one, remember the longest
@@ -133,7 +148,7 @@ leetcode::Module = (
             }
         }
                     
-        return res;
+        return res
     }
 
     test_lengthOfLongestSubstring::()->() = {
@@ -238,7 +253,12 @@ leetcode::Module = (
     -- Write the code that will take a string and make this conversion given a
     -- number of rows
     -- https://leetcode.com/problems/zigzag-conversion/
-    convert::(s:String, numRows:Int)->String = {
+    convert
+        ::(
+            s:String, numRows:Int)
+        -> 
+        String 
+    = {
         board: [][]Char = new [s.length][]Char
         for i := 0; i < s.length; i += 1 {
             board[i] = new [numRows]Char

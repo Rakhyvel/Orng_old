@@ -336,8 +336,33 @@ x imitation LLVM
 	- https://www.nmichaels.org/zig/interfaces.html interfaces in Zig
 		- compose an interface within each struct
 		- requires in-struct function definitions, which shouldn't be too much of a problem
+	- possibly like typeclasses in Haskell? WANT!
+		Iter::Class = (
+			next:(self:&Iter)->&Iter
+		)
 	- interfaces define a list of functions for a struct type
 	- if there exists function definitions for the struct type ANYWHERE in the program, the struct type implements the interface
+- refinement types, contracts, pre/post conditions
+	- why?
+		- comments are useless
+		- often times code will change and the comments will become wrong
+		- comments are not checked by compiler
+		- comments are rarely checked by programmer
+		- refinement types WILL be checked by compiler, and pre/post conditions WILL be checked by compiler
+		- comments should be kept, but only used to provide a convenient way to enumerate what to document
+	- are an expression, need another expression after them
+	- can chain them and other expressions together
+	arcsin::(x:Real)->Real = 
+	|>	-1 <= x <= 1		-- this expression is evaluated, if its false program hard crashes
+	|<	y; sin(y) == x		-- post conditions capture the return value, then have the expression
+	{
+		-- do math here
+	}
+	- |> for pre condition (like input)
+	- |< for post condition (like output!)
+	- maybe a post condition built in expression for like "|< no IO output happened during this function"
+	- conceptually, |> evaluates itself, then evaluates child
+	- |< evaluates its child at the end of the chain, captures it and performs condition
 - quantifiers from Alloy- or maybe these would be better as interfaces?
 	- basically just iterators, use interface above
 	- should be expressions, generate as a function call
@@ -380,22 +405,18 @@ x imitation LLVM
 	} else if node % 2 != 0 {
 		
 	}
-- pre and post condition contracts
-	- are an expression, need another expression after them
-	- can chain them and other expressions together
-	arcsin::(x:Real)->Real = 
-	|>	-1 <= x <= 1		-- this expression is evaluated, if its false program hard crashes
-	|<	y; sin(y) == x		-- post conditions capture the return value, then have the expression
-	{
-		-- do math here
-	}
-	- |> for pre condition (like input)
-	- |< for post condition (like output!)
-	- maybe a post condition built in expression for like "|< no IO output happened during this function"
-	- conceptually, |> evaluates itself, then evaluates child
-	- |< evaluates its child at the end of the chain, captures it and performs condition
 
 	
+
+
+
+
+
+
+
+
+
+Maybe?
 - relational operator chainings ????
 	- wasn't possible before because of duplication of code. Now that can be inlined
 	- have to be transitive operators (== < <= > >=)
