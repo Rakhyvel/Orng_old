@@ -7,8 +7,8 @@ Implementation is in the file generator.c
 #define GENERATOR_H
 
 #include "./ast.h"
-#include "./symbol.h"
 #include "./main.h"
+#include "./symbol.h"
 #include <stdio.h>
 
 void Generator_Generate(Program program, FILE* out);

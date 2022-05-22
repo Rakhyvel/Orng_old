@@ -232,7 +232,7 @@ x procedures inside structs
 		MyStruct.fn(x, 4) // x's state increments by 4
 		x.fn(4) // equivalent function call
 	x enums have length field and toString procedure
-- imitation LLVM
+x imitation LLVM
 	x custom if, while, for loops using gotos(!)
 	x basic blocks that either call another block or return from the function
 	x all ASTs store their temporary values in temporary variables marked _x where x is a number
@@ -248,7 +248,7 @@ x procedures inside structs
 	x remove new struct functions, since it can now be done inline
 	x defer, return, break, continue paths are correct?
 	x breaks should bust out of switches
-	- slices now that I can initialize arrays as expressions
+	x slices now that I can initialize arrays as expressions
 		x slices are a pointer to an array and a length
 		x syntax to create slices
 			arr: [4]Int
@@ -270,10 +270,11 @@ x procedures inside structs
 	x shorten stdlib to std
 	x rework restrictions to only restrict sibling symbols. Error if a symbol is not a sibling?
 	x find a way to make multi line strings, the way I have it now isnt tokenizable line-by-line
-- Rework the compiler to be better
-	- use a union for AST Nodes, like you would if you were to rewrite this in Orng
-		- create function to create an AST for every possible AST type
-		- no more guessing the child element in a list! Can now just use it
+- Rework the compiler to be better [ast-union-type]
+	x case/mapping rather than switch/case
+	x use a union for AST Nodes, like you would if you were to rewrite this in Orng
+		x create function to create an AST for every possible AST type
+		x no more guessing the child element in a list! Can now just use it
 	- convert AST to IR before, evaluate this, then 1:1 generate it out
 		1. For each symbol, flatten it's AST definition to an untyped IR list
 			- IR instructions should have a union with the different instructions too, like ASTs
@@ -282,6 +283,9 @@ x procedures inside structs
 			- Have a function that takes in untyped IR, analyzes it, emits an error or returns the new analyzed IR
 			- untyped IRs have ptrs to the analyzed IR, so that IRs that refered to the untyped version can get the typed version
 	- ASTs will likely not be typed, however, types will always be represented with ASTs I think
+	- analyzed IR instructions probably will be typed, if they can be
+	- make types expressions so that you can return them!
+	- only comptime const expr in modules, packages ARE modules, no Package type
 - unions like in julia and haskell
 	- Only practical uses are Either, and Maybe. Either is only ever used to pass error messages
 	- Tagged union and enums
@@ -332,8 +336,33 @@ x procedures inside structs
 	- https://www.nmichaels.org/zig/interfaces.html interfaces in Zig
 		- compose an interface within each struct
 		- requires in-struct function definitions, which shouldn't be too much of a problem
+	- possibly like typeclasses in Haskell? WANT!
+		Iter::Class = (
+			next:(self:&Iter)->&Iter
+		)
 	- interfaces define a list of functions for a struct type
 	- if there exists function definitions for the struct type ANYWHERE in the program, the struct type implements the interface
+- refinement types, contracts, pre/post conditions
+	- why?
+		- comments are useless
+		- often times code will change and the comments will become wrong
+		- comments are not checked by compiler
+		- comments are rarely checked by programmer
+		- refinement types WILL be checked by compiler, and pre/post conditions WILL be checked by compiler
+		- comments should be kept, but only used to provide a convenient way to enumerate what to document
+	- are an expression, need another expression after them
+	- can chain them and other expressions together
+	arcsin::(x:Real)->Real = 
+	|>	-1 <= x <= 1		-- this expression is evaluated, if its false program hard crashes
+	|<	y; sin(y) == x		-- post conditions capture the return value, then have the expression
+	{
+		-- do math here
+	}
+	- |> for pre condition (like input)
+	- |< for post condition (like output!)
+	- maybe a post condition built in expression for like "|< no IO output happened during this function"
+	- conceptually, |> evaluates itself, then evaluates child
+	- |< evaluates its child at the end of the chain, captures it and performs condition
 - quantifiers from Alloy- or maybe these would be better as interfaces?
 	- basically just iterators, use interface above
 	- should be expressions, generate as a function call
@@ -376,22 +405,18 @@ x procedures inside structs
 	} else if node % 2 != 0 {
 		
 	}
-- pre and post condition contracts
-	- are an expression, need another expression after them
-	- can chain them and other expressions together
-	arcsin::(x:Real)->Real = 
-	|>	-1 <= x <= 1		-- this expression is evaluated, if its false program hard crashes
-	|<	y; sin(y) == x		-- post conditions capture the return value, then have the expression
-	{
-		-- do math here
-	}
-	- |> for pre condition (like input)
-	- |< for post condition (like output!)
-	- maybe a post condition built in expression for like "|< no IO output happened during this function"
-	- conceptually, |> evaluates itself, then evaluates child
-	- |< evaluates its child at the end of the chain, captures it and performs condition
 
 	
+
+
+
+
+
+
+
+
+
+Maybe?
 - relational operator chainings ????
 	- wasn't possible before because of duplication of code. Now that can be inlined
 	- have to be transitive operators (== < <= > >=)
@@ -407,3 +432,16 @@ x procedures inside structs
 		_0 = 1	-- If we get here, result is true
 	over_1:; -- end of chain
 	- Syntax is weird to parse, need to loop over possible chains, but how to keep track of the symbols for each operator?
+
+- implicit dereferencing, like how C++ uses references
+	- there is a sharp distinction between C++ references and pointers
+	- references cannot be reassigned
+	- perhaps references can be thought of as constant addresses
+	- addrOf returns a constant address
+	- these will not be memoized during comptime eval, because addresses aren't comptime constant, but they could be runtime constant in the scope of the function
+	- maybe even a different syntax, with ^ for pointers and & for references, with references having implicit dereference and pointers not having that
+	- & operator would give "reference", where as ^ would give pointer type, dereferencing a pointer would use * as normal
+	- Was is the valid use case for this?? Seems kind of useless when pointers work fine, and there is no pointer arithmetic
+		- A pointer now can be marked as &:T, so that T is constant and cannot be changed by the callee
+		- however, this would require coercing T to :T, which is not possible
+		- maybe T <: :T, and &T = &:T ?? strange

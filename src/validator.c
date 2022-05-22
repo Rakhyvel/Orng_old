@@ -14,15 +14,16 @@ static const List* strings = NULL;
 static const List* verbatims = NULL;
 static const Map* includes = NULL;
 static const SymbolNode* mainFunction = NULL;
-static List* types;
 
-bool permissiveTypeEquiv = true;
+bool permissiveTypeEquiv = false;
 
-static const ASTNode* mainFunctionType;
+static ASTNode* mainFunctionType;
+bool typesAreEquivalent(ASTNode* a, ASTNode* b);
 static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning);
 static ASTNode* expandTypeIdent(ASTNode* type, bool reassigning);
-void validateAST(ASTNode* node);
+ASTNode* validateAST(ASTNode* node);
 void inferTypes(SymbolNode* var);
+Program Validator_Validate(SymbolNode* symbol);
 
 static void typeMismatchError(struct position pos, ASTNode* expectedType, ASTNode* actualType)
 {
@@ -66,9 +67,9 @@ static void restrictedOrUndefError(struct position pos1, struct position pos2, c
 */
 static SymbolNode* getDotSymbol(ASTNode* type)
 {
-    ASTNode* left = List_Begin(type->children)->data;
+    ASTNode* left = type->dot.left;
     ASTNode* newLeft = left;
-    ASTNode* right = List_Begin(type->children)->next->data;
+    ASTNode* right = type->dot.right;
     SymbolNode* leftSymbol = NULL;
 
     // new left needs to eventually resolve to a parameter list
@@ -78,7 +79,7 @@ static SymbolNode* getDotSymbol(ASTNode* type)
         if (!newLeft) {
             resolved = true;
         } else if (newLeft->astType == AST_IDENT) {
-            leftSymbol = Symbol_Find(newLeft->data, type->scope);
+            leftSymbol = Symbol_Find(newLeft->ident.data, type->scope);
             ASTNode* prevNewLeftType = newLeft;
             if (leftSymbol == 0 || leftSymbol == -1) {
                 newLeft = NULL;
@@ -115,37 +116,37 @@ static SymbolNode* getDotSymbol(ASTNode* type)
         }
         // newLeft is in the first child
         else if (newLeft->astType == AST_ADDR || newLeft->astType == AST_DEREF || newLeft->astType == AST_PAREN) {
-            newLeft = List_Get(newLeft->children, 0);
+            newLeft = newLeft->unop.expr;
             resolved = false;
         }
         // newLeft is in the second child
         else if (newLeft->astType == AST_CAST) {
-            newLeft = List_Get(newLeft->children, 1);
+            newLeft = newLeft->binop.right;
             resolved = false;
         }
         // newLeft is in the first child's type
         else if (newLeft->astType == AST_INDEX) {
-            ASTNode* arrayType = getType(List_Get(newLeft->children, 0), false, false);
+            ASTNode* arrayType = getType(newLeft->binop.left, false, false);
             if (arrayType->astType == AST_ADDR) {
-                arrayType = List_Get(arrayType->children, 0);
+                arrayType = arrayType->binop.left;
             }
             if (arrayType->astType != AST_ARRAY) {
                 error(type->pos, "indexing on a non-array type");
             }
-            ASTNode* dataDefine = List_Get(arrayType->children, 1);
-            SymbolNode* dataSymbol = dataDefine->data;
+            ASTNode* dataDefine = List_Get(arrayType->paramlist.defines, 1);
+            SymbolNode* dataSymbol = dataDefine->define.symbol;
             ASTNode* dataAddrType = dataSymbol->type;
-            newLeft = List_Get(dataAddrType->children, 0);
+            newLeft = dataAddrType->binop.left;
             resolved = false;
         } else if (newLeft->astType == AST_EXTERN) {
-            SymbolNode* var = newLeft->data;
+            SymbolNode* var = newLeft->_extern.symbol;
             newLeft = var->def;
             resolved = false;
         }
         // newLeft is the type of the array data
         else if (newLeft->astType == AST_ARRAY) {
-            ASTNode* define = List_Get(newLeft->children, 1);
-            SymbolNode* var = define->data;
+            ASTNode* define = List_Get(newLeft->paramlist.defines, 1);
+            SymbolNode* var = define->define.symbol;
             if (var->symbolType == SYMBOL_VARIABLE) {
                 newLeft = var->type;
                 resolved = false;
@@ -167,32 +168,30 @@ static SymbolNode* getDotSymbol(ASTNode* type)
         error(left->pos, "left side could not be resolved to a container");
     } else if (newLeft->astType == AST_PARAMLIST || newLeft->astType == AST_ARRAY) {
         // Search paramlists' defines for a symbol that matches
-        ListElem* elem = List_Begin(newLeft->children);
-        for (; rightSymbol == NULL && elem != List_End(newLeft->children); elem = elem->next) {
+        ListElem* elem = List_Begin(newLeft->paramlist.defines);
+        for (; rightSymbol == NULL && elem != List_End(newLeft->paramlist.defines); elem = elem->next) {
             ASTNode* define = elem->data;
-            SymbolNode* attr = define->data;
-            if (!strcmp(attr->name, right->data)) {
+            SymbolNode* attr = define->define.symbol;
+            if (!strcmp(attr->name, right->ident.data)) {
                 rightSymbol = attr;
                 break;
             }
         }
         if (rightSymbol == NULL) {
-            error(type->pos, "identifier '%s' not a member of parameterlist", right->data);
+            error(type->pos, "identifier '%s' not a member of parameterlist", right->ident.data);
         }
     } else { // ERROR! NOT A PARAMLIST!
         // Search symbol for a symbol that matches
-        rightSymbol = Map_Get(leftSymbol->children, right->data);
+        rightSymbol = Map_Get(leftSymbol->children, right->ident.data);
         if (rightSymbol == NULL) {
             if (newLeft->astType == AST_IDENT) {
-                error(type->pos, "symbol '%s' is not a member of '%s'", right->data, newLeft->data);
+                error(type->pos, "symbol '%s' is not a member of '%s'", right->ident.data, newLeft->ident.data);
             } else {
-                error(type->pos, "symbol '%s' is not a member of expression", right->data);
+                error(type->pos, "symbol '%s' is not a member of expression", right->ident.data);
             }
-        } else if (!rightSymbol->isPublic) {
-            error(type->pos, "cannot access non-public member '%s'", right->data);
         }
     }
-    type->data = rightSymbol;
+    type->dot.symbol = rightSymbol;
     return rightSymbol;
 }
 
@@ -200,46 +199,46 @@ static void validateLValue(ASTNode* node)
 {
     switch (node->astType) {
     case AST_IDENT: {
-        SymbolNode* var = Symbol_Find(node->data, node->scope);
+        SymbolNode* var = Symbol_Find(node->ident.data, node->scope);
         if (var->type->isConst) {
             error(node->pos, "symbol '%s' is constant", var->name);
         }
         break;
     }
     case AST_PAREN: {
-        ASTNode* child = List_Get(node->children, 0);
+        ASTNode* child = node->unop.expr;
         validateLValue(child);
         break;
     }
     case AST_INDEX: {
-        ASTNode* child = List_Get(node->children, 0);
+        ASTNode* child = node->binop.left;
         validateLValue(child);
         ASTNode* childType = getType(child, false, false);
         if (childType->astType != AST_ARRAY && childType->astType != AST_ADDR) {
             ASSERT(0);
         }
         if (childType->astType == AST_ADDR) {
-            childType = List_Get(childType->children, 0);
+            childType = childType->unop.expr;
         }
-        ASTNode* dataDefine = List_Get(childType->children, 1);
-        SymbolNode* dataSymbol = dataDefine->data;
+        ASTNode* dataDefine = List_Get(childType->paramlist.defines, 1);
+        SymbolNode* dataSymbol = dataDefine->define.symbol;
         ASTNode* dataAddrType = dataSymbol->type;
-        ASTNode* dataType = List_Get(dataAddrType->children, 0);
+        ASTNode* dataType = dataAddrType->unop.expr;
         if (dataType->isConst) {
             error(node->pos, "array data type is constant");
         }
         break;
     }
     case AST_DEREF: {
-        ASTNode* child = List_Get(node->children, 0);
-        if (child->astType != AST_ADDROF) {
+        ASTNode* child = node->unop.expr;
+        if (child->astType != AST_ADDR) {
             validateLValue(child);
         }
         ASTNode* childType = getType(child, false, false);
         if (childType->astType != AST_ADDR) {
             ASSERT(0);
         }
-        ASTNode* underlyingType = List_Get(childType->children, 0);
+        ASTNode* underlyingType = childType->unop.expr;
 
         if (underlyingType->isConst) {
             error(node->pos, "address expression is constant");
@@ -268,7 +267,7 @@ static ASTNode* resolveDotTypes(ASTNode* node, bool reassigning)
             error(node->pos, "dot expression doesn't resolve to a symbol");
         }
         if (reassigning && dotSymbol->isExtern) {
-            return AST_Create(AST_EXTERN, dotSymbol, dotSymbol, dotSymbol->pos, false);
+            return AST_Create_extern(dotSymbol, dotSymbol, dotSymbol->pos);
         } else {
             return dotSymbol->def;
         }
@@ -288,27 +287,23 @@ static ASTNode* expandTypeIdent(ASTNode* type, bool reassigning)
     int loopCounter = 0;
     ASTNode* expanded = type;
     while (expanded->astType == AST_IDENT) {
-        SymbolNode* var = Symbol_Find(expanded->data, expanded->scope);
+        SymbolNode* var = Symbol_Find(expanded->ident.data, expanded->scope);
         if (var != 0 && var != -1) {
             if (var->symbolType != SYMBOL_TYPE && var->symbolType != SYMBOL_ENUM) {
                 ASTNode* varType = getType(var->def, false, false);
-                if (varType->astType != AST_IDENT || strcmp(varType->data, "Type")) {
+                if (varType->astType != AST_IDENT || strcmp(varType->ident.data, "Type")) {
                     error2(type->pos, var->pos, "symbol '%s' is not a type", var->name);
                 }
             }
-            if (var->symbolType == SYMBOL_ENUM) {
-                expanded = AST_Create(AST_ENUM, var, type->scope, type->pos, false);
+            if (reassigning && var->isExtern) {
+                expanded = AST_Create_extern(var, type->scope, type->pos);
+                break;
             } else {
-                if (reassigning && var->isExtern) {
-                    expanded = AST_Create(AST_EXTERN, var, type->scope, type->pos, false);
-                    break;
-                } else {
-                    expanded = var->def;
-                }
+                expanded = var->def;
             }
-        } else if (!strcmp(expanded->data, "String")) {
+        } else if (!strcmp(expanded->ident.data, "String")) {
             expanded = STRING_TYPE;
-        } else if (!strcmp(expanded->data, "Module") && !expanded->isConst) {
+        } else if (!strcmp(expanded->ident.data, "Module") && !expanded->isConst) {
             printf("Found one\n");
         } else {
             break;
@@ -319,23 +314,21 @@ static ASTNode* expandTypeIdent(ASTNode* type, bool reassigning)
         loopCounter++;
     }
     if (expanded->astType == AST_ADDR) {
-        ASTNode* oldType = List_Get(expanded->children, 0);
-        expanded->children->head.next->data = expandTypeIdent(oldType, reassigning);
+        ASTNode* oldType = expanded->unop.expr;
+        expanded->unop.expr = expandTypeIdent(oldType, reassigning);
     } else if (expanded->astType == AST_PARAMLIST || expanded->astType == AST_ARRAY) {
-        ListElem* elem = List_Begin(expanded->children);
-        for (; elem != List_End(expanded->children); elem = elem->next) {
+        ListElem* elem = List_Begin(expanded->paramlist.defines);
+        for (; elem != List_End(expanded->paramlist.defines); elem = elem->next) {
             ASTNode* define = elem->data;
-            SymbolNode* symbol = define->data;
+            SymbolNode* symbol = define->define.symbol;
             Validator_Validate(symbol);
         }
     } else if (expanded->astType == AST_FUNCTION) {
-        ListElem* params = List_Begin(expanded->children);
-        ListElem* rets = params->next;
-        params->data = expandTypeIdent(params->data, true);
-        rets->data = expandTypeIdent(rets->data, true);
+        expanded->function.domainType = expandTypeIdent(expanded->function.domainType, true);
+        expanded->function.codomainType = expandTypeIdent(expanded->function.codomainType, true);
     }
     if (expanded->astType == AST_EXTERN && !reassigning) {
-        SymbolNode* externVar = expanded->data;
+        SymbolNode* externVar = expanded->_extern.symbol;
         if (externVar->def->astType != AST_UNDEF) { // Extern symbols don't need a def, if they do, expand else leave as an extern
             expanded = expandTypeIdent(externVar->def, reassigning);
         }
@@ -346,22 +339,6 @@ static ASTNode* expandTypeIdent(ASTNode* type, bool reassigning)
     }
 
     return expanded;
-}
-
-void collectType(ASTNode* type)
-{
-    ListElem* elem = List_Begin(types);
-    bool withinList = false;
-    for (; elem != List_End(types); elem = elem->next) {
-        ASTNode* otherType = elem->data;
-        if (typesAreEquivalent(otherType, type)) {
-            withinList = true;
-            break;
-        }
-    }
-    if (!withinList) {
-        List_Append(types, type);
-    }
 }
 
 /*
@@ -381,11 +358,11 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
 
     switch (node->astType) {
     case AST_IDENT: {
-        SymbolNode* var = Symbol_Find(node->data, node->scope);
+        SymbolNode* var = Symbol_Find(node->ident.data, node->scope);
         if (var == 0) {
-            restrictedOrUndefError(node->pos, (Position) { NULL, 0 }, node->data);
+            restrictedOrUndefError(node->pos, (Position) { NULL, 0 }, node->ident.data);
         } else if (var == -1) {
-            restrictedOrUndefError(node->pos, rejectingSymbol->pos, node->data);
+            restrictedOrUndefError(node->pos, rejectingSymbol->pos, node->ident.data);
         }
         if (var->type->astType == AST_UNDEF) {
             inferTypes(var);
@@ -394,9 +371,9 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
         break;
     }
     case AST_CALL: {
-        ASTNode* call = List_Get(node->children, 0);
+        ASTNode* call = node->binop.left;
         ASTNode* functionType = getType(call, false, reassigning);
-        ASTNode* functionReturn = List_Get(functionType->children, 1);
+        ASTNode* functionReturn = functionType->function.codomainType;
         type = expandTypeIdent(functionReturn, reassigning);
         break;
     }
@@ -425,8 +402,8 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
     case AST_MULTIPLY:
     case AST_DIVIDE:
     case AST_MODULUS: {
-        ASTNode* left = List_Get(node->children, 0);
-        ASTNode* right = List_Get(node->children, 1);
+        ASTNode* left = node->binop.left;
+        ASTNode* right = node->binop.right;
         ASTNode* leftType = getType(left, false, false);
         ASTNode* rightType = getType(right, false, false);
         bool tempPermissiveness = permissiveTypeEquiv;
@@ -458,59 +435,64 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
     case AST_XOR_ASSIGN:
     case AST_LSHIFT_ASSIGN:
     case AST_RSHIFT_ASSIGN:
-    case AST_PAREN:
     case AST_NAMED_ARG:
     case AST_RETURN: { // TODO: Maybe add a more nuanced system?
-        ASTNode* left = List_Get(node->children, 0);
+        ASTNode* left = node->unop.expr;
         type = getType(left, false, reassigning);
         break;
     }
+    case AST_PAREN: {
+        type = getType(List_Get(node->arglist.args, 0), false, reassigning);
+        break;
+	}
     case AST_SLICE: {
-        ASTNode* left = List_Get(node->children, 0);
+        ASTNode* left = node->slice.arrayExpr;
         ASTNode* leftType = getType(left, false, false);
-        ASTNode* dataDefine = List_Get(leftType->children, 1);
-        SymbolNode* dataSymbol = dataDefine->data;
+        ASTNode* dataDefine = List_Get(leftType->paramlist.defines, 1);
+        SymbolNode* dataSymbol = dataDefine->define.symbol;
         ASTNode* dataType = dataSymbol->type;
-        ASTNode* actualType = List_Get(dataType->children, 0);
+        ASTNode* actualType = dataType->unop.expr;
         type = createArrayTypeNode(actualType, -1);
         break;
     }
     case AST_DEREF: {
-        ASTNode* left = List_Get(node->children, 0);
+        ASTNode* left = node->unop.expr;
         ASTNode* addr = getType(left, false, reassigning);
-        type = List_Get(addr->children, 0);
+        type = addr->unop.expr;
         break;
     }
     case AST_ADDROF: {
-        ASTNode* innerType = getType(List_Get(node->children, 0), false, reassigning);
-        ASTNode* addrType = AST_Create(AST_ADDR, 0, node->scope, (Position) { 0, 0, 0, 0 }, true);
-        List_Append(addrType->children, innerType);
+        ASTNode* innerType = getType(node->unop.expr, false, reassigning);
+        ASTNode* addrType = AST_Create_addr(innerType, node->scope, (Position) { 0, 0, 0, 0 });
+        type = addrType;
+        break;
+    }
+    case AST_ADDR: {
+        ASTNode* innerType = getType(node->unop.expr, false, reassigning);
+        ASTNode* addrType = AST_Create_addr(innerType, node->scope, (Position) { 0, 0, 0, 0 });
         type = addrType;
         break;
     }
     case AST_INDEX: {
-        ASTNode* arrType = getType(List_Get(node->children, 0), false, reassigning);
+        ASTNode* arrType = getType(node->binop.left, false, reassigning);
         if (arrType->astType == AST_ARRAY) {
-            ASTNode* define = List_Get(arrType->children, 1);
-            SymbolNode* arrSymbol = define->data;
-            type = expandTypeIdent(List_Get(arrSymbol->type->children, 0), reassigning);
+            ASTNode* define = List_Get(arrType->paramlist.defines, 1);
+            SymbolNode* arrSymbol = define->define.symbol;
+            type = expandTypeIdent(arrSymbol->type->unop.expr, reassigning);
         } else if (arrType->astType == AST_ADDR) {
-            ASTNode* innerType = List_Get(arrType->children, 0);
+            ASTNode* innerType = arrType->unop.expr;
             if (innerType->astType == AST_ARRAY) {
-                ASTNode* define = List_Get(innerType->children, 1);
-                SymbolNode* arrSymbol = define->data;
-                type = expandTypeIdent(List_Get(arrSymbol->type->children, 0), reassigning);
+                ASTNode* define = List_Get(innerType->paramlist.defines, 1);
+                SymbolNode* arrSymbol = define->define.symbol;
+                type = expandTypeIdent(arrSymbol->type->unop.expr, reassigning);
             } else {
-                type = expandTypeIdent(List_Get(arrType->children, 0), reassigning);
+                type = expandTypeIdent(arrType->unop.expr, reassigning);
             }
         }
         break;
     }
-    case AST_NULL: {
-        ASTNode* voidPtr = AST_Create(AST_VOID, 0, node->scope, (Position) { 0, 0, 0, 0 }, true);
-        ASTNode* addrType = AST_Create(AST_ADDR, 0, node->scope, (Position) { 0, 0, 0, 0 }, true);
-        List_Append(addrType->children, voidPtr);
-        type = addrType;
+    case AST_NOTHING: {
+        type = AST_Create_void(node->scope, (Position) { 0, 0, 0, 0 });
         break;
     }
     case AST_SIZEOF: {
@@ -531,27 +513,29 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
         type = CONST_BOOL_TYPE;
         break;
     }
-    case AST_IFELSE: {
-        ASTNode* body = List_Begin(node->children)->next->data;
-        ASTNode* elseBody = List_Begin(node->children)->next->next->data;
-        ASTNode* bodyType = getType(body, false, false);
-        ASTNode* elseBodyType = getType(elseBody, false, false);
-        bool tempPermissiveness = permissiveTypeEquiv;
-        permissiveTypeEquiv = true;
-        if (typesAreEquivalent(bodyType, elseBodyType)) {
-            type = elseBodyType;
-        } else if (typesAreEquivalent(elseBodyType, bodyType)) {
-            type = bodyType;
+    case AST_IF: {
+        if (node->_if.elseBlock->astType != AST_UNDEF) {
+            ASTNode* body = node->_if.bodyBlock;
+            ASTNode* elseBody = node->_if.elseBlock;
+            ASTNode* bodyType = getType(body, false, false);
+            ASTNode* elseBodyType = getType(elseBody, false, false);
+            bool tempPermissiveness = permissiveTypeEquiv;
+            permissiveTypeEquiv = true;
+            if (typesAreEquivalent(bodyType, elseBodyType)) {
+                type = elseBodyType;
+            } else if (typesAreEquivalent(elseBodyType, bodyType)) {
+                type = bodyType;
+            } else {
+                type = UNDEF_TYPE;
+            }
+            permissiveTypeEquiv = tempPermissiveness;
         } else {
             type = UNDEF_TYPE;
         }
-        permissiveTypeEquiv = tempPermissiveness;
         break;
     }
-    case AST_BLOCK:
-    case AST_FOR:
-    case AST_CASE: {
-        ASTNode* lastNode = List_Get(node->children, node->children->size - 1);
+    case AST_BLOCK: {
+        ASTNode* lastNode = List_Get(node->block.children, node->block.children->size - 1);
         if (lastNode != NULL) {
             type = getType(lastNode, false, false);
         } else {
@@ -559,15 +543,23 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
         }
         break;
     }
-    case AST_SWITCH: {
-        if (node->children->size < 1) {
+    case AST_FOR: {
+        type = getType(node->_for.bodyBlock, false, false);
+        break;
+    }
+    case AST_MAPPING: {
+        type = getType(node->mapping.expr, false, false);
+        break;
+    }
+    case AST_CASE: {
+        if (node->_case.mappings->size < 1) {
             type = UNDEF_TYPE;
             break;
         } else {
-            ASTNode* firstCase = List_Get(node->children, 1);
+            ASTNode* firstCase = List_Get(node->_case.mappings, 0);
             ASTNode* firstCaseType = getType(firstCase, false, false);
             type = firstCaseType;
-            for (ListElem* elem = List_Begin(node->children)->next; elem != List_End(node->children); elem = elem->next) {
+            for (ListElem* elem = List_Begin(node->_case.mappings)->next; elem != List_End(node->_case.mappings); elem = elem->next) {
                 ASTNode* caseNode = elem->data;
                 ASTNode* caseNodeType = getType(caseNode, false, false);
                 if (!typesAreEquivalent(firstCaseType, caseNodeType) || !typesAreEquivalent(caseNodeType, firstCaseType)) {
@@ -581,7 +573,6 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
     case AST_ARGLIST:
     case AST_UNDEF:
     case AST_DEFINE:
-    case AST_IF:
     case AST_FREE:
     case AST_DEFER:
     case AST_BREAK:
@@ -590,21 +581,21 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
         break;
     }
     case AST_CAST: {
-        type = List_Get(node->children, 1);
+        type = node->binop.right;
         break;
     }
     case AST_DOT: {
-        ASTNode* left = List_Begin(node->children)->data;
-        ASTNode* right = List_Begin(node->children)->next->data;
+        ASTNode* left = node->binop.left;
+        ASTNode* right = node->binop.right;
         ASTNode* leftType = getType(left, left->astType != AST_DOT, reassigning); // need to know the type of the left side of dot
         leftType = expandTypeIdent(resolveDotTypes(leftType, false), reassigning);
         ASTNode* paramlist = NULL;
 
         bool resolved = false;
-        if (leftType->astType == AST_IDENT && (!strcmp(leftType->data, "Module") || !strcmp(leftType->data, "Package") || !strcmp(leftType->data, "Enum"))) {
+        if (leftType->astType == AST_IDENT && (!strcmp(leftType->ident.data, "Module") || !strcmp(leftType->ident.data, "Package") || !strcmp(leftType->ident.data, "Enum"))) {
             SymbolNode* leftSymbol = NULL;
             if (left->astType == AST_IDENT) {
-                leftSymbol = Symbol_Find(left->data, left->scope);
+                leftSymbol = Symbol_Find(left->ident.data, left->scope);
             } else if (left->astType == AST_DOT) {
                 leftSymbol = getDotSymbol(left);
             } else {
@@ -618,10 +609,10 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
             } else {
                 error(leftSymbol->pos, "leftSymbol def ast type was %s, is that right?", AST_GetString(leftSymbol->def->astType));
             }
-        } else if (leftType->astType == AST_IDENT && !strcmp(leftType->data, "Type")) {
+        } else if (leftType->astType == AST_IDENT && !strcmp(leftType->ident.data, "Type")) {
             SymbolNode* leftSymbol = NULL;
             if (left->astType == AST_IDENT) {
-                leftSymbol = Symbol_Find(left->data, left->scope);
+                leftSymbol = Symbol_Find(left->ident.data, left->scope);
             } else if (left->astType == AST_DOT) {
                 leftSymbol = getDotSymbol(left);
             } else {
@@ -629,17 +620,17 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
             }
             paramlist = leftSymbol->def;
         } else if (leftType->astType == AST_ADDR) {
-            paramlist = expandTypeIdent((ASTNode*)List_Get(leftType->children, 0), reassigning);
+            paramlist = expandTypeIdent(leftType->unop.expr, reassigning);
         } else if (leftType->astType == AST_PARAMLIST || leftType->astType == AST_ARRAY) {
             paramlist = leftType;
         } else if (leftType->astType == AST_EXTERN) {
-            SymbolNode* leftSymbol = leftType->data;
+            SymbolNode* leftSymbol = leftType->_extern.symbol;
             paramlist = leftSymbol->def;
         } else {
             error(left->pos, "left side of dot must be container");
         }
         if (paramlist->astType == AST_EXTERN) {
-            SymbolNode* var = paramlist->data;
+            SymbolNode* var = paramlist->_extern.symbol;
             paramlist = var->def;
         }
 
@@ -647,17 +638,17 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
             error(left->pos, "left side of dot must be container");
         }
 
-        ListElem* elem = List_Begin(paramlist->children);
+        ListElem* elem = List_Begin(paramlist->paramlist.defines);
         SymbolNode* attr = NULL;
-        for (; type == NULL && elem != List_End(paramlist->children); elem = elem->next) {
+        for (; type == NULL && elem != List_End(paramlist->paramlist.defines); elem = elem->next) {
             ASTNode* define = elem->data;
-            attr = define->data;
-            if (!strcmp(attr->name, right->data)) {
+            attr = define->define.symbol;
+            if (!strcmp(attr->name, right->ident.data)) {
                 ASTNode* retval = expandTypeIdent(attr->type, reassigning);
-                if (leftType->astType == AST_IDENT && !strcmp(leftType->data, "Type") && !retval->isConst) {
+                if (leftType->astType == AST_IDENT && !strcmp(leftType->ident.data, "Type") && !retval->isConst) {
                     error(node->pos, "type access is not a constant");
                 }
-                if (intermediate && retval->astType == AST_IDENT && (!strcmp(retval->data, "Module") || !strcmp(retval->data, "Package"))) {
+                if (intermediate && retval->astType == AST_IDENT && (!strcmp(retval->ident.data, "Module") || !strcmp(retval->ident.data, "Package"))) {
                     type = attr->def;
                     break;
                 } else {
@@ -668,12 +659,10 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
         }
         if (type == NULL) {
             if (left->astType == AST_IDENT) {
-                error(node->pos, "symbol '%s' is not a member of '%s'", right->data, left->data);
+                error(node->pos, "symbol '%s' is not a member of '%s'", right->ident.data, left->ident.data);
             } else {
-                error(node->pos, "symbol '%s' is not a member of left-side expression", right->data);
+                error(node->pos, "symbol '%s' is not a member of left-side expression", right->ident.data);
             }
-        } else if (!attr->isPublic) {
-            error(node->pos, "cannot access non-public member '%s'", right->data);
         }
         break;
     }
@@ -684,23 +673,21 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
     case AST_ENUM:
     case AST_PARAMLIST:
     case AST_FUNCTION:
-    case AST_ADDR:
     case AST_ARRAY: {
         type = TYPE_TYPE;
         break;
     }
     case AST_ARRAY_LITERAL: {
-        ASTNode* firstElem = List_Begin(node->children)->data;
+        ASTNode* firstElem = List_Begin(node->arrayLiteral.members)->data;
         ASTNode* firstType = getType(firstElem, false, reassigning);
-        type = createArrayTypeNode(firstType, node->children->size, true);
+        type = createArrayTypeNode(firstType, node->arrayLiteral.members->size, true);
         type->isConst = true;
         break;
     }
     case AST_NEW: {
-        ASTNode* newType = List_Get(node->children, 0);
+        ASTNode* newType = node->binop.left;
         if (newType->astType != AST_ARRAY) {
-            ASTNode* addr = AST_Create(AST_ADDR, NULL, node->scope, node->pos, false);
-            List_Append(addr->children, newType);
+            ASTNode* addr = AST_Create_addr(newType, node->scope, node->pos);
             type = addr;
         } else {
             type = newType;
@@ -714,7 +701,6 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
         printf("What\n");
     }
     node->type = type;
-    collectType(type);
     return type;
 }
 
@@ -726,17 +712,17 @@ static int scalarTypeType(ASTNode* node)
         } else if (node->astType != AST_IDENT) {
             return -1;
         } else {
-            if (!strcmp(node->data, "Int8")) {
+            if (!strcmp(node->ident.data, "Int8")) {
                 return 0;
-            } else if (!strcmp(node->data, "Int16")) {
+            } else if (!strcmp(node->ident.data, "Int16")) {
                 return 0;
-            } else if (!strcmp(node->data, "Int32")) {
+            } else if (!strcmp(node->ident.data, "Int32")) {
                 return 0;
-            } else if (!strcmp(node->data, "Int64") || !strcmp(node->data, "Int")) {
+            } else if (!strcmp(node->ident.data, "Int64") || !strcmp(node->ident.data, "Int")) {
                 return 0;
-            } else if (!strcmp(node->data, "Real32") || !strcmp(node->data, "Real")) {
+            } else if (!strcmp(node->ident.data, "Real32") || !strcmp(node->ident.data, "Real")) {
                 return 1;
-            } else if (!strcmp(node->data, "Real64")) {
+            } else if (!strcmp(node->ident.data, "Real64")) {
                 return 1;
             } else {
                 return -1;
@@ -748,17 +734,17 @@ static int scalarTypeType(ASTNode* node)
         } else if (node->astType != AST_IDENT) {
             return -1;
         } else {
-            if (!strcmp(node->data, "Int8")) {
+            if (!strcmp(node->ident.data, "Int8")) {
                 return 0;
-            } else if (!strcmp(node->data, "Int16")) {
+            } else if (!strcmp(node->ident.data, "Int16")) {
                 return 1;
-            } else if (!strcmp(node->data, "Int32")) {
+            } else if (!strcmp(node->ident.data, "Int32")) {
                 return 2;
-            } else if (!strcmp(node->data, "Int64") || !strcmp(node->data, "Int")) {
+            } else if (!strcmp(node->ident.data, "Int64") || !strcmp(node->ident.data, "Int")) {
                 return 3;
-            } else if (!strcmp(node->data, "Real32") || !strcmp(node->data, "Real")) {
+            } else if (!strcmp(node->ident.data, "Real32") || !strcmp(node->ident.data, "Real")) {
                 return 4;
-            } else if (!strcmp(node->data, "Real64")) {
+            } else if (!strcmp(node->ident.data, "Real64")) {
                 return 5;
             } else {
                 return -1;
@@ -795,7 +781,7 @@ bool typesAreEquivalent(ASTNode* a, ASTNode* b)
     ASTNode* bExpand = expandTypeIdent(b, true);
 
     if (aExpand->astType == AST_EXTERN) {
-        SymbolNode* var = aExpand->data;
+        SymbolNode* var = aExpand->_extern.symbol;
         if (var->def->astType == AST_UNDEF) {
             return true;
         } else {
@@ -803,7 +789,7 @@ bool typesAreEquivalent(ASTNode* a, ASTNode* b)
         }
     }
     if (bExpand->astType == AST_EXTERN) {
-        SymbolNode* var = bExpand->data;
+        SymbolNode* var = bExpand->_extern.symbol;
         if (var->def->astType == AST_UNDEF) {
             return true;
         } else {
@@ -820,10 +806,10 @@ bool typesAreEquivalent(ASTNode* a, ASTNode* b)
     if (compatiblility != -1) {
         return compatiblility;
     }
-    if (bExpand->astType == AST_IDENT && !strcmp(bExpand->data, "Module") && aExpand->astType == AST_IDENT && !strcmp(aExpand->data, "Type")) {
+    if (bExpand->astType == AST_IDENT && !strcmp(bExpand->ident.data, "Module") && aExpand->astType == AST_IDENT && !strcmp(aExpand->ident.data, "Type")) {
         return true;
     }
-    if (bExpand->astType == AST_IDENT && !strcmp(bExpand->data, "Package")) {
+    if (bExpand->astType == AST_IDENT && !strcmp(bExpand->ident.data, "Package")) {
         return true;
     }
     if (permissiveTypeEquiv && bExpand->isConst && !aExpand->isConst) {
@@ -833,38 +819,31 @@ bool typesAreEquivalent(ASTNode* a, ASTNode* b)
     bool retval = true;
     if (aExpand->astType != bExpand->astType && aExpand != AST_FUNCTION) {
         retval = false;
-    } else if (aExpand->children->size != bExpand->children->size) {
-        retval = false;
     } else {
         switch (aExpand->astType) {
         case AST_IDENT: {
-            bool equiv = aExpand->data && bExpand->data && !strcmp(aExpand->data, bExpand->data);
-            if (!equiv && (!strcmp(aExpand->data, "Int") && bExpand->astType == AST_ENUM)) {
+            bool equiv = aExpand->ident.data && bExpand->ident.data && !strcmp(aExpand->ident.data, bExpand->ident.data);
+            if (!equiv && (!strcmp(aExpand->ident.data, "Int") && bExpand->astType == AST_ENUM)) {
                 equiv = true;
             }
             retval = equiv;
             break;
         }
-        case AST_ENUM: {
-            SymbolNode* aSymbol = aExpand->data;
-            retval = aSymbol->parent == bExpand->data;
-            break;
-        }
         case AST_FUNCTION:
-            ASTNode* aLeft = List_Begin(aExpand->children)->data;
-            ASTNode* aRight = List_Begin(aExpand->children)->next->data;
-            ASTNode* bLeft = List_Begin(bExpand->children)->data;
-            ASTNode* bRight = List_Begin(bExpand->children)->next->data;
+            ASTNode* aLeft = aExpand->function.domainType;
+            ASTNode* aRight = aExpand->function.codomainType;
+            ASTNode* bLeft = bExpand->function.domainType;
+            ASTNode* bRight = bExpand->function.codomainType;
             aExpand->visited = true;
             bExpand->visited = true;
             bool equiv = typesAreEquivalent(aLeft, bLeft) && typesAreEquivalent(aRight, bRight);
             retval = equiv;
             break;
         case AST_DOT: {
-            ASTNode* aLeft = List_Begin(aExpand->children)->data;
-            ASTNode* aRight = List_Begin(aExpand->children)->next->data;
-            ASTNode* bLeft = List_Begin(bExpand->children)->data;
-            ASTNode* bRight = List_Begin(bExpand->children)->next->data;
+            ASTNode* aLeft = aExpand->dot.left;
+            ASTNode* aRight = aExpand->dot.right;
+            ASTNode* bLeft = bExpand->dot.left;
+            ASTNode* bRight = bExpand->dot.right;
             aExpand->visited = true;
             bExpand->visited = true;
             bool equiv = typesAreEquivalent(aLeft, bLeft) && typesAreEquivalent(aRight, bRight);
@@ -872,8 +851,8 @@ bool typesAreEquivalent(ASTNode* a, ASTNode* b)
             break;
         }
         case AST_ADDR: {
-            ASTNode* aLeft = List_Begin(aExpand->children)->data;
-            ASTNode* bLeft = List_Begin(bExpand->children)->data;
+            ASTNode* aLeft = aExpand->unop.expr;
+            ASTNode* bLeft = bExpand->unop.expr;
             aExpand->visited = true;
             bExpand->visited = true;
             if (aLeft->astType == AST_VOID || bLeft->astType == AST_VOID) {
@@ -885,48 +864,54 @@ bool typesAreEquivalent(ASTNode* a, ASTNode* b)
             break;
         }
         case AST_PARAMLIST: {
-            ListElem* aElem = List_Begin(aExpand->children);
-            ListElem* bElem = List_Begin(bExpand->children);
+            if (aExpand->paramlist.defines->size != bExpand->paramlist.defines->size) {
+                retval = false;
+                break;
+            }
+            ListElem* aElem = List_Begin(aExpand->paramlist.defines);
+            ListElem* bElem = List_Begin(bExpand->paramlist.defines);
             bool allEquiv = true;
             // For each parameter in the function's parameter list, print it out
-            for (; aElem != List_End(aExpand->children); aElem = aElem->next, bElem = bElem->next) {
+            for (; aElem != List_End(aExpand->paramlist.defines); aElem = aElem->next, bElem = bElem->next) {
                 ASTNode* aDefine = aElem->data;
-                SymbolNode* aSymbol = aDefine->data;
+                SymbolNode* aSymbol = aDefine->define.symbol;
                 ASTNode* aType = aSymbol->type;
                 ASTNode* bDefine = bElem->data;
-                SymbolNode* bSymbol = bDefine->data;
+                SymbolNode* bSymbol = bDefine->define.symbol;
                 ASTNode* bType = bSymbol->type;
                 aExpand->visited = true;
                 bExpand->visited = true;
                 bool fieldNamesSame = (aSymbol == NULL || bSymbol == NULL || !strcmp(aSymbol->name, bSymbol->name));
                 bool typeEquiv = typesAreEquivalent(aType, bType);
-                bool bothPub = (aSymbol == NULL || bSymbol == NULL || aSymbol->isPublic == bSymbol->isPublic);
-                allEquiv &= typeEquiv && fieldNamesSame && bothPub;
+                allEquiv &= typeEquiv && fieldNamesSame;
             }
             retval = allEquiv;
             break;
         }
         case AST_ARRAY: {
-            ListElem* aElem = List_Begin(aExpand->children);
-            ListElem* bElem = List_Begin(bExpand->children);
+            if (aExpand->paramlist.defines->size != bExpand->paramlist.defines->size) {
+                retval = false;
+                break;
+            }
+            ListElem* aElem = List_Begin(aExpand->paramlist.defines);
+            ListElem* bElem = List_Begin(bExpand->paramlist.defines);
             bool allEquiv = true;
             // For each parameter in the function's parameter list, print it out
-            for (; aElem != List_End(aExpand->children); aElem = aElem->next, bElem = bElem->next) {
+            for (; aElem != List_End(aExpand->paramlist.defines); aElem = aElem->next, bElem = bElem->next) {
                 ASTNode* aDefine = aElem->data;
-                SymbolNode* aSymbol = aDefine->data;
+                SymbolNode* aSymbol = aDefine->define.symbol;
                 ASTNode* aType = aSymbol->type;
                 ASTNode* aDef = aSymbol->def;
                 ASTNode* bDefine = bElem->data;
-                SymbolNode* bSymbol = bDefine->data;
+                SymbolNode* bSymbol = bDefine->define.symbol;
                 ASTNode* bType = bSymbol->type;
                 ASTNode* bDef = bSymbol->def;
                 aExpand->visited = true;
                 bExpand->visited = true;
-                bool lengthSame = !permissiveTypeEquiv || bDef->astType != AST_INT || aDef->data == bDef->data;
+                bool lengthSame = !permissiveTypeEquiv || bDef->astType != AST_INT || aDef->_int.data == bDef->_int.data;
                 bool fieldNamesSame = (aSymbol == NULL || bSymbol == NULL || !strcmp(aSymbol->name, bSymbol->name));
                 bool typeEquiv = typesAreEquivalent(aType, bType);
-                bool bothPub = (aSymbol == NULL || bSymbol == NULL || aSymbol->isPublic == bSymbol->isPublic);
-                allEquiv &= lengthSame && typeEquiv && fieldNamesSame && bothPub;
+                allEquiv &= lengthSame && typeEquiv && fieldNamesSame;
             }
             retval = allEquiv;
             break;
@@ -962,911 +947,6 @@ bool identIsPrimitive(char* data)
         !strcmp(data, "Real64");
 }
 
-void validateType(ASTNode* node)
-{
-    ASSERT(node != NULL);
-    if (node->isValid) {
-        return;
-    }
-    node->isValid = true;
-
-    switch (node->astType) {
-    case AST_IDENT: {
-        if (strcmp(node->data, "Int") && //
-            strcmp(node->data, "Char") && //
-            strcmp(node->data, "Bool") && //
-            strcmp(node->data, "Char") && //
-            strcmp(node->data, "Real") && //
-            strcmp(node->data, "String") && //
-            strcmp(node->data, "Type") && //
-            strcmp(node->data, "Module") && //
-            strcmp(node->data, "Package") && //
-            strcmp(node->data, "Enum") && //
-            strcmp(node->data, "Int8") && //
-            strcmp(node->data, "Int16") && //
-            strcmp(node->data, "Int32") && //
-            strcmp(node->data, "Int64") && //
-            strcmp(node->data, "Real32") && //
-            strcmp(node->data, "Real64")) {
-            SymbolNode* var = Symbol_Find(node->data, node->scope);
-            if (var == NULL) {
-                restrictedOrUndefError(node->pos, (Position) { NULL, 0 }, node->data);
-            } else if (var == -1) {
-                restrictedOrUndefError(node->pos, rejectingSymbol->pos, node->data);
-            } else if (var->symbolType != SYMBOL_TYPE && var->symbolType != SYMBOL_ENUM) {
-                error(node->pos, "symbol '%s' is not a type 2", node->data);
-            }
-        }
-        break;
-    }
-    case AST_PARAMLIST: {
-        validateAST(node);
-        break;
-    }
-    case AST_DOT: {
-        validateAST(node);
-        ASTNode* dotType = getType(node, false, false);
-        if (dotType->astType != AST_IDENT || !(!strcmp(dotType->data, "Type") || !strcmp(dotType->data, "Enum"))) {
-            error(node->pos, "symbol '%s' is not a type 3", ((ASTNode*)List_Get(node->children, 1))->data);
-        }
-        SymbolNode* var = getDotSymbol(node);
-        break;
-    }
-    case AST_FUNCTION: {
-        ASTNode* params = List_Get(node->children, 0);
-        ASTNode* rets = List_Get(node->children, 1);
-        validateType(params);
-        validateType(rets);
-        break;
-    }
-    case AST_ADDR: {
-        ASTNode* base = List_Get(node->children, 0);
-        validateType(base);
-        break;
-    }
-    case AST_EXTERN: {
-        SymbolNode* type = node->data;
-        if (!typesAreEquivalent(type->type, TYPE_TYPE) && !typesAreEquivalent(type->type, ENUM_TYPE)) {
-            typeMismatchError(node->pos, TYPE_TYPE, type->type);
-        }
-        break;
-    }
-    case AST_ARRAY: {
-        ASTNode* typeDefine = List_Get(node->children, 1);
-        ASTNode* lengthDefine = List_Get(node->children, 0);
-        SymbolNode* type = typeDefine->data;
-        SymbolNode* length = lengthDefine->data;
-        validateType(type->type);
-        validateAST(length->def);
-        ASTNode* lengthType = getType(length->def, "", false);
-        if (lengthType->astType != AST_UNDEF && !typesAreEquivalent(lengthType, INT32_TYPE)) {
-            typeMismatchError(node->pos, INT32_TYPE, lengthType);
-        }
-        break;
-    }
-    case AST_VOID:
-    case AST_UNDEF:
-    case AST_ENUM: {
-        break;
-    }
-    default: {
-        error(node->pos, "not a type");
-    }
-    }
-}
-
-void inferTypes(SymbolNode* var)
-{
-    if (var->def && var->symbolType != SYMBOL_FUNCTION) {
-        if (!var->def->isValid) {
-            validateAST(var->def);
-        }
-        // if type is undef, type is type of def
-        // else, type must match type of def
-        ASTNode* defType = getType(var->def, false, true);
-        if (var->type->astType == AST_UNDEF) {
-            // No type annot., infer types
-            bool wasConst = var->type->isConst;
-            var->type = defType;
-            var->type->isConst = wasConst;
-
-            if (defType->astType == AST_IDENT && !strcmp(defType->data, "Type")) {
-                var->symbolType = SYMBOL_TYPE;
-            } else if (defType->astType == AST_IDENT && !strcmp(defType->data, "Module")) {
-                var->symbolType = SYMBOL_MODULE;
-                var->type->isConst = true;
-            } else if (defType->astType == AST_IDENT && !strcmp(defType->data, "Package")) {
-                var->symbolType = SYMBOL_PACKAGE;
-                var->type->isConst = true;
-            }
-            if (var->type->astType == AST_UNDEF) {
-                error(var->pos, "cannot infer type of symbol '%s', try using a cast", var->name);
-            }
-        } else {
-            bool typesEquivalent = typesAreEquivalent(defType, var->type);
-
-            if (defType && (defType->astType != AST_UNDEF || var->def->astType != AST_UNDEF) && !typesEquivalent) {
-                // Type annot.'d, types disagree
-                typeMismatchError(var->pos, var->type, defType);
-            } else {
-                // Types annot.'d, types agree
-                var->type = expandTypeIdent(var->type, true);
-                validateType(var->type);
-                var->def->type = var->type;
-                if (var->def->astType == AST_ARRAY_LITERAL) {
-                    ASTNode* dataDefine = List_Get(var->type->children, 1);
-                    SymbolNode* dataSymbol = dataDefine->data;
-                    ASTNode* dataType = dataSymbol->type;
-                    for (ListElem* elem = List_Begin(var->def->children); elem != List_End(var->def->children); elem = elem->next) {
-                        ASTNode* child = elem->data;
-                        child->type = dataType;
-                    }
-                }
-            }
-        }
-    }
-}
-
-void namedArgsMatch(ASTNode* expr, ASTNode* args, ASTNode* params)
-{
-    Map* argNames = Map_Create(); // maps param names:String -> arg expressions:&ASTNode
-
-    for (ListElem* elem = List_Begin(args->children); elem != List_End(args->children); elem = elem->next) {
-        ASTNode* namedArg = elem->data;
-        if (namedArg->astType != AST_NAMED_ARG) {
-            error(namedArg->pos, "positional argument specified in named argument list");
-        }
-        ASTNode* argExpr = List_Get(namedArg->children, 0);
-        if (Map_Put(argNames, namedArg->data, argExpr)) {
-            error(namedArg->pos, "named argument specified twice in the same argument list");
-        }
-    }
-
-    while (!List_IsEmpty(args->children)) {
-        List_Pop(args->children);
-    }
-
-    if (expr && expr->astType == AST_DOT && params->children->size > 0) {
-        SymbolNode* var = expr->data;
-        if (var->parent && var->parent->symbolType == SYMBOL_TYPE) {
-            // CALL( DOT(self, methodName), ARGLIST(...) )
-            // CALL( DOT(self, methodName), ARGLIST(self, ...) )
-            ASTNode* self = List_Get(expr->children, 0);
-            ASTNode* firstParamDefine = List_Get(params->children, 0);
-            SymbolNode* firstParamVar = firstParamDefine->data;
-            if (Map_Put(argNames, firstParamVar->name, self)) {
-                error(self->pos, "self argument already specified in the argument list");
-            }
-        }
-    }
-
-    for (ListElem* elem = List_Begin(params->children); elem != List_End(params->children); elem = elem->next) {
-        ASTNode* define = elem->data;
-        SymbolNode* symbol = define->data;
-        inferTypes(symbol);
-        ASTNode* argExpr = Map_Get(argNames, symbol->name);
-        if (argExpr) {
-            ASTNode* argType = getType(argExpr, false, false);
-            if (!typesAreEquivalent(argType, symbol->type)) {
-                if (expr && expr->astType == AST_IDENT) {
-                    SymbolNode* var = Symbol_Find(expr->data, expr->scope);
-                    typeMismatchError2(argExpr->pos, var->pos, symbol->type, argType);
-                } else if (expr && expr->astType == AST_DOT) {
-                    SymbolNode* var = expr->data;
-                    typeMismatchError2(argExpr->pos, var->pos, symbol->type, argType);
-                } else {
-                    typeMismatchError(argExpr->pos, symbol->type, argType);
-                }
-            }
-            List_Append(args->children, argExpr);
-        } else if (symbol->def->astType == AST_UNDEF) {
-            error2(args->pos, symbol->pos, "named argument list does not specify all non-default parameters");
-        } else {
-            List_Append(args->children, symbol->def);
-        }
-    }
-
-    Map_Destroy(argNames);
-}
-
-void positionalArgsMatch(ASTNode* expr, ASTNode* args, ASTNode* params)
-{
-    if (expr && expr->astType == AST_DOT && params->children->size > 0) {
-        SymbolNode* var = expr->data;
-        ASTNode* exprType = getType(expr, false, false);
-        if (exprType->astType == AST_ADDR && var->parent && var->parent->symbolType == SYMBOL_TYPE) {
-            // CALL( DOT(self, methodName), ARGLIST(...) )
-            // CALL( DOT(self, methodName), ARGLIST(self, ...) )
-            ASTNode* self = List_Get(expr->children, 0);
-            List_Push(args->children, self);
-        }
-    }
-
-    // arguments are correct arity
-    ListElem* paramElem = List_Begin(params->children);
-    bool isVararg = false;
-    for (; paramElem != List_End(params->children) && !isVararg; paramElem = paramElem->next) {
-        ASTNode* define = paramElem->data;
-        SymbolNode* paramSymbol = define->data;
-        isVararg = paramSymbol->isVararg;
-    }
-
-    if (!isVararg && params->children->size < args->children->size) {
-        if (expr && expr->astType == AST_IDENT) {
-            SymbolNode* var = Symbol_Find(expr->data, expr->scope);
-            error2(args->pos, var->pos, "argument list with too many arguments");
-        } else if (expr && expr->astType == AST_DOT) {
-            SymbolNode* var = expr->data;
-            error2(args->pos, var->pos, "argument list with too many arguments");
-        } else {
-            error(args->pos, "argument list with too many arguments");
-        }
-    }
-
-    // arguments are correct type
-    paramElem = List_Begin(params->children);
-    ListElem* argElem = List_Begin(args->children);
-    isVararg = false;
-    for (; paramElem != List_End(params->children) && argElem != List_End(args->children) && !isVararg; paramElem = paramElem->next, argElem = argElem->next) {
-        ASTNode* paramDefine = paramElem->data;
-        SymbolNode* paramSymbol = paramDefine->data;
-        inferTypes(paramSymbol);
-        ASTNode* paramType = expandTypeIdent(paramSymbol->type, false);
-        ASTNode* arg = argElem->data;
-        if (arg->astType == AST_NAMED_ARG) {
-            error(arg->pos, "named argument specified in positional argument list");
-        }
-        ASTNode* argType = getType(arg, false, true);
-        if (!typesAreEquivalent(argType, paramType)) {
-            if (expr && expr->astType == AST_IDENT) {
-                SymbolNode* var = Symbol_Find(expr->data, expr->scope);
-                typeMismatchError2(arg->pos, var->pos, paramType, argType);
-            } else if (expr && expr->astType == AST_DOT) {
-                SymbolNode* var = expr->data;
-                typeMismatchError2(arg->pos, var->pos, paramType, argType);
-            } else {
-                typeMismatchError(arg->pos, paramType, argType);
-            }
-        }
-    }
-    if (paramElem != List_End(params->children)) {
-        for (; paramElem != List_End(params->children); paramElem = paramElem->next) {
-            ASTNode* paramDefine = paramElem->data;
-            SymbolNode* paramSymbol = paramDefine->data;
-            ASTNode* paramDef = paramSymbol->def;
-            if (paramDef->astType == AST_UNDEF) {
-                if (expr && expr->astType == AST_IDENT) {
-                    SymbolNode* var = Symbol_Find(expr->data, expr->scope);
-                    error2(args->pos, var->pos, "argument list with too few arguments");
-                } else if (expr && expr->astType == AST_DOT) {
-                    SymbolNode* var = expr->data;
-                    error2(args->pos, var->pos, "argument list with too few arguments");
-                } else {
-                    error(args->pos, "argument list with too few arguments");
-                }
-            } else {
-                List_Append(args->children, paramDef);
-            }
-        }
-    }
-}
-
-void argsMatchParams(ASTNode* expr, ASTNode* args, ASTNode* params)
-{
-    if (args->children->size == 0 && params->children->size == 0) {
-        return;
-    }
-
-    if (args->children->size == 0 || ((ASTNode*)List_Get(args->children, 0))->astType == AST_NAMED_ARG) {
-        namedArgsMatch(expr, args, params);
-    } else {
-        positionalArgsMatch(expr, args, params);
-    }
-}
-
-/*
-for reference:
-integral = int
-scalar = integral + Real
-arithmetic = scalar + <addr>
-chars are not considered integral for later compatability with Python
-*/
-void validateAST(ASTNode* node)
-{
-    static List* loops = NULL;
-    if (!loops) {
-        loops = List_Create();
-    }
-
-    ASSERT(node != NULL);
-    if (node->isValid) {
-        return;
-    }
-    node->isValid = true;
-
-    if (node->astType != AST_DOT && node->astType != AST_SIZEOF && node->astType != AST_CAST && node->astType != AST_NEW && node->astType != AST_ENUM) {
-        if (node->astType == AST_FOR || node->astType == AST_CASE) {
-            ASTNode* lastNode = List_Get(node->children, node->children->size - 2);
-            List_Push(loops, lastNode->data);
-        }
-        ListElem* elem = List_Begin(node->children);
-        int i = 0;
-        for (; elem != List_End(node->children); elem = elem->next) {
-            ASTNode* statement = elem->data;
-            validateAST(statement);
-            node->containsBreak |= statement->astType == AST_BREAK || statement->containsBreak;
-            node->containsContinue |= statement->astType == AST_CONTINUE || statement->containsContinue;
-            node->containsReturn |= statement->astType == AST_RETURN || statement->containsReturn;
-            if (i == node->children->size - 1 && (node->astType == AST_FOR || node->astType == AST_CASE)) {
-                List_Pop(loops);
-            }
-            i++;
-        }
-    }
-
-    switch (node->astType) {
-    case AST_IF:
-    case AST_IFELSE:
-    case AST_NOT: {
-        // condition (#0) is bool type
-        ASTNode* condition = List_Get(node->children, 0);
-        ASTNode* conditionType = getType(condition, false, false);
-        if (!typesAreEquivalent(conditionType, BOOL_TYPE)) {
-            typeMismatchError(condition->pos, BOOL_TYPE, conditionType);
-        }
-        break;
-    }
-    case AST_FOR: {
-        // condition (#1) is bool type
-        ASTNode* condition = List_Get(node->children, 1);
-        ASTNode* conditionType = getType(condition, false, false);
-        if (!typesAreEquivalent(conditionType, BOOL_TYPE)) {
-            typeMismatchError(condition->pos, BOOL_TYPE, conditionType);
-        }
-        break;
-    }
-    case AST_SWITCH: {
-        // switch expression must be integral
-        ASTNode* element = List_Get(node->children, 0);
-        ASTNode* elementType = getType(element, false, false);
-        if (!typesAreEquivalent(elementType, INT64_TYPE)) {
-            typeMismatchError(element->pos, INT64_TYPE, elementType);
-        }
-        // only one 'else' case
-        int elseCaseCount = 0;
-        ListElem* elem = List_Begin(node->children);
-        for (; elem != List_End(node->children); elem = elem->next) {
-            ASTNode* define = elem->data;
-            if (define->children->size == 1) {
-                elseCaseCount++;
-                if (elseCaseCount > 1) {
-                    error(define->pos, "multiple else cases in switch statement");
-                }
-            }
-        }
-        // TODO: all cases have different numbers
-        // TODO: all cases must be comptime integer exprs
-        break;
-    }
-    case AST_RETURN: {
-        ASTNode* retval = List_Get(node->children, 0);
-        ASTNode* retType = getType(retval, false, false);
-        SymbolNode* function = Symbol_TypeAncestor(node->scope, SYMBOL_FUNCTION);
-        if (function == NULL) {
-            function = Symbol_TypeAncestor(node->scope, SYMBOL_FUNCTION);
-            if (function == NULL) {
-                error(node->pos, "return not within function");
-            }
-        }
-        ASTNode* functionType = function->type;
-        ASTNode* functionRetType = List_Get(functionType->children, 1);
-        if (retType->astType == AST_VOID) {
-            typesAreEquivalent(retType, functionRetType);
-        }
-        if (!typesAreEquivalent(retType, functionRetType)) {
-            typeMismatchError(retval->pos, functionRetType, retType);
-        }
-        break;
-    }
-    case AST_BREAK:
-    case AST_CONTINUE: {
-        // within a for, while, or do-while loop
-        if (loops->size == 0) {
-            error(node->pos, "%s not in loop", node->data);
-        }
-        node->data = List_Peek(loops);
-        break;
-    }
-    case AST_IDENT: {
-        SymbolNode* var = Symbol_Find(node->data, node->scope);
-        if (var == NULL) {
-            restrictedOrUndefError(node->pos, (Position) { NULL, 0 }, node->data);
-        } else if (var == -1) {
-            restrictedOrUndefError(node->pos, rejectingSymbol->pos, node->data);
-        }
-        break;
-    }
-    case AST_DEFINE: {
-        SymbolNode* var = node->data;
-        /// var type is not Type or Enum
-        if (var->type->astType != AST_IDENT || strcmp(var->type->data, "Type") && strcmp(var->type->data, "Enum")) {
-            inferTypes(var);
-        } else if (!strcmp(var->type->data, "Type")) {
-            var->def = expandTypeIdent(var->def, true);
-            validateType(var->def);
-        } else if (!strcmp(var->type->data, "Enum")) {
-            var->def = expandTypeIdent(var->def, true);
-        }
-        break;
-    }
-    case AST_INDEX: {
-        // left is array or addr type
-        ASTNode* left = List_Get(node->children, 0);
-        ASTNode* leftType = getType(left, false, false);
-        if (leftType->astType != AST_ADDR && leftType->astType != AST_ARRAY) {
-            error(left->pos, "expected address or array");
-        }
-
-        // subscript is integral type
-        ASTNode* subscript = List_Get(node->children, 1);
-        ASTNode* subscriptType = getType(subscript, false, false);
-        if (!typesAreCompatible(subscriptType, INT32_TYPE)) {
-            typeMismatchError(subscript->pos, INT32_TYPE, subscriptType);
-        }
-
-        // TODO: if subscript is compt, subscript cannot be negative
-        // TODO: if sub is comptime and arr is comptime, cannot be greater than array size
-        break;
-    }
-    case AST_SLICE: {
-        // left is array or addr type
-        ASTNode* left = List_Get(node->children, 0);
-        ASTNode* leftType = getType(left, false, false);
-        if (leftType->astType != AST_ADDR && leftType->astType != AST_ARRAY) {
-            error(left->pos, "expected address or array");
-        }
-
-        // lower bound is integral type
-        ASTNode* lowerBound = List_Get(node->children, 1);
-        if (lowerBound->astType != AST_UNDEF) {
-            ASTNode* lowerBoundType = getType(lowerBound, false, false);
-            if (!typesAreCompatible(lowerBoundType, INT64_TYPE)) {
-                typeMismatchError(lowerBound->pos, INT64_TYPE, lowerBoundType);
-            }
-        }
-
-        ASTNode* upperBound = List_Get(node->children, 2);
-        if (upperBound->astType != AST_UNDEF) {
-            ASTNode* upperBoundType = getType(upperBound, false, false);
-            if (!typesAreCompatible(upperBoundType, INT64_TYPE)) {
-                typeMismatchError(upperBound->pos, INT64_TYPE, upperBoundType);
-            }
-        }
-
-        // TODO: if subscript is compt, subscript cannot be negative
-        // TODO: if sub is comptime and arr is comptime, cannot be greater than array size
-        break;
-    }
-    case AST_DOT: {
-        ASTNode* left = List_Get(node->children, 0);
-        validateAST(left);
-        getType(node, false, true);
-        getDotSymbol(node);
-        if (node->data == NULL) {
-            error(node->pos, "not an l-value");
-        }
-        break;
-    }
-    case AST_OR:
-    case AST_AND: {
-        // left and right are bool types
-        ASTNode* left = List_Get(node->children, 0);
-        ASTNode* right = List_Get(node->children, 1);
-        if (!typesAreEquivalent(getType(left, false, false), BOOL_TYPE)) {
-            typeMismatchError(left->pos, BOOL_TYPE, getType(left, false, false));
-        } else if (!typesAreEquivalent(getType(right, false, false), BOOL_TYPE)) {
-            typeMismatchError(right->pos, BOOL_TYPE, getType(right, false, false));
-        }
-        break;
-    }
-    case AST_MODULUS:
-    case AST_BIT_OR:
-    case AST_BIT_XOR:
-    case AST_BIT_AND:
-    case AST_LSHIFT:
-    case AST_RSHIFT: {
-        // types on both sides are integral types
-        ASTNode* left = List_Get(node->children, 0);
-        ASTNode* right = List_Get(node->children, 1);
-        if (!typesAreEquivalent(getType(left, false, false), INT64_TYPE)) {
-            typeMismatchError(left->pos, INT64_TYPE, getType(left, false, false));
-        } else if (!typesAreEquivalent(getType(right, false, false), INT64_TYPE)) {
-            typeMismatchError(right->pos, INT64_TYPE, getType(right, false, false));
-        }
-        break;
-    }
-    case AST_ADD:
-    case AST_SUBTRACT:
-    case AST_MULTIPLY: {
-        // types on both sides are scalar types
-        ASTNode* left = List_Get(node->children, 0);
-        ASTNode* right = List_Get(node->children, 1);
-        if (!typesAreEquivalent(getType(left, false, false), REAL64_TYPE)) {
-            typeMismatchError(left->pos, REAL64_TYPE, getType(left, false, false));
-        } else if (!typesAreEquivalent(getType(right, false, false), REAL64_TYPE)) {
-            typeMismatchError(right->pos, REAL64_TYPE, getType(right, false, false));
-        }
-        break;
-    }
-    case AST_DIVIDE: {
-        // types on both sides are scalar types
-        ASTNode* left = List_Get(node->children, 0);
-        ASTNode* right = List_Get(node->children, 1);
-        if (!typesAreEquivalent(getType(left, false, false), REAL64_TYPE)) {
-            typeMismatchError(left->pos, REAL64_TYPE, getType(left, false, false));
-        } else if (!typesAreEquivalent(getType(right, false, false), REAL64_TYPE)) {
-            typeMismatchError(right->pos, REAL64_TYPE, getType(right, false, false));
-        }
-        // TODO: if denominator is comptime, cannot be 0
-        break;
-    }
-    case AST_EQ:
-    case AST_NEQ:
-    case AST_GTR:
-    case AST_LSR:
-    case AST_GTE:
-    case AST_LTE: {
-        // right type <= left type
-        ASTNode* left = List_Get(node->children, 0);
-        ASTNode* right = List_Get(node->children, 1);
-        ASTNode* leftType = getType(left, false, false);
-        ASTNode* rightType = getType(right, false, false);
-        if (!typesAreEquivalent(rightType, leftType)) {
-            incompatibleTypesError(node->pos, leftType, rightType);
-        }
-
-        // types on both sides are not paramlist types
-        if (leftType->astType == AST_PARAMLIST || leftType->astType == AST_ARRAY || rightType->astType == AST_PARAMLIST || rightType->astType == AST_ARRAY) {
-            error(node->pos, "comparison on struct type");
-        }
-        break;
-    }
-    case AST_ASSIGN: {
-        // right type <= left type
-        ASTNode* left = List_Get(node->children, 0);
-        ASTNode* right = List_Get(node->children, 1);
-        ASTNode* leftType = getType(left, false, true);
-        ASTNode* rightType = getType(right, false, true);
-        if (!typesAreEquivalent(rightType, leftType)) {
-            typeMismatchError(right->pos, leftType, rightType);
-        } else {
-            right->type = leftType;
-        }
-
-        // left type is an l-value
-        validateLValue(left);
-        break;
-    }
-    case AST_ADD_ASSIGN:
-    case AST_SUB_ASSIGN:
-    case AST_MULT_ASSIGN: {
-        // right type <= left type
-        ASTNode* left = List_Get(node->children, 0);
-        ASTNode* right = List_Get(node->children, 1);
-        ASTNode* leftType = getType(left, false, false);
-        ASTNode* rightType = getType(right, false, false);
-        if (!typesAreEquivalent(rightType, leftType)) {
-            incompatibleTypesError(node->pos, leftType, rightType);
-        }
-
-        // right type is scalar type and not addr
-        if (!typesAreEquivalent(rightType, REAL64_TYPE)) {
-            typeMismatchError(right->pos, REAL64_TYPE, rightType);
-        }
-
-        // left type is an l-value
-        validateLValue(left);
-        break;
-    }
-    case AST_DIV_ASSIGN: {
-        // right type <= left type
-        ASTNode* left = List_Get(node->children, 0);
-        ASTNode* right = List_Get(node->children, 1);
-        ASTNode* leftType = getType(left, false, false);
-        ASTNode* rightType = getType(right, false, false);
-        if (!typesAreEquivalent(rightType, leftType)) {
-            incompatibleTypesError(node->pos, leftType, rightType);
-        }
-
-        // right type is scalar type and not addr
-        if (!typesAreEquivalent(rightType, REAL64_TYPE)) {
-            typeMismatchError(right->pos, REAL64_TYPE, rightType);
-        }
-
-        // left type is an l-value
-        validateLValue(left);
-
-        // TODO: if comptime, is not 0
-        break;
-    }
-    case AST_AND_ASSIGN: // TODO: make this polymorphic
-    case AST_OR_ASSIGN:
-    case AST_XOR_ASSIGN: {
-        // right type <= left type
-        ASTNode* left = List_Get(node->children, 0);
-        ASTNode* right = List_Get(node->children, 1);
-        ASTNode* leftType = getType(left, false, false);
-        ASTNode* rightType = getType(right, false, false);
-        if (!typesAreEquivalent(rightType, leftType)) {
-            incompatibleTypesError(node->pos, leftType, rightType);
-        }
-
-        // right type is integral type and not addr
-        if (!typesAreEquivalent(rightType, INT64_TYPE) && !typesAreEquivalent(rightType, BOOL_TYPE)) {
-            error(node->pos, "operator assignment on invalid type");
-        }
-
-        // left type is an l-value
-        validateLValue(left);
-        break;
-    }
-    case AST_MOD_ASSIGN:
-    case AST_LSHIFT_ASSIGN:
-    case AST_RSHIFT_ASSIGN: {
-        // right type <= left type
-        ASTNode* left = List_Get(node->children, 0);
-        ASTNode* right = List_Get(node->children, 1);
-        ASTNode* leftType = getType(left, false, false);
-        ASTNode* rightType = getType(right, false, false);
-        if (!typesAreEquivalent(rightType, leftType)) {
-            incompatibleTypesError(node->pos, leftType, rightType);
-        }
-
-        // right type is integral type and not addr
-        if (!typesAreEquivalent(rightType, INT64_TYPE)) {
-            typeMismatchError(right->pos, INT64_TYPE, rightType);
-        }
-
-        // left type is an l-value
-        validateLValue(left);
-        break;
-    }
-    case AST_NEG: {
-        ASTNode* left = List_Get(node->children, 0);
-        ASTNode* leftType = getType(left, false, false);
-        // right type is scalar type
-        if (!typesAreEquivalent(leftType, REAL64_TYPE)) {
-            typeMismatchError(left->pos, REAL64_TYPE, leftType);
-        }
-        break;
-    }
-    case AST_BIT_NOT: {
-        // child is an integral type
-        ASTNode* left = List_Get(node->children, 0);
-        ASTNode* leftType = getType(left, false, false);
-        if (!typesAreEquivalent(leftType, INT64_TYPE)) {
-            typeMismatchError(left->pos, INT64_TYPE, leftType);
-        }
-        break;
-    }
-    case AST_ADDROF: {
-        ASTNode* left = List_Get(node->children, 0);
-        // left type is an l-value
-        validateLValue(left);
-        break;
-    }
-    case AST_DEREF: {
-        // child type is scalar
-        ASTNode* left = List_Get(node->children, 0);
-        ASTNode* leftType = getType(left, false, false);
-        if (leftType->astType != AST_ADDR) {
-            error(node->pos, "type mismatch, expected address");
-        }
-        break;
-    }
-    case AST_CAST: {
-        ASTNode* expr = List_Get(node->children, 0);
-        validateAST(expr);
-        ListElem* elem = List_Begin(node->children)->next;
-        // cast type is valid type
-        elem->data = expandTypeIdent(elem->data, true);
-        ASTNode* cast = elem->data;
-        validateType(cast);
-
-
-        // cannot cast between function addr and data addr
-        ASTNode* exprType = getType(expr, false, false);
-        if (cast->isConst && !exprType->isConst) {
-            error(cast->pos, "cast from variable type to constant type");
-        }
-        if (exprType->astType == AST_ADDR && cast->astType == AST_FUNCTION) {
-            error(node->pos, "cast from data address to function address");
-        }
-        if (exprType->astType == AST_FUNCTION && cast->astType == AST_ADDR) {
-            error(node->pos, "cast from function address to data address");
-        }
-        if (exprType->astType == AST_ADDR && cast->astType == AST_FUNCTION) {
-            error(node->pos, "cast from data address to function address");
-        }
-        if (exprType->astType == AST_FUNCTION && cast->astType == AST_ADDR) {
-            error(node->pos, "cast from function address to data address");
-        }
-
-        if (expr->astType == AST_ARGLIST || cast->astType == AST_PARAMLIST || cast->astType == AST_ARRAY) {
-            if (cast->astType != AST_PARAMLIST && cast->astType != AST_ARRAY) {
-                error(node->pos, "cast from arglist to non-arglist type");
-            } else {
-                expr->type = cast;
-                argsMatchParams(NULL, expr, cast);
-            }
-        }
-        break;
-    }
-    case AST_CALL: {
-        // call is to a function type
-        ASTNode* expr = List_Get(node->children, 0);
-        ASTNode* exprType = getType(expr, false, false);
-        if (exprType->astType != AST_FUNCTION) {
-            error(node->pos, "call is not to function");
-        }
-        argsMatchParams(expr, List_Get(node->children, 1), List_Get(exprType->children, 0));
-        break;
-    }
-    case AST_ENUM: {
-        // No duplicates in enum
-        Map* map = Map_Create();
-        ListElem* elem = List_Begin(node->children);
-        for (; elem != List_End(node->children); elem = elem->next) {
-            ASTNode* ident = elem->data;
-            if (Map_Put(map, ident->data, 1)) {
-                error(ident->pos, "identifier '%s' already included in enum", ident->data);
-            }
-        }
-        Map_Destroy(map);
-        break;
-    }
-    case AST_CHAR: {
-        // data is a valid character
-        if (node->data[0] == '\\') {
-            if (strlen(node->data) != 2 || node->data[1] != 'n' && node->data[1] != 'r' && node->data[1] != 't' && node->data[1] != '\\' && node->data[1] != '\'' && node->data[1] != '0') {
-                error(node->pos, "invalid character constant");
-            }
-        } else if (strlen(node->data) != 1 || node->data[0] == '\n') {
-            error(node->pos, "invalid character constant");
-        }
-        break;
-    }
-    case AST_SIZEOF:
-        // type is valid
-        ListElem* elem = List_Begin(node->children);
-        elem->data = expandTypeIdent(elem->data, true);
-        validateType(elem->data);
-        break;
-    case AST_NEW: {
-        // type is valid
-        ListElem* elem = List_Begin(node->children);
-        elem->data = expandTypeIdent(elem->data, true);
-        validateType(elem->data);
-
-        ASTNode* type = elem->data;
-        if (type->astType == AST_ARRAY) {
-            ASTNode* lengthDefine = List_Get(type->children, 0);
-            SymbolNode* lengthSymbol = lengthDefine->data;
-            ASTNode* lengthCode = lengthSymbol->def;
-            if (lengthCode->astType == AST_UNDEF) {
-                error(lengthCode->pos, "array size is missing");
-            }
-        }
-
-        // If intializer is array, initializer is correct type
-        ASTNode* init = List_Get(node->children, 1);
-        if (init->astType == AST_ARRAY_LITERAL) {
-            validateAST(init);
-            ASTNode* initType = getType(init, false, false);
-            if (!typesAreEquivalent(initType, elem->data)) {
-                typeMismatchError(init->pos, elem->data, initType);
-            }
-            ASTNode* lengthDefine = List_Get(type->children, 0);
-            SymbolNode* lengthSymbol = lengthDefine->data;
-            ASTNode* lengthCode = lengthSymbol->def;
-            if (lengthCode->astType != AST_INT) {
-                error(init->pos, "cannot use initializer, array size is not known at compile time");
-            }
-        } else if (init->astType == AST_ARGLIST || init->astType == AST_PAREN) {
-            init->astType = AST_ARGLIST;
-            validateAST(init);
-            init->type = type;
-            argsMatchParams(NULL, init, type);
-        }
-        break;
-    }
-    case AST_ARRAY_LITERAL: {
-        if (node->children->size <= 0) {
-            error(node->pos, "array literal is empty");
-        }
-
-        ASTNode* firstElem = List_Begin(node->children)->data;
-        ASTNode* arrType = getType(firstElem, false, false);
-
-        ListElem* elem = List_Begin(node->children)->next;
-        for (; elem != List_End(node->children); elem = elem->next) {
-            ASTNode* arrElem = elem->data;
-            ASTNode* elemType = getType(arrElem, false, false);
-            if (!typesAreEquivalent(arrType, elemType)) {
-                typeMismatchError(arrElem->pos, arrType, elemType);
-            }
-        }
-        break;
-    }
-    case AST_STRING: {
-        node->pos.start_line = strings->size;
-        List_Append(strings, node);
-    } break;
-    case AST_DEFER: {
-        if (node->containsReturn) {
-            error(node->pos, "defer statement cannot contain return");
-        } else if (node->containsBreak) {
-            error(node->pos, "defer statement cannot contain break");
-        } else if (node->containsContinue) {
-            error(node->pos, "defer statement cannot contain continue");
-        }
-    } break;
-    case AST_FREE: {
-        ASTNode* child = List_Get(node->children, 0);
-        ASTNode* childType = getType(child, false, false);
-        if (childType->astType != AST_ADDR && childType->astType != AST_ARRAY) {
-            char actualStr[255];
-            AST_TypeRepr(actualStr, childType);
-            error(node->pos, "expected address, got %s", actualStr);
-        }
-    } break;
-    case AST_PARAMLIST:
-    case AST_ARRAY:
-    case AST_ADDR:
-    case AST_FUNCTION:
-    case AST_NULL:
-    case AST_TRUE:
-    case AST_FALSE:
-    case AST_INT:
-    case AST_REAL:
-    case AST_PAREN:
-    case AST_ARGLIST:
-    case AST_BLOCK:
-    case AST_UNDEF:
-    case AST_VOID:
-    case AST_CASE:
-    case AST_NAMED_ARG: {
-        // Terminals that do not need to be validated other than their children
-        break;
-    }
-    default: {
-        error(node->pos, "unvalidatable %d", node->astType);
-    }
-    }
-    node->type = getType(node, false, true);
-}
-
-// Validate that all possible paths return some value
-// The actual type validation is done earlier for all return types
-static bool allReturnPath(ASTNode* node)
-{
-    if (node->astType == AST_RETURN) {
-        return true;
-    }
-
-    if (node->astType == AST_IFELSE) {
-        return allReturnPath(List_Get(node->children, 1)) && allReturnPath(List_Get(node->children, 2));
-    } else if (node->astType == AST_BLOCK) {
-        ListElem* elem = List_Begin(node->children);
-        for (; elem != List_End(node->children); elem = elem->next) {
-            if (allReturnPath(elem->data)) {
-                return true;
-            }
-        }
-    }
-    return false;
-}
-
 static struct graph* addGraphNode(List* depenGraph, ASTNode* structType)
 {
     // Check list to see if any graph node has paramlist type
@@ -1890,17 +970,105 @@ static struct graph* addGraphNode(List* depenGraph, ASTNode* structType)
     return graphNode;
 }
 
-// Collects structs that are defined in the type portion of a define
-static void collectStructs(ASTNode* type)
+void validateType(ASTNode* node, bool collectThisType)
 {
-    // Add struct type if it's unique
-    if ((type->astType == AST_PARAMLIST || type->astType == AST_ARRAY) && type->children->size > 0) {
-        DGraph* graphNode = addGraphNode(depenGraph, type);
+    ASSERT(node != NULL);
+    if (node->isValid) {
+        return;
+    }
+    node->isValid = true;
 
-        ListElem* paramElem = List_Begin(type->children);
-        for (; paramElem != List_End(type->children); paramElem = paramElem->next) {
+    switch (node->astType) {
+    case AST_IDENT: {
+        if (strcmp(node->ident.data, "Int") && //
+            strcmp(node->ident.data, "Char") && //
+            strcmp(node->ident.data, "Bool") && //
+            strcmp(node->ident.data, "Char") && //
+            strcmp(node->ident.data, "Real") && //
+            strcmp(node->ident.data, "String") && //
+            strcmp(node->ident.data, "Type") && //
+            strcmp(node->ident.data, "Package") && //
+            strcmp(node->ident.data, "Module") && //
+            strcmp(node->ident.data, "Enum") && //
+            strcmp(node->ident.data, "Int8") && //
+            strcmp(node->ident.data, "Int16") && //
+            strcmp(node->ident.data, "Int32") && //
+            strcmp(node->ident.data, "Int64") && //
+            strcmp(node->ident.data, "Real32") && //
+            strcmp(node->ident.data, "Real64")) {
+            SymbolNode* var = Symbol_Find(node->ident.data, node->scope);
+            if (var == NULL) {
+                restrictedOrUndefError(node->pos, (Position) { NULL, 0 }, node->ident.data);
+            } else if (var == -1) {
+                restrictedOrUndefError(node->pos, rejectingSymbol->pos, node->ident.data);
+            } else if (var->symbolType != SYMBOL_TYPE && var->symbolType != SYMBOL_ENUM) {
+                error(node->pos, "symbol '%s' is not a type 2", node->ident.data);
+            }
+        }
+        break;
+    }
+    case AST_PARAMLIST: {
+        validateAST(node);
+        break;
+    }
+    case AST_DOT: {
+        validateAST(node);
+        ASTNode* dotType = getType(node, false, false);
+        if (dotType->astType != AST_IDENT || !(!strcmp(dotType->ident.data, "Type") || !strcmp(dotType->ident.data, "Enum"))) {
+            error(node->pos, "symbol '%s' is not a type 3", node->dot.right->ident.data);
+        }
+        SymbolNode* var = getDotSymbol(node);
+        break;
+    }
+    case AST_FUNCTION: {
+        ASTNode* params = node->function.domainType;
+        ASTNode* rets = node->function.codomainType;
+        validateType(params, false);
+        validateType(rets, false);
+        break;
+    }
+    case AST_ADDR: {
+        validateType(node->unop.expr, collectThisType);
+        break;
+    }
+    case AST_EXTERN: {
+        SymbolNode* type = node->_extern.symbol;
+        if (!typesAreEquivalent(type->type, TYPE_TYPE) && !typesAreEquivalent(type->type, ENUM_TYPE)) {
+            typeMismatchError(node->pos, TYPE_TYPE, type->type);
+        }
+        break;
+    }
+    case AST_ARRAY: {
+        ASTNode* typeDefine = List_Get(node->paramlist.defines, 1);
+        ASTNode* lengthDefine = List_Get(node->paramlist.defines, 0);
+        SymbolNode* type = typeDefine->define.symbol;
+        SymbolNode* length = lengthDefine->define.symbol;
+        validateType(type->type, collectThisType);
+        validateAST(length->def, collectThisType);
+        ASTNode* lengthType = getType(length->def, "", false);
+        if (lengthType->astType != AST_UNDEF && !typesAreEquivalent(lengthType, INT32_TYPE)) {
+            typeMismatchError(node->pos, INT32_TYPE, lengthType);
+        }
+        break;
+    }
+    case AST_VOID:
+    case AST_UNDEF:
+    case AST_ENUM: {
+        break;
+    }
+    default: {
+        error(node->pos, "not a type");
+    }
+    }
+
+    // Collect structs
+    if (collectThisType && (node->astType == AST_PARAMLIST || node->astType == AST_ARRAY) && node->paramlist.defines->size > 0) {
+        DGraph* graphNode = addGraphNode(depenGraph, node);
+
+        ListElem* paramElem = List_Begin(node->paramlist.defines);
+        for (; paramElem != List_End(node->paramlist.defines); paramElem = paramElem->next) {
             ASTNode* fieldDefine = paramElem->data;
-            SymbolNode* fieldVar = fieldDefine->data;
+            SymbolNode* fieldVar = fieldDefine->define.symbol;
             ASTNode* fieldType = expandTypeIdent(fieldVar->type, true);
             if (fieldType->astType == AST_PARAMLIST || fieldType->astType == AST_ARRAY) {
                 DGraph* dependency = addGraphNode(depenGraph, fieldType);
@@ -1908,59 +1076,1482 @@ static void collectStructs(ASTNode* type)
             }
         }
     }
-
-    struct listElem* elem = List_Begin(type->children);
-    for (; elem != List_End(type->children); elem = elem->next) {
-        ASTNode* child = elem->data;
-        collectStructs(child);
-    }
-    if (type->astType == AST_DEFINE) {
-        SymbolNode* var = type->data;
-        if (!var->visited || var->parent == NULL) {
-            collectStructs(var->type);
-            var->visited = true;
-        }
-    }
 }
 
-void collectStructsAST(ASTNode* node)
+void inferTypes(SymbolNode* var)
 {
-    if (node->astType != AST_DOT && node->astType != AST_CAST && node->astType != AST_NEW) {
-        collectStructs(getType(node, false, false));
-        struct listElem* elem = List_Begin(node->children);
-        for (; elem != List_End(node->children); elem = elem->next) {
-            ASTNode* child = elem->data;
-            collectStructsAST(child);
+    if (var->def && var->symbolType != SYMBOL_FUNCTION) {
+        if (!var->def->isValid) {
+            validateAST(var->def);
         }
-        if (node->astType == AST_DEFINE) {
-            SymbolNode* var = node->data;
-            collectStructsAST(var->def);
-        }
-    }
-}
+        // if type is undef, type is type of def
+        // else, type must match type of def
+        ASTNode* defType = getType(var->def, false, true);
+        if (var->type->astType == AST_UNDEF) {
+            // No type annot., infer types
+            bool wasConst = var->type->isConst;
+            var->type = defType;
+            var->type->isConst = wasConst;
 
-void collectStructsMain(SymbolNode* symbol)
-{
-    symbol->visited = true;
-    List* children = symbol->children->keyList;
-    ListElem* elem = List_Begin(children);
-    for (; elem != List_End(children); elem = elem->next) {
-        SymbolNode* child = Map_Get(symbol->children, elem->data);
-        collectStructsMain(child);
-    }
-
-    if (symbol->isReachable) {
-        if (symbol->symbolType == SYMBOL_VARIABLE && symbol->type || symbol->symbolType == SYMBOL_TYPE) {
-            collectStructs(symbol->type);
-            collectStructs(symbol->def);
-        } else if (symbol->symbolType == SYMBOL_FUNCTION && symbol->isReachable) {
-            ASTNode* returns = (ASTNode*)List_Get(symbol->type->children, 1);
-            if (returns->children->size > 1) {
-                collectStructs(returns);
+            if (defType->astType == AST_IDENT && !strcmp(defType->ident.data, "Type")) {
+                var->symbolType = SYMBOL_TYPE;
+            } else if (defType->astType == AST_IDENT && !strcmp(defType->ident.data, "Module")) {
+                var->symbolType = SYMBOL_MODULE;
+                var->type->isConst = true;
+            } else if (defType->astType == AST_IDENT && !strcmp(defType->ident.data, "Package")) {
+                var->symbolType = SYMBOL_PACKAGE;
+                var->type->isConst = true;
             }
-            collectStructsAST(symbol->def);
+            if (var->type->astType == AST_UNDEF) {
+                error(var->pos, "cannot infer type of symbol '%s', try using a cast", var->name);
+            }
+        } else {
+            bool typesEquivalent = typesAreEquivalent(defType, var->type);
+
+            if (defType && (defType->astType != AST_UNDEF || var->def->astType != AST_UNDEF) && !typesEquivalent) {
+                // Type annot.'d, types disagree
+                typeMismatchError(var->pos, var->type, defType);
+            } else {
+                // Types annot.'d, types agree
+                var->type = expandTypeIdent(var->type, true);
+                validateType(var->type, true);
+                var->def->type = var->type;
+                if (var->def->astType == AST_ARRAY_LITERAL) {
+                    ASTNode* dataDefine = List_Get(var->type->paramlist.defines, 1);
+                    SymbolNode* dataSymbol = dataDefine->define.symbol;
+                    ASTNode* dataType = dataSymbol->type;
+                    for (ListElem* elem = List_Begin(var->def->paramlist.defines); elem != List_End(var->def->paramlist.defines); elem = elem->next) {
+                        ASTNode* child = elem->data;
+                        child->type = dataType;
+                    }
+                }
+            }
         }
     }
+}
+
+void namedArgsMatch(ASTNode* expr, ASTNode* args, ASTNode* params)
+{
+    Map* argNames = Map_Create(); // maps param names:String -> arg expressions:&ASTNode
+
+    for (ListElem* elem = List_Begin(args->arglist.args); elem != List_End(args->arglist.args); elem = elem->next) {
+        ASTNode* namedArg = elem->data;
+        if (namedArg->astType != AST_NAMED_ARG) {
+            error(namedArg->pos, "positional argument specified in named argument list");
+        }
+        ASTNode* argExpr = namedArg->namedArg.expr;
+        if (Map_Put(argNames, namedArg->namedArg.name, argExpr)) {
+            error(namedArg->pos, "named argument specified twice in the same argument list");
+        }
+    }
+
+    while (!List_IsEmpty(args->arglist.args)) {
+        List_Pop(args->arglist.args);
+    }
+
+    if (expr && expr->astType == AST_DOT && params->paramlist.defines->size > 0) {
+        SymbolNode* var = expr->dot.symbol;
+        if (var->parent && var->parent->symbolType == SYMBOL_TYPE) {
+            // CALL( DOT(self, methodName), ARGLIST(...) )
+            // CALL( DOT(self, methodName), ARGLIST(self, ...) )
+            ASTNode* self = expr->dot.left;
+            ASTNode* firstParamDefine = List_Get(params->paramlist.defines, 0);
+            SymbolNode* firstParamVar = firstParamDefine->define.symbol;
+            if (Map_Put(argNames, firstParamVar->name, self)) {
+                error(self->pos, "self argument already specified in the argument list");
+            }
+        }
+    }
+
+    for (ListElem* elem = List_Begin(params->paramlist.defines); elem != List_End(params->paramlist.defines); elem = elem->next) {
+        ASTNode* define = elem->data;
+        SymbolNode* symbol = define->define.symbol;
+        inferTypes(symbol);
+        ASTNode* argExpr = Map_Get(argNames, symbol->name);
+        if (argExpr) {
+            ASTNode* argType = getType(argExpr, false, false);
+            if (!typesAreEquivalent(argType, symbol->type)) {
+                if (expr && expr->astType == AST_IDENT) {
+                    SymbolNode* var = Symbol_Find(expr->ident.data, expr->scope);
+                    typeMismatchError2(argExpr->pos, var->pos, symbol->type, argType);
+                } else if (expr && expr->astType == AST_DOT) {
+                    SymbolNode* var = expr->dot.symbol;
+                    typeMismatchError2(argExpr->pos, var->pos, symbol->type, argType);
+                } else {
+                    typeMismatchError(argExpr->pos, symbol->type, argType);
+                }
+            }
+            List_Append(args->arglist.args, argExpr);
+        } else if (symbol->def->astType == AST_UNDEF) {
+            error2(args->pos, symbol->pos, "named argument list does not specify all non-default parameters");
+        } else {
+            List_Append(args->arglist.args, symbol->def);
+        }
+    }
+
+    Map_Destroy(argNames);
+}
+
+void positionalArgsMatch(ASTNode* expr, ASTNode* args, ASTNode* params)
+{
+    if (expr && expr->astType == AST_DOT && params->paramlist.defines->size > 0) {
+        SymbolNode* var = expr->dot.symbol;
+        ASTNode* exprType = getType(expr, false, false);
+        if (exprType->astType == AST_ADDR && var->parent && var->parent->symbolType == SYMBOL_TYPE) {
+            // CALL( DOT(self, methodName), ARGLIST(...) )
+            // CALL( DOT(self, methodName), ARGLIST(self, ...) )
+            ASTNode* self = expr->dot.left;
+            List_Push(args->arglist.args, self);
+        }
+    }
+
+    // arguments are correct arity
+    ListElem* paramElem = List_Begin(params->paramlist.defines);
+    bool isVararg = false;
+    for (; paramElem != List_End(params->paramlist.defines) && !isVararg; paramElem = paramElem->next) {
+        ASTNode* define = paramElem->data;
+        SymbolNode* paramSymbol = define->define.symbol;
+        isVararg = paramSymbol->isVararg;
+    }
+
+    if (!isVararg && params->paramlist.defines->size < args->arglist.args->size) {
+        if (expr && expr->astType == AST_IDENT) {
+            SymbolNode* var = Symbol_Find(expr->ident.data, expr->scope);
+            error2(args->pos, var->pos, "argument list with too many arguments");
+        } else if (expr && expr->astType == AST_DOT) {
+            SymbolNode* var = expr->dot.symbol;
+            error2(args->pos, var->pos, "argument list with too many arguments");
+        } else {
+            error(args->pos, "argument list with too many arguments");
+        }
+    }
+
+    // arguments are correct type
+    paramElem = List_Begin(params->paramlist.defines);
+    ListElem* argElem = List_Begin(args->paramlist.defines);
+    isVararg = false;
+    for (; paramElem != List_End(params->paramlist.defines) && argElem != List_End(args->arglist.args) && !isVararg; paramElem = paramElem->next, argElem = argElem->next) {
+        ASTNode* paramDefine = paramElem->data;
+        SymbolNode* paramSymbol = paramDefine->define.symbol;
+        inferTypes(paramSymbol);
+        ASTNode* paramType = expandTypeIdent(paramSymbol->type, false);
+        ASTNode* arg = argElem->data;
+        if (arg->astType == AST_NAMED_ARG) {
+            error(arg->pos, "named argument specified in positional argument list");
+        }
+        ASTNode* argType = getType(arg, false, true);
+        if (!typesAreEquivalent(argType, paramType)) {
+            if (expr && expr->astType == AST_IDENT) {
+                SymbolNode* var = Symbol_Find(expr->ident.data, expr->scope);
+                typeMismatchError2(arg->pos, var->pos, paramType, argType);
+            } else if (expr && expr->astType == AST_DOT) {
+                SymbolNode* var = expr->dot.left;
+                typeMismatchError2(arg->pos, var->pos, paramType, argType);
+            } else {
+                typeMismatchError(arg->pos, paramType, argType);
+            }
+        }
+    }
+    if (paramElem != List_End(params->paramlist.defines)) {
+        for (; paramElem != List_End(params->paramlist.defines); paramElem = paramElem->next) {
+            ASTNode* paramDefine = paramElem->data;
+            SymbolNode* paramSymbol = paramDefine->define.symbol;
+            ASTNode* paramDef = paramSymbol->def;
+            if (paramDef->astType == AST_UNDEF) {
+                if (expr && expr->astType == AST_IDENT) {
+                    SymbolNode* var = Symbol_Find(expr->ident.data, expr->scope);
+                    error2(args->pos, var->pos, "argument list with too few arguments");
+                } else if (expr && expr->astType == AST_DOT) {
+                    SymbolNode* var = expr->dot.symbol;
+                    error2(args->pos, var->pos, "argument list with too few arguments");
+                } else {
+                    error(args->pos, "argument list with too few arguments");
+                }
+            } else {
+                List_Append(args->arglist.args, paramDef);
+            }
+        }
+    }
+}
+
+void argsMatchParams(ASTNode* expr, ASTNode* args, ASTNode* params)
+{
+    if (args->arglist.args->size == 0 && params->paramlist.defines->size == 0) {
+        return;
+    }
+
+    if (args->arglist.args->size == 0 || ((ASTNode*)List_Get(args->arglist.args, 0))->astType == AST_NAMED_ARG) {
+        namedArgsMatch(expr, args, params);
+    } else {
+        positionalArgsMatch(expr, args, params);
+    }
+}
+
+/*
+for reference:
+integral = int
+scalar = integral + Real
+arithmetic = scalar + <addr>
+chars are not considered integral for later compatability with Python
+*/
+ASTNode* validateAST(ASTNode* node)
+{
+    static List* loops = NULL;
+    if (!loops) {
+        loops = List_Create();
+    }
+
+    ASSERT(node != NULL);
+    if (node->isValid) {
+        return;
+    }
+    node->isValid = true;
+
+    ASTNode* retval = NULL;
+
+    switch (node->astType) {
+    case AST_IDENT: {
+        SymbolNode* var = Symbol_Find(node->ident.data, node->scope);
+        if (var == NULL) {
+            restrictedOrUndefError(node->pos, (Position) { NULL, 0 }, node->ident.data);
+        } else if (var == -1) {
+            restrictedOrUndefError(node->pos, rejectingSymbol->pos, node->ident.data);
+        }
+        Validator_Validate(var);
+        if (var->type->isConst) {
+            retval = var->def;
+            break;
+        } else {
+            retval = node;
+            break;
+        }
+    }
+    case AST_INT:
+    case AST_REAL:
+    case AST_TRUE:
+    case AST_FALSE:
+    case AST_NOTHING:
+        retval = node;
+        break;
+    case AST_CHAR: {
+        // data is a valid character
+        if (node->_char.data[0] == '\\') {
+            if (strlen(node->_char.data) != 2 || node->_char.data[1] != 'n' && node->_char.data[1] != 'r' && node->_char.data[1] != 't' && node->_char.data[1] != '\\' && node->_char.data[1] != '\'' && node->_char.data[1] != '0') {
+                error(node->pos, "invalid character constant");
+            }
+        } else if (strlen(node->_char.data) != 1 || node->_char.data[0] == '\n') {
+            error(node->pos, "invalid character constant");
+        }
+        retval = node;
+        break;
+    }
+    case AST_STRING: {
+        node->string.stringID = strings->size;
+        List_Append(strings, node);
+        retval = node;
+        break;
+    }
+    case AST_ARRAY_LITERAL: {
+        if (node->arrayLiteral.members->size <= 0) {
+            error(node->pos, "array literal is empty");
+        }
+
+        List* validMembers = List_Create();
+        ASTNode* firstElem = validateAST(List_Begin(node->arrayLiteral.members)->data);
+        List_Append(validMembers, firstElem);
+        ASTNode* arrType = getType(firstElem, false, false);
+
+        ListElem* elem = List_Begin(node->arrayLiteral.members)->next;
+        for (; elem != List_End(node->arrayLiteral.members); elem = elem->next) {
+            ASTNode* arrElem = validateAST(elem->data);
+            ASTNode* elemType = getType(arrElem, false, false);
+            if (!typesAreEquivalent(arrType, elemType)) {
+                typeMismatchError(arrElem->pos, arrType, elemType);
+            }
+            List_Append(validMembers, arrElem);
+        }
+
+        node->arrayLiteral.members = validMembers;
+        retval = node;
+        break;
+    }
+    case AST_PAREN:
+    case AST_ARGLIST: {
+        List* validArgs = List_Create();
+        for (ListElem* elem = List_Begin(node->arglist.args); elem != List_End(node->arglist.args); elem = elem->next) {
+            ASTNode* arg = elem->data;
+            List_Append(validArgs, validateAST(arg));
+        }
+        node->arglist.args = validArgs;
+        retval = node;
+        break;
+    }
+    case AST_SIZEOF: {
+        // type is valid
+        node->unop.expr = expandTypeIdent(node->unop.expr, true);
+        validateType(node->unop.expr, true);
+        retval = node;
+        break; // TODO: return integer literal always?
+    }
+    case AST_BLOCK: {
+        List* validChildren = List_Create();
+        for (ListElem* elem = List_Begin(node->block.children); elem != List_End(node->block.children); elem = elem->next) {
+            ASTNode* child = elem->data;
+            List_Append(validChildren, validateAST(child));
+        }
+        node->block.children = validChildren;
+        retval = node;
+        break;
+    }
+    case AST_IF: {
+        ASTNode* validCondition = validateAST(node->_if.condition);
+        ASTNode* validBodyBlock = validateAST(node->_if.bodyBlock);
+        ASTNode* validElseBlock = validateAST(node->_if.elseBlock);
+
+        if (validCondition->astType == AST_TRUE) {
+            retval = validBodyBlock;
+            break;
+        } else if (validCondition->astType == AST_FALSE) {
+            if (validElseBlock->astType != AST_UNDEF) {
+                retval = validElseBlock;
+                break;
+            } else {
+                retval = NOTHING_AST;
+                break;
+            }
+        } else {
+            node->_if.condition = validCondition;
+            node->_if.bodyBlock = validBodyBlock;
+            node->_if.elseBlock = validElseBlock;
+            retval = node;
+            break;
+        }
+    }
+    case AST_FOR: {
+        // condition (#1) is bool type
+        ASTNode* validPre = validateAST(node->_for.pre);
+        ASTNode* validCondition = validateAST(node->_for.condition); // TODO: Check if condition is false, delete AST node
+        ASTNode* validPost = validateAST(node->_for.post);
+        ASTNode* validBodyBlock = validateAST(node->_for.bodyBlock);
+        ASTNode* validElseBlock = validateAST(node->_for.elseBlock);
+
+        if (validCondition->astType == AST_UNDEF) {
+            validCondition = TRUE_AST;
+        } else {
+            ASTNode* conditionType = getType(validCondition, false, false);
+            if (!typesAreEquivalent(conditionType, BOOL_TYPE)) {
+                typeMismatchError(validCondition->pos, BOOL_TYPE, conditionType);
+            }
+        }
+
+        node->_for.pre = validPre;
+        node->_for.condition = validCondition;
+        node->_for.post = validPost;
+        node->_for.bodyBlock = validBodyBlock;
+        node->_for.elseBlock = validElseBlock;
+        retval = node;
+        break;
+    }
+    case AST_CASE: {
+        ASTNode* validExpr = validateAST(node->_case.expr);
+        List* validMappings = List_Create();
+        for (ListElem* elem = List_Begin(node->_case.mappings); elem != List_End(node->_case.mappings); elem = elem->next) {
+            ASTNode* mapping = elem->data;
+            List_Append(validMappings, validateAST(mapping));
+        }
+
+        // switch expression must be integral
+        ASTNode* elementType = getType(validExpr, false, false);
+        if (!typesAreEquivalent(elementType, INT64_TYPE)) {
+            typeMismatchError(validExpr->pos, INT64_TYPE, elementType);
+        }
+        // only one 'else' case
+        int elseCaseCount = 0;
+        ListElem* elem = List_Begin(validMappings);
+        for (; elem != List_End(validMappings); elem = elem->next) {
+            ASTNode* mapping = elem->data;
+            if (mapping->mapping.exprs->size == 1) {
+                elseCaseCount++;
+                if (elseCaseCount > 1) {
+                    error(mapping->pos, "multiple else cases in switch statement");
+                }
+            }
+        }
+        // TODO: all cases have different numbers
+        // TODO: all cases must be comptime integer exprs
+        node->_case.expr = validExpr;
+        node->_case.mappings = validMappings;
+        retval = node;
+        break;
+    }
+    case AST_MAPPING: {
+        List* validExprs = List_Create();
+        for (ListElem* elem = List_Begin(node->mapping.exprs); elem != List_End(node->mapping.exprs); elem = elem->next) {
+            ASTNode* mapping = elem->data;
+            List_Append(validExprs, validateAST(mapping));
+        }
+        ASTNode* validExpr = validateAST(node->mapping.expr);
+        node->mapping.exprs = validExprs;
+        node->mapping.expr = validExpr;
+        retval = node;
+        break;
+    }
+    case AST_RETURN: {
+        ASTNode* validRetval = validateAST(node->unop.expr);
+        ASTNode* retType = getType(validRetval, false, false);
+
+        // return must be in function
+        SymbolNode* function = Symbol_TypeAncestor(node->scope, SYMBOL_FUNCTION);
+        if (function == NULL) {
+            function = Symbol_TypeAncestor(node->scope, SYMBOL_FUNCTION);
+            if (function == NULL) {
+                error(node->pos, "retval = not within function");
+                break;
+            }
+        }
+        // return type matches function type
+        ASTNode* functionType = function->type;
+        ASTNode* functionRetType = functionType->function.codomainType;
+        if (retType->astType == AST_VOID) {
+            typesAreEquivalent(retType, functionRetType);
+        }
+        if (!typesAreEquivalent(retType, functionRetType)) {
+            typeMismatchError(node->pos, functionRetType, retType);
+        }
+
+        node->unop.expr = validRetval;
+        retval = node;
+        break;
+    }
+    case AST_BREAK: {
+        // within a for, while, or do-while loop
+        if (loops->size == 0) {
+            error(node->pos, "break not in loop");
+        }
+        retval = node;
+        break;
+    }
+    case AST_CONTINUE: {
+        // within a for, while, or do-while loop
+        if (loops->size == 0) {
+            error(node->pos, "continue not in loop");
+        }
+        retval = node;
+        break;
+    }
+    case AST_DEFER: {
+        ASTNode* validStatement = node->defer.statement;
+        if (node->containsReturn) {
+            error(node->pos, "defer statement cannot contain return");
+        } else if (node->containsBreak) {
+            error(node->pos, "defer statement cannot contain break");
+        } else if (node->containsContinue) {
+            error(node->pos, "defer statement cannot contain continue");
+        }
+        node->defer.statement = validStatement;
+        retval = node;
+        break;
+    }
+    case AST_DEFINE: {
+        SymbolNode* var = node->define.symbol;
+        /// var type is not Type or Enum
+        if (var->type->astType != AST_IDENT || strcmp(var->type->ident.data, "Type") && strcmp(var->type->ident.data, "Enum")) {
+            inferTypes(var);
+        } else if (!strcmp(var->type->ident.data, "Type")) {
+            var->def = expandTypeIdent(var->def, true);
+            validateType(var->def, true);
+        } else if (!strcmp(var->type->ident.data, "Enum")) {
+            var->def = expandTypeIdent(var->def, true);
+        }
+        retval = node;
+        break;
+    }
+    case AST_NEW: {
+        // type is valid
+        node->binop.left = expandTypeIdent(node->binop.left, true);
+        validateType(node->binop.left, true);
+
+        ASTNode* type = node->binop.left;
+        if (type->astType == AST_ARRAY) {
+            ASTNode* lengthDefine = List_Get(type->paramlist.defines, 0);
+            SymbolNode* lengthSymbol = lengthDefine->define.symbol;
+            ASTNode* lengthCode = lengthSymbol->def;
+            if (lengthCode->astType == AST_UNDEF) {
+                error(lengthCode->pos, "array size is missing");
+            }
+        }
+
+        // If intializer is array, initializer is correct type
+        ASTNode* validInit = validateAST(node->binop.right);
+        if (validInit->astType == AST_ARRAY_LITERAL) {
+            ASTNode* initType = getType(validInit, false, false);
+            if (!typesAreEquivalent(initType, type)) {
+                typeMismatchError(node->pos, type, initType);
+            }
+            ASTNode* lengthDefine = List_Get(type->paramlist.defines, 0);
+            SymbolNode* lengthSymbol = lengthDefine->define.symbol;
+            ASTNode* lengthCode = lengthSymbol->def;
+            if (lengthCode->astType != AST_INT) {
+                error(node->pos, "cannot use initializer, array size is not known at compile time");
+            }
+        } else if (node->astType == AST_ARGLIST || validInit->astType == AST_PAREN) {
+            validInit->astType = AST_ARGLIST;
+            argsMatchParams(NULL, validInit, type);
+        }
+        validInit->type = type;
+        node->binop.right = validInit;
+        retval = node;
+        break;
+    }
+    case AST_FREE: {
+        ASTNode* validChild = validateAST(node->unop.expr);
+        ASTNode* childType = getType(validChild, false, false);
+        if (childType->astType != AST_ADDR && childType->astType != AST_ARRAY) {
+            char actualStr[255];
+            AST_TypeRepr(actualStr, childType);
+            error(node->pos, "expected address, got %s", actualStr);
+        }
+        node->unop.expr = validChild;
+        retval = node;
+        break;
+    }
+    case AST_INDEX: {
+        // left is array or addr type
+        ASTNode* left = node->binop.left;
+        left->type = validateAST(left)->type;
+        ASTNode* leftType = getType(left, false, false);
+        if (leftType->astType != AST_ADDR && leftType->astType != AST_ARRAY) {
+            error(left->pos, "expected address or array");
+        }
+
+        // subscript is integral type
+        ASTNode* subscript = validateAST(node->binop.right);
+        ASTNode* subscriptType = getType(subscript, false, false);
+        if (!typesAreCompatible(subscriptType, INT32_TYPE)) {
+            typeMismatchError(subscript->pos, INT32_TYPE, subscriptType);
+        }
+
+        node->binop.left = left;
+        node->binop.right = subscript;
+
+        // if subscript is compt, subscript cannot be negative
+        if (subscript->astType == AST_INT && subscript->_int.data < 0) {
+            error(node->pos, "array index is negative");
+        }
+        // if sub is comptime and arr is comptime, cannot be greater than array size
+        if (subscript->astType == AST_INT && left->astType == AST_ARRAY_LITERAL) {
+            if (subscript->_int.data >= left->arrayLiteral.members->size) {
+                error(node->pos, "array index is greater than size of array");
+            } else {
+                retval = List_Get(left->arrayLiteral.members, subscript->_int.data);
+                break;
+            }
+        } else {
+            retval = node;
+            break;
+        }
+    }
+    case AST_SLICE: {
+        // left is array or addr type
+        ASTNode* validArrExpr = validateAST(node->slice.arrayExpr);
+        ASTNode* leftType = getType(validArrExpr, false, false);
+        if (leftType->astType != AST_ADDR && leftType->astType != AST_ARRAY) {
+            error(validArrExpr->pos, "expected address or array");
+        }
+
+        // lower bound is integral type
+        ASTNode* validLowerBound = validateAST(node->slice.lowerBound);
+        if (validLowerBound->astType != AST_UNDEF) {
+            ASTNode* lowerBoundType = getType(validLowerBound, false, false);
+            if (!typesAreCompatible(lowerBoundType, INT64_TYPE)) {
+                typeMismatchError(validLowerBound->pos, INT64_TYPE, lowerBoundType);
+            }
+        }
+
+        ASTNode* validUpperBound = validateAST(node->slice.upperBound);
+        if (validUpperBound->astType != AST_UNDEF) {
+            ASTNode* upperBoundType = getType(validUpperBound, false, false);
+            if (!typesAreCompatible(upperBoundType, INT64_TYPE)) {
+                typeMismatchError(validUpperBound->pos, INT64_TYPE, upperBoundType);
+            }
+        }
+        node->slice.arrayExpr = validArrExpr;
+        node->slice.lowerBound = validLowerBound;
+        node->slice.upperBound = validUpperBound;
+
+        // if subscript is compt, subscript cannot be negative
+        if (validLowerBound->astType == AST_INT && validLowerBound->_int.data < 0) {
+            error(validLowerBound->pos, "lower bound is negative");
+        }
+        if (validUpperBound->astType == AST_INT && validUpperBound->_int.data < 0) {
+            error(validUpperBound->pos, "upper bound is negative");
+        }
+        if (validLowerBound->astType == AST_INT && validUpperBound->astType == AST_INT && validLowerBound->_int.data > validUpperBound->_int.data) {
+            error(validUpperBound->pos, "upper bound is lower than lower bound");
+        }
+
+        // if sub is comptime and arr is comptime, cannot be greater than array size
+        if (validLowerBound->astType == AST_INT && validArrExpr->astType == AST_ARRAY_LITERAL) {
+            if (validLowerBound->_int.data >= validArrExpr->arrayLiteral.members->size) {
+                error(node->pos, "lower bound is greater than size of array");
+            }
+        }
+        if (validUpperBound->astType == AST_INT && validArrExpr->astType == AST_ARRAY_LITERAL) {
+            if (validUpperBound->_int.data >= validArrExpr->arrayLiteral.members->size) {
+                error(node->pos, "upper bound is greater than size of array");
+            }
+        }
+
+        retval = node;
+        break;
+    }
+    case AST_DOT: {
+        ASTNode* left = validateAST(node->dot.left);
+        getType(node, false, true);
+        getDotSymbol(node);
+        if (node->dot.symbol == NULL) {
+            error(node->pos, "not an l-value");
+        } else { // TODO: comptime collapse
+            retval = node;
+            break;
+        }
+    }
+    case AST_OR: {
+        // left and right are bool types
+        ASTNode* left = validateAST(node->binop.left);
+        ASTNode* right = validateAST(node->binop.right);
+        if (!typesAreEquivalent(getType(left, false, false), BOOL_TYPE)) {
+            typeMismatchError(left->pos, BOOL_TYPE, getType(left, false, false));
+        } else if (!typesAreEquivalent(getType(right, false, false), BOOL_TYPE)) {
+            typeMismatchError(right->pos, BOOL_TYPE, getType(right, false, false));
+        }
+        node->binop.left = left;
+        node->binop.right = right;
+        if (left->astType == AST_TRUE || right->astType == AST_TRUE) {
+            retval = TRUE_AST;
+            break;
+        } else {
+            retval = node;
+            break;
+        }
+    }
+    case AST_AND: {
+        // left and right are bool types
+        ASTNode* left = validateAST(node->binop.left);
+        ASTNode* right = validateAST(node->binop.right);
+        if (!typesAreEquivalent(getType(left, false, false), BOOL_TYPE)) {
+            typeMismatchError(left->pos, BOOL_TYPE, getType(left, false, false));
+        } else if (!typesAreEquivalent(getType(right, false, false), BOOL_TYPE)) {
+            typeMismatchError(right->pos, BOOL_TYPE, getType(right, false, false));
+        }
+        node->binop.left = left;
+        node->binop.right = right;
+        if (left->astType == AST_TRUE && right->astType == AST_TRUE) {
+            retval = TRUE_AST;
+            break;
+        } else {
+            retval = node;
+            break;
+        }
+    }
+    case AST_BIT_OR: {
+        ASTNode* left = validateAST(node->binop.left);
+        ASTNode* right = validateAST(node->binop.right);
+        if (!typesAreEquivalent(getType(left, false, false), INT64_TYPE)) {
+            typeMismatchError(left->pos, INT64_TYPE, getType(left, false, false));
+        } else if (!typesAreEquivalent(getType(right, false, false), INT64_TYPE)) {
+            typeMismatchError(right->pos, INT64_TYPE, getType(right, false, false));
+        }
+
+        node->binop.left = left;
+        node->binop.right = right;
+        if (left->astType == AST_INT && right->astType == AST_INT) {
+            retval = AST_Create_int(left->_int.data | left->_int.data, node->scope, node->pos);
+            break;
+        } else {
+            retval = node;
+            break;
+        }
+    }
+    case AST_BIT_XOR: {
+        ASTNode* left = validateAST(node->binop.left);
+        ASTNode* right = validateAST(node->binop.right);
+        if (!typesAreEquivalent(getType(left, false, false), INT64_TYPE)) {
+            typeMismatchError(left->pos, INT64_TYPE, getType(left, false, false));
+        } else if (!typesAreEquivalent(getType(right, false, false), INT64_TYPE)) {
+            typeMismatchError(right->pos, INT64_TYPE, getType(right, false, false));
+        }
+
+        node->binop.left = left;
+        node->binop.right = right;
+        if (left->astType == AST_INT && right->astType == AST_INT) {
+            retval = AST_Create_int(left->_int.data ^ left->_int.data, node->scope, node->pos);
+            break;
+        } else {
+            retval = node;
+            break;
+        }
+    }
+    case AST_BIT_AND: {
+        ASTNode* left = validateAST(node->binop.left);
+        ASTNode* right = validateAST(node->binop.right);
+        if (!typesAreEquivalent(getType(left, false, false), INT64_TYPE)) {
+            typeMismatchError(left->pos, INT64_TYPE, getType(left, false, false));
+        } else if (!typesAreEquivalent(getType(right, false, false), INT64_TYPE)) {
+            typeMismatchError(right->pos, INT64_TYPE, getType(right, false, false));
+        }
+
+        node->binop.left = left;
+        node->binop.right = right;
+        if (left->astType == AST_INT && right->astType == AST_INT) {
+            retval = AST_Create_int(left->_int.data & left->_int.data, node->scope, node->pos);
+            break;
+        } else {
+            retval = node;
+            break;
+        }
+    }
+    case AST_LSHIFT: {
+        ASTNode* left = validateAST(node->binop.left);
+        ASTNode* right = validateAST(node->binop.right);
+        if (!typesAreEquivalent(getType(left, false, false), INT64_TYPE)) {
+            typeMismatchError(left->pos, INT64_TYPE, getType(left, false, false));
+        } else if (!typesAreEquivalent(getType(right, false, false), INT64_TYPE)) {
+            typeMismatchError(right->pos, INT64_TYPE, getType(right, false, false));
+        }
+
+        node->binop.left = left;
+        node->binop.right = right;
+        if (left->astType == AST_INT && right->astType == AST_INT) {
+            retval = AST_Create_int(left->_int.data << left->_int.data, node->scope, node->pos);
+            break;
+        } else {
+            retval = node;
+            break;
+        }
+    }
+    case AST_RSHIFT: {
+        ASTNode* left = validateAST(node->binop.left);
+        ASTNode* right = validateAST(node->binop.right);
+        if (!typesAreEquivalent(getType(left, false, false), INT64_TYPE)) {
+            typeMismatchError(left->pos, INT64_TYPE, getType(left, false, false));
+        } else if (!typesAreEquivalent(getType(right, false, false), INT64_TYPE)) {
+            typeMismatchError(right->pos, INT64_TYPE, getType(right, false, false));
+        }
+
+        node->binop.left = left;
+        node->binop.right = right;
+        if (left->astType == AST_INT && right->astType == AST_INT) {
+            retval = AST_Create_int(left->_int.data >> left->_int.data, node->scope, node->pos);
+            break;
+        } else {
+            retval = node;
+            break;
+        }
+    }
+    case AST_EQ: {
+        // right type <= left type
+        ASTNode* left = validateAST(node->binop.left);
+        ASTNode* right = validateAST(node->binop.right);
+        ASTNode* leftType = getType(left, false, false);
+        ASTNode* rightType = getType(right, false, false);
+        if (!typesAreEquivalent(rightType, leftType)) {
+            incompatibleTypesError(node->pos, leftType, rightType);
+        }
+
+        // types on both sides are not paramlist types
+        // TODO: Allow struct comparisons
+        if (leftType->astType == AST_PARAMLIST || leftType->astType == AST_ARRAY || rightType->astType == AST_PARAMLIST || rightType->astType == AST_ARRAY) {
+            error(node->pos, "comparison on struct type");
+        }
+
+        node->binop.left = left;
+        node->binop.right = right;
+
+        if (left->astType == AST_INT && right->astType == AST_INT) {
+            retval = (left->_int.data == right->_int.data) ? TRUE_AST : FALSE_AST;
+            break;
+        } else if (left->astType == AST_REAL && right->astType == AST_REAL) {
+            retval = (left->real.data == right->real.data) ? TRUE_AST : FALSE_AST;
+            break;
+        } else if (left->astType == AST_CHAR && right->astType == AST_CHAR) {
+            retval = (left->_char.data == right->_char.data) ? TRUE_AST : FALSE_AST;
+            break;
+        } else if (left->astType == AST_TRUE && right->astType == AST_TRUE) {
+            retval = TRUE_AST;
+            break;
+        } else if (left->astType == AST_FALSE && right->astType == AST_FALSE) {
+            retval = TRUE_AST;
+            break;
+        } else if (left->astType == AST_NOTHING && right->astType == AST_NOTHING) {
+            retval = TRUE_AST;
+            break;
+        } else if (
+            (left->astType == AST_INT
+                || left->astType == AST_REAL
+                || left->astType == AST_CHAR
+                || left->astType == AST_TRUE
+                || left->astType == AST_FALSE
+                || left->astType == AST_NOTHING)
+            && (right->astType == AST_INT
+                || right->astType == AST_REAL
+                || right->astType == AST_CHAR
+                || right->astType == AST_TRUE
+                || right->astType == AST_FALSE
+                || right->astType == AST_NOTHING)) {
+            retval = FALSE_AST;
+            break;
+        } else {
+            retval = node;
+            break;
+        }
+    }
+    case AST_NEQ: {
+        // right type <= left type
+        ASTNode* left = validateAST(node->binop.left);
+        ASTNode* right = validateAST(node->binop.right);
+        ASTNode* leftType = getType(left, false, false);
+        ASTNode* rightType = getType(right, false, false);
+        if (!typesAreEquivalent(rightType, leftType)) {
+            incompatibleTypesError(node->pos, leftType, rightType);
+        }
+
+        // types on both sides are not paramlist types
+        // TODO: Allow struct comparisons
+        if (leftType->astType == AST_PARAMLIST || leftType->astType == AST_ARRAY || rightType->astType == AST_PARAMLIST || rightType->astType == AST_ARRAY) {
+            error(node->pos, "comparison on struct type");
+        }
+
+        node->binop.left = left;
+        node->binop.right = right;
+
+        if (left->astType == AST_INT && right->astType == AST_INT) {
+            retval = (left->_int.data != right->_int.data) ? TRUE_AST : FALSE_AST;
+            break;
+        } else if (left->astType == AST_REAL && right->astType == AST_REAL) {
+            retval = (left->real.data != right->real.data) ? TRUE_AST : FALSE_AST;
+            break;
+        } else if (left->astType == AST_CHAR && right->astType == AST_CHAR) {
+            retval = (left->_char.data != right->_char.data) ? TRUE_AST : FALSE_AST;
+            break;
+        } else if (left->astType == AST_TRUE && right->astType == AST_TRUE) {
+            retval = FALSE_AST;
+            break;
+        } else if (left->astType == AST_FALSE && right->astType == AST_FALSE) {
+            retval = FALSE_AST;
+            break;
+        } else if (left->astType == AST_NOTHING && right->astType == AST_NOTHING) {
+            retval = FALSE_AST;
+            break;
+        } else if (
+            (left->astType == AST_INT
+                || left->astType == AST_REAL
+                || left->astType == AST_CHAR
+                || left->astType == AST_TRUE
+                || left->astType == AST_FALSE
+                || left->astType == AST_NOTHING)
+            && (right->astType == AST_INT
+                || right->astType == AST_REAL
+                || right->astType == AST_CHAR
+                || right->astType == AST_TRUE
+                || right->astType == AST_FALSE
+                || right->astType == AST_NOTHING)) {
+            retval = TRUE_AST;
+            break;
+        } else {
+            retval = node;
+            break;
+        }
+    }
+    case AST_GTR: {
+        // right type <= left type
+        ASTNode* left = validateAST(node->binop.left);
+        ASTNode* right = validateAST(node->binop.right);
+        ASTNode* leftType = getType(left, false, false);
+        ASTNode* rightType = getType(right, false, false);
+        if (!typesAreEquivalent(rightType, leftType)) {
+            incompatibleTypesError(node->pos, leftType, rightType);
+        }
+
+        if (!typesAreEquivalent(leftType, REAL64_TYPE)) {
+            typeMismatchError(node->pos, REAL64_TYPE, rightType);
+        }
+
+        // types on both sides are not paramlist types
+        // TODO: Allow struct comparisons
+        if (leftType->astType == AST_PARAMLIST || leftType->astType == AST_ARRAY || rightType->astType == AST_PARAMLIST || rightType->astType == AST_ARRAY) {
+            error(node->pos, "comparison on struct type");
+        }
+
+        node->binop.left = left;
+        node->binop.right = right;
+
+        if (left->astType == AST_INT && right->astType == AST_INT) {
+            retval = (left->_int.data > right->_int.data) ? TRUE_AST : FALSE_AST;
+            break;
+        } else if (left->astType == AST_REAL && right->astType == AST_REAL) {
+            retval = (left->real.data > right->real.data) ? TRUE_AST : FALSE_AST;
+            break;
+        } else {
+            retval = node;
+            break;
+        }
+    }
+    case AST_LSR: {
+        // right type <= left type
+        ASTNode* left = validateAST(node->binop.left);
+        ASTNode* right = validateAST(node->binop.right);
+        ASTNode* leftType = getType(left, false, false);
+        ASTNode* rightType = getType(right, false, false);
+        if (!typesAreEquivalent(rightType, leftType)) {
+            incompatibleTypesError(node->pos, leftType, rightType);
+        }
+
+        if (!typesAreEquivalent(leftType, REAL64_TYPE)) {
+            typeMismatchError(node->pos, REAL64_TYPE, rightType);
+        }
+
+        // types on both sides are not paramlist types
+        // TODO: Allow struct comparisons
+        if (leftType->astType == AST_PARAMLIST || leftType->astType == AST_ARRAY || rightType->astType == AST_PARAMLIST || rightType->astType == AST_ARRAY) {
+            error(node->pos, "comparison on struct type");
+        }
+
+        node->binop.left = left;
+        node->binop.right = right;
+
+        if (left->astType == AST_INT && right->astType == AST_INT) {
+            retval = (left->_int.data < right->_int.data) ? TRUE_AST : FALSE_AST;
+            break;
+        } else if (left->astType == AST_REAL && right->astType == AST_REAL) {
+            retval = (left->real.data < right->real.data) ? TRUE_AST : FALSE_AST;
+            break;
+        } else {
+            retval = node;
+            break;
+        }
+    }
+    case AST_GTE: {
+        // right type <= left type
+        ASTNode* left = validateAST(node->binop.left);
+        ASTNode* right = validateAST(node->binop.right);
+        ASTNode* leftType = getType(left, false, false);
+        ASTNode* rightType = getType(right, false, false);
+        if (!typesAreEquivalent(rightType, leftType)) {
+            incompatibleTypesError(node->pos, leftType, rightType);
+        }
+
+        if (!typesAreEquivalent(leftType, REAL64_TYPE)) {
+            typeMismatchError(node->pos, REAL64_TYPE, rightType);
+        }
+
+        // types on both sides are not paramlist types
+        // TODO: Allow struct comparisons
+        if (leftType->astType == AST_PARAMLIST || leftType->astType == AST_ARRAY || rightType->astType == AST_PARAMLIST || rightType->astType == AST_ARRAY) {
+            error(node->pos, "comparison on struct type");
+        }
+
+        node->binop.left = left;
+        node->binop.right = right;
+
+        if (left->astType == AST_INT && right->astType == AST_INT) {
+            retval = (left->_int.data >= right->_int.data) ? TRUE_AST : FALSE_AST;
+            break;
+        } else if (left->astType == AST_REAL && right->astType == AST_REAL) {
+            retval = (left->real.data >= right->real.data) ? TRUE_AST : FALSE_AST;
+            break;
+        } else {
+            retval = node;
+            break;
+        }
+    }
+    case AST_LTE: {
+        // right type <= left type
+        ASTNode* left = validateAST(node->binop.left);
+        ASTNode* right = validateAST(node->binop.right);
+        ASTNode* leftType = getType(left, false, false);
+        ASTNode* rightType = getType(right, false, false);
+        if (!typesAreEquivalent(rightType, leftType)) {
+            incompatibleTypesError(node->pos, leftType, rightType);
+        }
+
+        if (!typesAreEquivalent(leftType, REAL64_TYPE)) {
+            typeMismatchError(node->pos, REAL64_TYPE, rightType);
+        }
+
+        // types on both sides are not paramlist types
+        // TODO: Allow struct comparisons
+        if (leftType->astType == AST_PARAMLIST || leftType->astType == AST_ARRAY || rightType->astType == AST_PARAMLIST || rightType->astType == AST_ARRAY) {
+            error(node->pos, "comparison on struct type");
+        }
+
+        node->binop.left = left;
+        node->binop.right = right;
+
+        if (left->astType == AST_INT && right->astType == AST_INT) {
+            retval = (left->_int.data <= right->_int.data) ? TRUE_AST : FALSE_AST;
+            break;
+        } else if (left->astType == AST_REAL && right->astType == AST_REAL) {
+            retval = (left->real.data <= right->real.data) ? TRUE_AST : FALSE_AST;
+            break;
+        } else {
+            retval = node;
+            break;
+        }
+    }
+    case AST_ADD: {
+        // types on both sides are scalar types
+        ASTNode* left = validateAST(node->binop.left);
+        ASTNode* right = validateAST(node->binop.right);
+        if (!typesAreEquivalent(getType(left, false, false), REAL64_TYPE)) {
+            typeMismatchError(left->pos, REAL64_TYPE, getType(left, false, false));
+        } else if (!typesAreEquivalent(getType(right, false, false), REAL64_TYPE)) {
+            typeMismatchError(right->pos, REAL64_TYPE, getType(right, false, false));
+        }
+
+        node->binop.left = left;
+        node->binop.right = right;
+
+        if (left->astType == AST_REAL && right->astType == AST_REAL) {
+            retval = AST_Create_real(left->real.data + right->real.data, node->scope, node->pos);
+            break;
+        } else if (left->astType == AST_INT && right->astType == AST_REAL) {
+            retval = AST_Create_real((double)left->_int.data + right->real.data, node->scope, node->pos);
+            break;
+        } else if (left->astType == AST_REAL && right->astType == AST_INT) {
+            retval = AST_Create_real(left->real.data + (double)right->_int.data, node->scope, node->pos);
+            break;
+        } else if (left->astType == AST_INT && right->astType == AST_INT) {
+            retval = AST_Create_real(left->real.data + right->real.data, node->scope, node->pos);
+            break;
+        } else {
+            retval = node;
+            break;
+        }
+    }
+    case AST_SUBTRACT: {
+        // types on both sides are scalar types
+        ASTNode* left = validateAST(node->binop.left);
+        ASTNode* right = validateAST(node->binop.right);
+        if (!typesAreEquivalent(getType(left, false, false), REAL64_TYPE)) {
+            typeMismatchError(node->pos, REAL64_TYPE, getType(left, false, false));
+        } else if (!typesAreEquivalent(getType(right, false, false), REAL64_TYPE)) {
+            typeMismatchError(node->pos, REAL64_TYPE, getType(right, false, false));
+        }
+
+        node->binop.left = left;
+        node->binop.right = right;
+
+        if (left->astType == AST_REAL && right->astType == AST_REAL) {
+            retval = AST_Create_real(left->real.data - right->real.data, node->scope, node->pos);
+            break;
+        } else if (left->astType == AST_INT && right->astType == AST_REAL) {
+            retval = AST_Create_real((double)left->_int.data - right->real.data, node->scope, node->pos);
+            break;
+        } else if (left->astType == AST_REAL && right->astType == AST_INT) {
+            retval = AST_Create_real(left->real.data - (double)right->_int.data, node->scope, node->pos);
+            break;
+        } else if (left->astType == AST_INT && right->astType == AST_INT) {
+            retval = AST_Create_real(left->real.data - right->real.data, node->scope, node->pos);
+            break;
+        } else {
+            retval = node;
+            break;
+        }
+    }
+    case AST_MULTIPLY: {
+        // types on both sides are scalar types
+        ASTNode* left = validateAST(node->binop.left);
+        ASTNode* right = validateAST(node->binop.right);
+        if (!typesAreEquivalent(getType(left, false, false), REAL64_TYPE)) {
+            typeMismatchError(left->pos, REAL64_TYPE, getType(left, false, false));
+        } else if (!typesAreEquivalent(getType(right, false, false), REAL64_TYPE)) {
+            typeMismatchError(right->pos, REAL64_TYPE, getType(right, false, false));
+        }
+
+        node->binop.left = left;
+        node->binop.right = right;
+
+        if (left->astType == AST_REAL && right->astType == AST_REAL) {
+            retval = AST_Create_real(left->real.data * right->real.data, node->scope, node->pos);
+            break;
+        } else if (left->astType == AST_INT && right->astType == AST_REAL) {
+            retval = AST_Create_real((double)left->_int.data * right->real.data, node->scope, node->pos);
+            break;
+        } else if (left->astType == AST_REAL && right->astType == AST_INT) {
+            retval = AST_Create_real(left->real.data * (double)right->_int.data, node->scope, node->pos);
+            break;
+        } else if (left->astType == AST_INT && right->astType == AST_INT) {
+            retval = AST_Create_real(left->real.data * right->real.data, node->scope, node->pos);
+            break;
+        } else {
+            retval = node;
+            break;
+        }
+    }
+    case AST_DIVIDE: {
+        // types on both sides are scalar types
+        ASTNode* left = validateAST(node->binop.left);
+        ASTNode* right = validateAST(node->binop.right);
+        if (!typesAreEquivalent(getType(left, false, false), REAL64_TYPE)) {
+            typeMismatchError(left->pos, REAL64_TYPE, getType(left, false, false));
+        } else if (!typesAreEquivalent(getType(right, false, false), REAL64_TYPE)) {
+            typeMismatchError(right->pos, REAL64_TYPE, getType(right, false, false));
+        }
+
+        if (right->astType == AST_INT && right->_int.data == 0) {
+            error(node->pos, "division by zero");
+        } else if (right->astType == AST_REAL && right->real.data == 0.0) {
+            error(node->pos, "division by zero");
+        }
+
+        node->binop.left = left;
+        node->binop.right = right;
+
+        if (left->astType == AST_REAL && right->astType == AST_REAL) {
+            retval = AST_Create_real(left->real.data / right->real.data, node->scope, node->pos);
+            break;
+        } else if (left->astType == AST_INT && right->astType == AST_REAL) {
+            retval = AST_Create_real((double)left->_int.data / right->real.data, node->scope, node->pos);
+            break;
+        } else if (left->astType == AST_REAL && right->astType == AST_INT) {
+            retval = AST_Create_real(left->real.data / (double)right->_int.data, node->scope, node->pos);
+            break;
+        } else if (left->astType == AST_INT && right->astType == AST_INT) {
+            retval = AST_Create_real(left->real.data / right->real.data, node->scope, node->pos);
+            break;
+        } else {
+            retval = node;
+            break;
+        }
+    }
+    case AST_MODULUS: {
+        ASTNode* left = validateAST(node->binop.left);
+        ASTNode* right = validateAST(node->binop.right);
+        if (!typesAreEquivalent(getType(left, false, false), INT64_TYPE)) {
+            typeMismatchError(left->pos, REAL64_TYPE, getType(left, false, false));
+        } else if (!typesAreEquivalent(getType(right, false, false), INT64_TYPE)) {
+            typeMismatchError(right->pos, REAL64_TYPE, getType(right, false, false));
+        }
+
+        node->binop.left = left;
+        node->binop.right = right;
+
+        if (left->astType == AST_INT && right->astType == AST_INT) {
+            retval = AST_Create_real(left->_int.data % right->_int.data, node->scope, node->pos);
+            break;
+        } else {
+            retval = node;
+            break;
+        }
+    }
+    case AST_ASSIGN: {
+        // right type <= left type
+        ASTNode* left = node->binop.left;
+        left->type = validateAST(left)->type;
+        ASTNode* right = validateAST(node->binop.right);
+        ASTNode* leftType = getType(left, false, true);
+        ASTNode* rightType = getType(right, false, true);
+        if (!typesAreEquivalent(rightType, leftType)) {
+            typeMismatchError(right->pos, leftType, rightType);
+        } else {
+            right->type = leftType;
+        }
+
+        // left type is an l-value
+        validateLValue(left);
+        node->binop.left = left;
+        node->binop.right = right;
+
+        retval = node;
+        break;
+    }
+    case AST_ADD_ASSIGN:
+    case AST_SUB_ASSIGN:
+    case AST_MULT_ASSIGN: {
+        // right type <= left type
+        ASTNode* left = node->binop.left;
+        left->type = validateAST(left)->type;
+        ASTNode* right = validateAST(node->binop.right);
+        ASTNode* leftType = getType(left, false, false);
+        ASTNode* rightType = getType(right, false, false);
+        if (!typesAreEquivalent(rightType, leftType)) {
+            incompatibleTypesError(node->pos, leftType, rightType);
+        }
+
+        // right type is scalar type and not addr
+        if (!typesAreEquivalent(rightType, REAL64_TYPE)) {
+            typeMismatchError(right->pos, REAL64_TYPE, rightType);
+        }
+
+        // left type is an l-value
+        validateLValue(left);
+        node->binop.left = left;
+        node->binop.right = right;
+
+        retval = node;
+        break;
+    }
+    case AST_DIV_ASSIGN: {
+        // right type <= left type
+        ASTNode* left = node->binop.left;
+        left->type = validateAST(left)->type;
+        ASTNode* right = validateAST(node->binop.right);
+        ASTNode* leftType = getType(left, false, false);
+        ASTNode* rightType = getType(right, false, false);
+        if (!typesAreEquivalent(rightType, leftType)) {
+            incompatibleTypesError(node->pos, leftType, rightType);
+        }
+
+        // right type is scalar type and not addr
+        if (!typesAreEquivalent(rightType, REAL64_TYPE)) {
+            typeMismatchError(right->pos, REAL64_TYPE, rightType);
+        }
+
+        // left type is an l-value
+        validateLValue(left);
+
+        if (right->astType == AST_INT && right->_int.data == 0) {
+            error(node->pos, "division by zero");
+        } else if (right->astType == AST_REAL && right->real.data == 0.0) {
+            error(node->pos, "division by zero");
+        }
+
+        node->binop.left = left;
+        node->binop.right = right;
+
+        retval = node;
+        break;
+    }
+    case AST_AND_ASSIGN: // TODO: make this polymorphic
+    case AST_OR_ASSIGN:
+    case AST_XOR_ASSIGN: {
+        // right type <= left type
+        ASTNode* left = node->binop.left;
+        left->type = validateAST(left)->type;
+        ASTNode* right = validateAST(node->binop.right);
+        ASTNode* leftType = getType(left, false, false);
+        ASTNode* rightType = getType(right, false, false);
+        if (!typesAreEquivalent(rightType, leftType)) {
+            incompatibleTypesError(node->pos, leftType, rightType);
+        }
+
+        // right type is integral type and not addr
+        if (!typesAreEquivalent(rightType, INT64_TYPE) && !typesAreEquivalent(rightType, BOOL_TYPE)) {
+            error(node->pos, "operator assignment on invalid type");
+        }
+
+        // left type is an l-value
+        validateLValue(left);
+
+        node->binop.left = left;
+        node->binop.right = right;
+
+        retval = node;
+        break;
+    }
+    case AST_MOD_ASSIGN:
+    case AST_LSHIFT_ASSIGN:
+    case AST_RSHIFT_ASSIGN: {
+        // right type <= left type
+        ASTNode* left = node->binop.left;
+        left->type = validateAST(left)->type;
+        ASTNode* right = validateAST(node->binop.right);
+        ASTNode* leftType = getType(left, false, false);
+        ASTNode* rightType = getType(right, false, false);
+        if (!typesAreEquivalent(rightType, leftType)) {
+            incompatibleTypesError(node->pos, leftType, rightType);
+        }
+
+        // right type is integral type and not addr
+        if (!typesAreEquivalent(rightType, INT64_TYPE)) {
+            typeMismatchError(right->pos, INT64_TYPE, rightType);
+        }
+
+        // left type is an l-value
+        validateLValue(left);
+        node->binop.left = left;
+        node->binop.right = right;
+
+        retval = node;
+        break;
+    }
+    case AST_NOT: {
+        // condition (#0) is bool type
+        ASTNode* condition = validateAST(node->unop.expr);
+        ASTNode* conditionType = getType(condition, false, false);
+        if (!typesAreEquivalent(conditionType, BOOL_TYPE)) {
+            typeMismatchError(condition->pos, BOOL_TYPE, conditionType);
+        }
+        node->unop.expr = condition;
+
+        if (condition->astType == AST_TRUE) {
+            retval = FALSE_AST;
+            break;
+        } else if (condition->astType == AST_FALSE) {
+            retval = TRUE_AST;
+            break;
+        } else {
+            retval = node;
+            break;
+        }
+    }
+    case AST_NEG: {
+        ASTNode* left = validateAST(node->unop.expr);
+        ASTNode* leftType = getType(left, false, false);
+        // right type is scalar type
+        if (!typesAreEquivalent(leftType, REAL64_TYPE)) {
+            typeMismatchError(left->pos, REAL64_TYPE, leftType);
+        }
+        node->unop.expr = left;
+        if (left->astType == AST_INT) {
+            retval = AST_Create_int(-left->_int.data, node->scope, node->pos);
+            break;
+        } else if (left->astType == AST_REAL) {
+            retval = AST_Create_int(-left->real.data, node->scope, node->pos);
+            break;
+        } else {
+            retval = node;
+            break;
+        }
+    }
+    case AST_BIT_NOT: {
+        // child is an integral type
+        ASTNode* left = validateAST(node->unop.expr);
+        ASTNode* leftType = getType(left, false, false);
+        if (!typesAreEquivalent(leftType, INT64_TYPE)) {
+            typeMismatchError(left->pos, INT64_TYPE, leftType);
+        }
+        node->unop.expr = left;
+        if (left->astType == AST_INT) {
+            retval = AST_Create_int(~left->_int.data, node->scope, node->pos);
+            break;
+        } else {
+            retval = node;
+            break;
+        }
+    }
+    case AST_ADDROF: {
+        ASTNode* left = validateAST(node->unop.expr);
+        // left type is an l-value
+        validateLValue(left);
+        node->unop.expr = left;
+        retval = node;
+        break;
+    }
+    case AST_DEREF: {
+        // child type is scalar
+        ASTNode* left = validateAST(node->unop.expr);
+        ASTNode* leftType = getType(left, false, false);
+        if (leftType->astType != AST_ADDR) {
+            error(node->pos, "type mismatch, expected address");
+        }
+        node->unop.expr = left;
+        retval = node;
+        break;
+    }
+    case AST_CAST: {
+        ASTNode* expr = validateAST(node->binop.left);
+        // cast type is valid type
+        node->binop.right = expandTypeIdent(node->binop.right, true);
+        ASTNode* cast = node->binop.right;
+        validateType(cast, true);
+
+        // cannot cast between function addr and data addr
+        ASTNode* exprType = getType(expr, false, false);
+        if (cast->isConst && !exprType->isConst) {
+            error(node->pos, "cast from variable type to constant type");
+        }
+        if (exprType->astType == AST_ADDR && cast->astType == AST_FUNCTION) {
+            error(node->pos, "cast from data address to function address");
+        }
+        if (exprType->astType == AST_FUNCTION && cast->astType == AST_ADDR) {
+            error(node->pos, "cast from function address to data address");
+        }
+        if (exprType->astType == AST_ADDR && cast->astType == AST_FUNCTION) {
+            error(node->pos, "cast from data address to function address");
+        }
+        if (exprType->astType == AST_FUNCTION && cast->astType == AST_ADDR) {
+            error(node->pos, "cast from function address to data address");
+        }
+
+        if (expr->astType == AST_ARGLIST || cast->astType == AST_PARAMLIST || cast->astType == AST_ARRAY) {
+            if (cast->astType != AST_PARAMLIST && cast->astType != AST_ARRAY) {
+                error(node->pos, "cast from arglist to non-arglist type");
+            } else {
+                expr->type = cast;
+                argsMatchParams(NULL, expr, cast);
+            }
+        }
+
+        node->binop.left = expr;
+        retval = node;
+        break;
+    }
+    case AST_CALL: {
+        // call is to a function type
+        ASTNode* expr = node->call.left;
+        validateAST(expr);
+        ASTNode* exprType = getType(expr, false, false);
+        node->call.left = expr;
+        expr->type = exprType;
+        node->call.fnType = exprType;
+        if (exprType->astType != AST_FUNCTION) {
+            error(node->pos, "call is not to function");
+        }
+        argsMatchParams(expr, node->call.right, exprType->function.domainType);
+        node->call.right = validateAST(node->call.right);
+        // TODO: check if function parameters and return are all comptime, if so, collapse to function def with arguments filled in
+        retval = node;
+        break;
+    }
+    case AST_PARAMLIST:
+    case AST_ARRAY: {
+        ListElem* elem = List_Begin(node->paramlist.defines);
+        for (; elem != List_End(node->paramlist.defines); elem = elem->next) {
+            ASTNode* define = elem->data;
+            validateAST(define);
+        }
+        retval = UNDEF_TYPE;
+        break;
+    }
+    case AST_ADDR:
+    case AST_FUNCTION:
+    case AST_UNDEF:
+    case AST_VOID:
+    case AST_NAMED_ARG: {
+        retval = UNDEF_TYPE;
+        break;
+    }
+    default: {
+        error(node->pos, "unvalidatable %d", node->astType);
+    }
+    }
+    if (retval) {
+        retval->type = getType(retval, false, true);
+    }
+    return retval;
+}
+
+// Validate that all possible paths return some value
+// The actual type validation is done earlier for all return types
+static bool allReturnPath(ASTNode* node)
+{
+    if (node->astType == AST_RETURN) {
+        return true;
+    } else if (node->astType == AST_CASE) {
+        return true;
+    } else if (node->astType == AST_IF && node->_if.elseBlock->astType != AST_UNDEF) {
+        return allReturnPath(node->_if.bodyBlock) && allReturnPath(node->_if.elseBlock);
+    } else if (node->astType == AST_BLOCK) {
+        ListElem* elem = List_Begin(node->block.children);
+        for (; elem != List_End(node->block.children); elem = elem->next) {
+            if (allReturnPath(elem->data)) {
+                return true;
+            }
+        }
+    }
+    return false;
 }
 
 void resolveRestrictions(SymbolNode* symbol)
@@ -1971,7 +2562,7 @@ void resolveRestrictions(SymbolNode* symbol)
         ASTNode* expr = e->data;
         SymbolNode* var = NULL;
         if (expr->astType == AST_IDENT) {
-            var = Symbol_Find(expr->data, symbol->parent);
+            var = Symbol_Find(expr->ident.data, symbol->parent);
         } else if (expr->astType == AST_DOT) {
             var = getDotSymbol(expr);
         } else {
@@ -1990,132 +2581,6 @@ void resolveRestrictions(SymbolNode* symbol)
     for (; elem != List_End(children); elem = elem->next) {
         SymbolNode* child = Map_Get(symbol->children, elem->data);
         resolveRestrictions(child);
-    }
-}
-
-void reachableSymbol(SymbolNode* symbol);
-
-void reachableAST(ASTNode* node)
-{
-    ListElem* elem = List_Begin(node->children);
-    for (; elem != List_End(node->children); elem = elem->next) {
-        ASTNode* child = elem->data;
-        reachableAST(child);
-    }
-    switch (node->astType) {
-    case AST_DEFINE: {
-        SymbolNode* var = node->data;
-        reachableAST(var->def);
-    } break;
-    case AST_IDENT: {
-        SymbolNode* var = Symbol_Find(node->data, node->scope);
-        if (var != 0 && var != -1) {
-            reachableSymbol(var);
-        }
-    } break;
-    case AST_DOT:
-        reachableSymbol(node->data);
-        break;
-    }
-}
-
-void makeChildrenReachable(SymbolNode* symbol)
-{
-    symbol->isReachable = true;
-
-    List* children = symbol->children->keyList;
-    ListElem* elem = List_Begin(children);
-    for (; elem != List_End(children); elem = elem->next) {
-        SymbolNode* child = Map_Get(symbol->children, elem->data);
-        makeChildrenReachable(child);
-    }
-}
-
-void reachableSymbol(SymbolNode* symbol)
-{
-    if (!symbol) {
-        return;
-    }
-    if (symbol->symbolType != SYMBOL_MODULE && symbol->symbolType != SYMBOL_PACKAGE) {
-        bool wasReachable = symbol->isReachable;
-        makeChildrenReachable(symbol);
-        if (!wasReachable) {
-            reachableAST(symbol->def);
-        }
-    }
-}
-
-/*
-	- can't call functions
-	- can't dereference pointers
-	- can't take addresses of
-	- can't call new or free
-	- can't reference external symbols
-	- can't assign to variables outside of function's scope
-*/
-ASTNode* isASTStateful(ASTNode* node)
-{
-    ListElem* elem = List_Begin(node->children);
-    if (node->astType != AST_DOT) {
-        for (; elem != List_End(node->children); elem = elem->next) {
-            ASTNode* child = elem->data;
-            ASTNode* res = isASTStateful(child);
-            if (res) {
-                return res;
-            }
-        }
-    }
-    switch (node->astType) {
-    case AST_DEREF:
-    case AST_ADDROF:
-    case AST_NEW:
-    case AST_FREE:
-        return node;
-    case AST_INDEX: {
-        ASTNode* child = List_Get(node->children, 0);
-        ASTNode* type = getType(child, false, false);
-        if (type->astType == AST_ADDR) {
-            return node;
-        } else {
-            return NULL;
-        }
-    }
-    case AST_IDENT: {
-        SymbolNode* var = Symbol_Find(node->data, node->scope);
-        if (var->isExtern) {
-            return node;
-        }
-        return var->parent != NULL && var->parent->symbolType != SYMBOL_BLOCK && var->parent->symbolType != SYMBOL_FUNCTION && !var->type->isConst ? node : NULL;
-    }
-    case AST_DOT: {
-        SymbolNode* var = getDotSymbol(node);
-        if (var->isExtern) {
-            return node;
-        }
-        return var->parent != NULL && var->parent->symbolType != SYMBOL_BLOCK && var->parent->symbolType != SYMBOL_FUNCTION && !var->type->isConst ? node : NULL;
-    }
-    case AST_DEFINE: {
-        SymbolNode* var = node->data;
-        ASTNode* res = isASTStateful(var->def);
-        if (res != NULL) {
-            return res;
-        } else if (var->type->astType == AST_ADDR) {
-            return node;
-        } else {
-            return NULL;
-        }
-    }
-    case AST_CALL: {
-        ASTNode* expr = List_Get(node->children, 0);
-        ASTNode* exprType = getType(expr, false, false);
-        if (exprType->astType != AST_FUNCTION) {
-            return node;
-        } else {
-            return NULL;
-        }
-    }
-    default:
-        return NULL;
     }
 }
 
@@ -2140,17 +2605,18 @@ Program Validator_Validate(SymbolNode* symbol)
 
         includes = Map_Create();
 
-        types = List_Create();
+        validateType(CONST_STRING_TYPE, true);
+        validateType(STRING_ARR_TYPE, true);
+        permissiveTypeEquiv = true;
 
-        mainFunctionType = AST_Create(AST_FUNCTION, 0, NULL, (Position) { 0, 0, 0, 0 }, true);
-        ASTNode* mainFunctionParams = AST_Create(AST_PARAMLIST, 0, NULL, (Position) { 0, 0, 0, 0 }, true);
         SymbolNode* argsDefineSymbol = Symbol_Create("args", SYMBOL_VARIABLE, NULL, (Position) { 0, 0, 0, 0 });
         argsDefineSymbol->type = STRING_ARR_TYPE;
-        argsDefineSymbol->def = AST_Create(AST_UNDEF, 0, NULL, (Position) { 0, 0, 0, 0 }, false);
-        ASTNode* argsDefine = AST_Create(AST_DEFINE, argsDefineSymbol, NULL, (Position) { 0, 0, 0, 0 }, false);
-        List_Append(mainFunctionParams->children, argsDefine);
-        List_Append(mainFunctionType->children, mainFunctionParams);
-        List_Append(mainFunctionType->children, INT32_TYPE);
+        argsDefineSymbol->def = AST_Create_undef(NULL, (Position) { 0, 0, 0, 0 });
+        ASTNode* argsDefine = AST_Create_define(argsDefineSymbol, NULL, (Position) { 0, 0, 0, 0 });
+        ASTNode* mainFunctionParams = AST_Create_paramlist(NULL, (Position) { 0, 0, 0, 0 });
+        List_Append(mainFunctionParams->paramlist.defines, argsDefine);
+        mainFunctionType = AST_Create_function(mainFunctionParams, INT32_TYPE, NULL, (Position) { 0, 0, 0, 0 });
+        mainFunctionType->isConst = true;
         resolveRestrictions(symbol);
     }
 
@@ -2166,8 +2632,7 @@ Program Validator_Validate(SymbolNode* symbol)
     // Expand symbol type
     if (symbol->type) {
         symbol->type = expandTypeIdent(symbol->type, true);
-        validateType(symbol->type);
-        collectType(symbol->type);
+        validateType(symbol->type, true);
     }
 
     if (symbol->parent && symbol->parent->symbolType != SYMBOL_TYPE) {
@@ -2192,12 +2657,8 @@ Program Validator_Validate(SymbolNode* symbol)
             gen_error("no main function defined");
         }
         // Reachability?
-        reachableSymbol(mainFunction);
         permissiveTypeEquiv = false;
-        collectStructs(CONST_STRING_TYPE);
-        collectStructs(STRING_ARR_TYPE);
         unVisitSymbolTree(symbol);
-        collectStructsMain(symbol);
         break;
     }
     case SYMBOL_PACKAGE: {
@@ -2226,26 +2687,26 @@ Program Validator_Validate(SymbolNode* symbol)
             if (includesSymbol->def->astType != AST_ARRAY_LITERAL) {
                 error(includesSymbol->pos, "includes array must be a string array");
             }
-            ListElem* e = List_Begin(includesSymbol->def->children);
-            for (; e != List_End(includesSymbol->def->children); e = e->next) {
+            ListElem* e = List_Begin(includesSymbol->def->arrayLiteral.members);
+            for (; e != List_End(includesSymbol->def->arrayLiteral.members); e = e->next) {
                 ASTNode* stringLiteral = e->data;
                 if (!typesAreEquivalent(stringLiteral->type, STRING_TYPE)) {
                     typeMismatchError(stringLiteral->pos, STRING_TYPE, stringLiteral->type);
                 }
-                Map_Put(includes, stringLiteral->data, 1);
+                Map_Put(includes, stringLiteral->string.data, 1);
             }
         }
         if (verbatimSymbol) {
             if (verbatimSymbol->def->astType != AST_ARRAY_LITERAL) {
                 error(verbatimSymbol->pos, "verbatim array must be a string array");
             }
-            ListElem* e = List_Begin(verbatimSymbol->def->children);
-            for (; e != List_End(verbatimSymbol->def->children); e = e->next) {
+            ListElem* e = List_Begin(verbatimSymbol->def->arrayLiteral.members);
+            for (; e != List_End(verbatimSymbol->def->arrayLiteral.members); e = e->next) {
                 ASTNode* stringLiteral = e->data;
                 if (!typesAreEquivalent(stringLiteral->type, STRING_TYPE)) {
                     typeMismatchError(stringLiteral->pos, STRING_TYPE, stringLiteral->type);
                 }
-                List_Append(verbatims, stringLiteral->data);
+                List_Append(verbatims, stringLiteral->string.data);
             }
         }
         break;
@@ -2259,7 +2720,7 @@ Program Validator_Validate(SymbolNode* symbol)
             SymbolNode* child = Map_Get(symbol->children, elem->data);
             Validator_Validate(child);
         }
-        ASTNode* retType = List_Get(symbol->type->children, 1);
+        ASTNode* retType = symbol->type->function.codomainType;
         if (!symbol->isExtern && retType->astType != AST_VOID) {
             if (symbol->def->astType != AST_UNDEF && getType(symbol->def, false, false)->astType != AST_UNDEF) {
                 if (!typesAreEquivalent(getType(symbol->def, false, false), retType)) {
@@ -2272,7 +2733,7 @@ Program Validator_Validate(SymbolNode* symbol)
         if (!strcmp(symbol->name, "main") && typesAreEquivalent(mainFunctionType, symbol->type)) {
             if (mainFunction) {
                 error2(symbol->pos, mainFunction->pos, "multiple main function definitions");
-            } else if (symbol->isPublic) {
+            } else {
                 mainFunction = symbol;
             }
         }
@@ -2291,12 +2752,12 @@ Program Validator_Validate(SymbolNode* symbol)
             error(symbol->pos, "type '%s' is not constant", symbol->name);
         }
         // validate valid type def
-        validateType(symbol->def);
+        validateType(symbol->def, true);
         // if def ast type is param list then for all define in paramlist children, define symbol is not extern
         if (symbol->def->astType == AST_PARAMLIST) {
-            for (ListElem* elem = List_Begin(symbol->def->children); elem != List_End(symbol->def->children); elem = elem->next) {
+            for (ListElem* elem = List_Begin(symbol->def->paramlist.defines); elem != List_End(symbol->def->paramlist.defines); elem = elem->next) {
                 ASTNode* define = elem->data;
-                SymbolNode* var = define->data;
+                SymbolNode* var = define->define.symbol;
                 if (var && var->isExtern) {
                     error(var->type->pos, "struct field is marked external");
                 }
