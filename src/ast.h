@@ -40,6 +40,7 @@ enum astType {
     AST_DEREF,
     AST_INDEX,
     AST_SLICE,
+	AST_ADDROF,
     // Boolean
     AST_NOT,
     AST_OR,
@@ -111,11 +112,11 @@ typedef struct astNode_int {
 
 typedef struct astNode_string {
     char* data;
-    // Possible a field for the string id number?
+    int stringID;
 } astNode_string;
 
 typedef struct astNode_char {
-    char data;
+    char* data;
 } astNode_char;
 
 typedef struct astNode_real {
@@ -143,6 +144,18 @@ typedef struct astNode_binop {
     struct astNode* left;
     struct astNode* right;
 } astNode_binop;
+
+typedef struct astNode_call {
+    struct astNode* left;
+    struct astNode* right;
+    struct astNode* fnType;
+} astNode_call;
+
+typedef struct astNode_dot {
+    struct astNode* left;
+    struct astNode* right;
+    struct symbolNode* symbol;
+} astNode_dot;
 
 typedef struct astNode_slice {
     struct astNode* arrayExpr;
@@ -233,6 +246,8 @@ typedef struct astNode {
         astNode_arrayLiteral arrayLiteral;
         astNode_unop unop;
         astNode_binop binop;
+        astNode_call call;
+        astNode_dot dot;
         astNode_slice slice;
         astNode_block block;
         astNode_defer defer;
@@ -266,6 +281,10 @@ const ASTNode* PACKAGE_TYPE;
 const ASTNode* UNDEF_TYPE;
 const ASTNode* VOID_ADDR_TYPE;
 const ASTNode* ENUM_TYPE;
+
+const ASTNode* TRUE_AST;
+const ASTNode* FALSE_AST;
+const ASTNode* NOTHING_AST;
 
 ASTNode* AST_Create_ident(char* data, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_call(struct astNode* functionExpr, struct astNode* arglist, struct symbolNode* scope, struct position pos);

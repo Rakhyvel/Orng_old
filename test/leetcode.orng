@@ -4,7 +4,7 @@ leetcode::Module = (
     test_all::()->() = {
         test_twoSum()
         test_addTwoNumbers()
-        test_lengthOfLongestSubstring()
+        --test_lengthOfLongestSubstring()
         test_findMedianSortedArrays()
         test_longestPalindrome()
         test_convert()
@@ -30,17 +30,13 @@ leetcode::Module = (
 
     fizzbuzz2::(n:Int)->String =
         case n % 15 {
-            0   -> "fizzbuzz"
+            0           -> "fizzbuzz"
 
-            3, 
-            6, 
-            9, 
-            12  -> "fizz"
+            3, 6, 9, 12 -> "fizz"
 
-            5, 
-            10  -> "buzz"
+            5, 10       -> "buzz"
 
-            else-> std.string.format(255, "%d", n)
+            else        -> std.string.format(255, "%d", n)
         }
 
 
@@ -48,15 +44,14 @@ leetcode::Module = (
     -- the two numbers such that they add up to target.
     -- https://leetcode.com/problems/two-sum/
     twoSum::(nums:[]Int, target:Int)->[2]Int = {
-        for true; ; false {}
         for i := 0; i < nums.length - 1; i += 1 {
             for j := i + 1; j < nums.length; j += 1 {
                 if nums[i] + nums[j] == target {
-                    return new [2]Int=[i, j]
+                    return new [2]Int[i, j]
                 }
             }
         }
-        return new [2]Int=[-1, -1]
+        return new [2]Int[-1, -2]
     }
 
     test_twoSum::()->() = {
@@ -84,7 +79,7 @@ leetcode::Module = (
     )
 
     convertToInt::(l:&ListNode)->Int =
-        if l.next == nothing {
+        if l.next == 0:&ListNode {
             l.val
         } else {
             l.val + convertToInt(l.next) * 10
@@ -92,21 +87,21 @@ leetcode::Module = (
 
     convertToList::(i:Int)->&ListNode =
         if i < 10 {
-            new ListNode=(i, nothing)
+            new ListNode(i, nothing)
         } else {
-            new ListNode=(i % 10, convertToList(i / 10))
+            new ListNode(i % 10, convertToList(i / 10))
         }
 
     addTwoNumbers::(l1:&ListNode, l2:&ListNode)->&ListNode = 
         convertToList(convertToInt(l1) + convertToInt(l2))
 
     test_addTwoNumbers::()->() = {
-        l1_c := new ListNode=(3, nothing)
-        l1_b := new ListNode=(4, l1_c)
-        l1   := new ListNode=(2, l1_b)
-        l2_c := new ListNode=(4, nothing)
-        l2_b := new ListNode=(6, l2_c)
-        l2   := new ListNode=(5, l2_b)
+        l1_c := new ListNode(3, nothing)
+        l1_b := new ListNode(4, l1_c)
+        l1   := new ListNode(2, l1_b)
+        l2_c := new ListNode(4, nothing)
+        l2_b := new ListNode(6, l2_c)
+        l2   := new ListNode(5, l2_b)
 
         ans := addTwoNumbers(l1, l2)
 
@@ -234,7 +229,7 @@ leetcode::Module = (
                 end = i + len / 2
             }
         }
-        s[start;end]
+        s[start;end + 1]
     }
 
     test_longestPalindrome::()->() = {
@@ -245,7 +240,7 @@ leetcode::Module = (
         if std.string.equals(ans, "bab") || std.string.equals(ans, "aba") {
             std.system.println("longestPalindrome: Passed!")
         } else {
-            std.system.println("longestPalindrome: Failed")
+            std.system.println("longestPalindrome: Failed %d", ans.length)
         }
     }
 
@@ -321,10 +316,10 @@ leetcode::Module = (
     -- [-2^31, 2^31 - 1], then return 0.
     -- https://leetcode.com/problems/reverse-integer/
     reverseList::(list:&ListNode)->&ListNode = {
-        prev:&ListNode = nothing
+        prev:&ListNode = 0:&ListNode
         curr:&ListNode = list
-        next:&ListNode = nothing
-        for curr != nothing {
+        next:&ListNode = 0:&ListNode
+        for curr != 0:&ListNode {
             next = curr.next
             curr.next = prev
             prev = curr
@@ -395,7 +390,7 @@ leetcode::Module = (
     isPalindrome::(x:Int)->Bool = {
         list := convertToList(x)
         reversedList := reverseList(convertToList(x))
-        for list != nothing {
+        for list != 0:&ListNode {
             if list.val != reversedList.val {
                 return false
             }
@@ -428,7 +423,7 @@ leetcode::Module = (
         j := 0 -- p index
 
         for i < s.length {
-            repeat::Bool = if j + 1 == p.length {false} else {p[j + 1] == '*'}
+            repeat:Bool = if j + 1 == p.length {false} else {p[j + 1] == '*'}
 
             if p[j] != '.' && s[i] != p[j] {
                 if repeat {
@@ -469,6 +464,7 @@ leetcode::Module = (
     maxArea::(height:[]Int, max:Int=0)->Int =
         for i := 0; i < height.length - 1; i += 1 {
             for j := i + 1; j < height.length; j += 1 {
+                std.system.println("%d", std.math.abs(i - j))
                 max = std.math.max(max, std.math.abs(i - j) * std.math.min(height[i], height[j])):Int
             }
         }
@@ -481,7 +477,7 @@ leetcode::Module = (
         if ans == 49 {
             std.system.println("maxArea: Passed!")
         } else {
-            std.system.println("maxArea: Failed")
+            std.system.println("maxArea: Failed %d", ans)
         }
     }
 )

@@ -1,16 +1,6 @@
-testModule::(args:[]String)->Int = {
-	x:Int = 4
-	-- // function preamble
-	-- int x;
-	-- ...
-	-- // code
-	-- *(&x + 0) = 4;
-
-	y:[]Int = [1, 2, 3, 4]
-	-- // function preamble
-	-- struct struct_x y;
-	-- ...
-	-- // code
-	-- *(&y + 0) = 1
-	-- *(&y + 4) = 2
-}
+testModule::Module = (
+	main::(args:[]String)->Int = {
+		leetcode.test_maxArea()
+		0
+	}
+)

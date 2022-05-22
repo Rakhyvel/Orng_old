@@ -1,3 +1,5 @@
+#ifndef IR_H
+#define IR_H
 #include "../util/list.h"
 #include "./position.h"
 #include <stdint.h>
@@ -8,7 +10,7 @@
 // temp = temp -- for if/else and for loops
 
 /*
-code_lowered	- contains psuedo instructions until types are resolved
+IR	- contains psuedo instructions until types are resolved
 				- like store
 
 code_typed		- all types are known
@@ -32,6 +34,7 @@ typedef enum ir_type {
     IR_ASSIGN_VAR, //			nothing				()						Assigns the value of a register to a variable
     IR_ASSIGN_TEMP, //			nothing				()						Assigns the value of a register to a temporary variable
     IR_SET_DEFER, //			nothing				()						Sets a defer flag to true
+	IR_GET_DEFER, //	
     IR_INDEX, //				value at index		type of array			Indexes an array
     IR_SLICE, //				slice				array					Creates a slice
     IR_DOT, //					value at dot		type of field			Gets the field of a struct
@@ -106,286 +109,292 @@ struct label {
     char* labelID;
 };
 
-typedef struct codeLowered_loadIdent {
+typedef struct IR_loadIdent {
     char* name;
     struct symbolNode* scope;
-} codeLowered_loadIdent;
+} IR_loadIdent;
 
-typedef struct codeLowered_loadInt {
+typedef struct IR_loadInt {
     int64_t data;
-} codeLowered_loadInt;
+} IR_loadInt;
 
-typedef struct codeLowered_loadReal {
+typedef struct IR_loadReal {
     double data;
-} codeLowered_loadReal;
+} IR_loadReal;
 
-typedef struct codeLowered_loadString {
+typedef struct IR_loadString {
     char* data;
-} codeLowered_loadString;
+} IR_loadString;
 
-typedef struct codeLowered_loadChar {
+typedef struct IR_loadChar {
     char data;
-} codeLowered_loadChar;
+} IR_loadChar;
 
-typedef struct codeLowered_loadNothing {
+typedef struct IR_loadNothing {
     int no_data;
-} codeLowered_loadNothing;
+} IR_loadNothing;
 
-typedef struct codeLowered_loadTrue {
+typedef struct IR_loadTrue {
     int no_data;
-} codeLowered_loadTrue;
+} IR_loadTrue;
 
-typedef struct codeLowered_loadFalse {
+typedef struct IR_loadFalse {
     int no_data;
-} codeLowered_loadFalse;
+} IR_loadFalse;
 
-typedef struct codeLowered_loadSizeof {
+typedef struct IR_loadSizeof {
     struct astNode* type;
-} codeLowered_loadSizeof;
+} IR_loadSizeof;
 
-typedef struct codeLowered_loadArrayLiteral {
+typedef struct IR_loadArrayLiteral {
     List* members;
-} codeLowered_loadArrayLiteral;
+} IR_loadArrayLiteral;
 
-typedef struct codeLowered_loadStructLiteral {
+typedef struct IR_loadStructLiteral {
     List* args;
-} codeLowered_loadStructLiteral;
+} IR_loadStructLiteral;
 
-typedef struct codeLowered_declareVar {
+typedef struct IR_declareVar {
     struct symbolNode* symbol;
-} codeLowered_declareVar;
+} IR_declareVar;
 
-typedef struct codeLowered_declareTemp {
+typedef struct IR_declareTemp {
     int no_data;
-} codeLowered_declareTemp;
+} IR_declareTemp;
 
-typedef struct codeLowered_declareDefer {
+typedef struct IR_declareDefer {
     int deferID;
     char* symbolName;
-} codeLowered_declareDefer;
+} IR_declareDefer;
 
-typedef struct codeLowered_assignVar {
+typedef struct IR_assignVar {
     // idk what to put here yet
     int no_data;
-} codeLowered_assignVar;
+} IR_assignVar;
 
-typedef struct codeLowered_assignTemp {
+typedef struct IR_assignTemp {
     ir_id dst;
     ir_id src;
-} codeLowered_assignTemp;
+} IR_assignTemp;
 
-typedef struct codeLowered_return {
+typedef struct IR_return {
     ir_id expr;
-} codeLowered_return;
+} IR_return;
 
-typedef struct codeLowered_setDefer {
+typedef struct IR_setDefer {
     int deferID;
     char* symbolName;
-} codeLowered_setDefer;
+} IR_setDefer;
 
-typedef struct codeLowered_index {
+typedef struct IR_getDefer {
+    int deferID;
+    char* symbolName;
+} IR_getDefer;
+
+typedef struct IR_index {
     ir_id arrExprID;
     ir_id subscriptID;
-} codeLowered_index;
+} IR_index;
 
-typedef struct codeLowered_slice {
+typedef struct IR_slice {
     ir_id arrExprID;
     ir_id lowerBoundID;
     ir_id upperBoundID;
-} codeLowered_slice;
+} IR_slice;
 
-typedef struct codeLowered_dot {
-    ir_id leftID;
-    char* identifier;
-} codeLowered_dot;
+typedef struct IR_dot {
+    struct astNode* dotExpr;
+} IR_dot;
 
-typedef struct codeLowered_declareLabel {
+typedef struct IR_declareLabel {
     struct label label;
-} codeLowered_declareLabel;
+} IR_declareLabel;
 
-typedef struct codeLowered_branchIfZero {
+typedef struct IR_branchIfZero {
     ir_id condition;
     struct label label;
-} codeLowered_branchIfZero;
+} IR_branchIfZero;
 
-typedef struct codeLowered_jump {
+typedef struct IR_jump {
     struct label label;
-} codeLowered_jump;
+} IR_jump;
 
-typedef struct codeLowered_case {
+typedef struct IR_case {
     int no_data;
-} codeLowered_case;
+} IR_case;
 
-typedef struct codeLowered_and {
+typedef struct IR_and {
     ir_id left;
     ir_id right;
-} codeLowered_and;
+} IR_and;
 
-typedef struct codeLowered_or {
+typedef struct IR_or {
     ir_id left;
     ir_id right;
-} codeLowered_or;
+} IR_or;
 
-typedef struct codeLowered_bitAnd {
+typedef struct IR_bitAnd {
     ir_id left;
     ir_id right;
-} codeLowered_bitAnd;
+} IR_bitAnd;
 
-typedef struct codeLowered_bitXor {
+typedef struct IR_bitXor {
     ir_id left;
     ir_id right;
-} codeLowered_bitXor;
+} IR_bitXor;
 
-typedef struct codeLowered_bitOr {
+typedef struct IR_bitOr {
     ir_id left;
     ir_id right;
-} codeLowered_bitOr;
+} IR_bitOr;
 
-typedef struct codeLowered_lshift {
+typedef struct IR_lshift {
     ir_id left;
     ir_id right;
-} codeLowered_lshift;
+} IR_lshift;
 
-typedef struct codeLowered_rshift {
+typedef struct IR_rshift {
     ir_id left;
     ir_id right;
-} codeLowered_rshift;
+} IR_rshift;
 
-typedef struct codeLowered_eq {
+typedef struct IR_eq {
     ir_id left;
     ir_id right;
-} codeLowered_eq;
+} IR_eq;
 
-typedef struct codeLowered_neq {
+typedef struct IR_neq {
     ir_id left;
     ir_id right;
-} codeLowered_neq;
+} IR_neq;
 
-typedef struct codeLowered_gtr {
+typedef struct IR_gtr {
     ir_id left;
     ir_id right;
-} codeLowered_gtr;
+} IR_gtr;
 
-typedef struct codeLowered_lsr {
+typedef struct IR_lsr {
     ir_id left;
     ir_id right;
-} codeLowered_lsr;
+} IR_lsr;
 
-typedef struct codeLowered_gte {
+typedef struct IR_gte {
     ir_id left;
     ir_id right;
-} codeLowered_gte;
+} IR_gte;
 
-typedef struct codeLowered_lte {
+typedef struct IR_lte {
     ir_id left;
     ir_id right;
-} codeLowered_lte;
+} IR_lte;
 
-typedef struct codeLowered_add {
+typedef struct IR_add {
     ir_id left;
     ir_id right;
-} codeLowered_add;
+} IR_add;
 
-typedef struct codeLowered_subtract {
+typedef struct IR_subtract {
     ir_id left;
     ir_id right;
-} codeLowered_subtract;
+} IR_subtract;
 
-typedef struct codeLowered_multiply {
+typedef struct IR_multiply {
     ir_id left;
     ir_id right;
-} codeLowered_multiply;
+} IR_multiply;
 
-typedef struct codeLowered_divide {
+typedef struct IR_divide {
     ir_id left;
     ir_id right;
-} codeLowered_divide;
+} IR_divide;
 
-typedef struct codeLowered_modulus {
+typedef struct IR_modulus {
     ir_id left;
     ir_id right;
-} codeLowered_modulus;
+} IR_modulus;
 
-typedef struct codeLowered_negate {
+typedef struct IR_negate {
     ir_id expr;
-} codeLowered_negate;
+} IR_negate;
 
-typedef struct codeLowered_bitNot {
+typedef struct IR_bitNot {
     ir_id expr;
-} codeLowered_bitNot;
+} IR_bitNot;
 
-typedef struct codeLowered_addrOf {
+typedef struct IR_addrOf {
     ir_id expr;
-} codeLowered_addrOf;
+} IR_addrOf;
 
-typedef struct codeLowered_deref {
+typedef struct IR_deref {
     ir_id expr;
-} codeLowered_deref;
+} IR_deref;
 
-typedef struct codeLowered_cast {
+typedef struct IR_cast {
     int no_data;
-} codeLowered_cast;
+} IR_cast;
 
-typedef struct codeLowered_call {
+typedef struct IR_call {
     int no_data;
-} codeLowered_call;
+} IR_call;
 
-typedef struct code_lowered {
+typedef struct IR {
     ir_type type;
     struct position pos;
     union {
-        codeLowered_loadIdent loadIdent;
-        codeLowered_loadInt loadInt;
-        codeLowered_loadReal loadReal;
-        codeLowered_loadString loadString;
-        codeLowered_loadChar loadChar;
-        codeLowered_loadNothing loadNothing;
-        codeLowered_loadTrue loadTrue;
-        codeLowered_loadFalse loadFalse;
-        codeLowered_loadSizeof loadSizeof;
-        codeLowered_loadArrayLiteral loadArrayLiteral;
-        codeLowered_loadStructLiteral loadStructLiteral;
-        codeLowered_declareVar declaredVar;
-        codeLowered_declareTemp declareTemp;
-        codeLowered_declareDefer declareDefer;
-        codeLowered_assignVar assignVar;
-        codeLowered_assignTemp assignTemp;
-        codeLowered_return _return;
-        codeLowered_setDefer setDefer;
-        codeLowered_index index;
-        codeLowered_slice slice;
-        codeLowered_dot dot;
-        codeLowered_declareLabel declareLabel;
-        codeLowered_branchIfZero branchIfZero;
-        codeLowered_jump jump;
-        codeLowered_case _case;
-        codeLowered_and _and;
-        codeLowered_or _or;
-        codeLowered_bitAnd bitAnd;
-        codeLowered_bitXor bitXor;
-        codeLowered_bitOr bitOr;
-        codeLowered_lshift lshift;
-        codeLowered_rshift rshift;
-        codeLowered_eq eq;
-        codeLowered_neq neq;
-        codeLowered_gtr gtr;
-        codeLowered_lsr lsr;
-        codeLowered_gte gte;
-        codeLowered_lte lte;
-        codeLowered_add add;
-        codeLowered_subtract subtract;
-        codeLowered_multiply multiply;
-        codeLowered_divide divide;
-        codeLowered_modulus modulus;
-        codeLowered_negate negate;
-        codeLowered_bitNot bitNot;
-        codeLowered_addrOf addrOf;
-        codeLowered_deref deref;
-        codeLowered_cast cast;
-        codeLowered_call call;
+        IR_loadIdent loadIdent;
+        IR_loadInt loadInt;
+        IR_loadReal loadReal;
+        IR_loadString loadString;
+        IR_loadChar loadChar;
+        IR_loadNothing loadNothing;
+        IR_loadTrue loadTrue;
+        IR_loadFalse loadFalse;
+        IR_loadSizeof loadSizeof;
+        IR_loadArrayLiteral loadArrayLiteral;
+        IR_loadStructLiteral loadStructLiteral;
+        IR_declareVar declaredVar;
+        IR_declareTemp declareTemp;
+        IR_declareDefer declareDefer;
+        IR_assignVar assignVar;
+        IR_assignTemp assignTemp;
+        IR_return _return;
+        IR_setDefer setDefer;
+        IR_getDefer getDefer;
+        IR_index index;
+        IR_slice slice;
+        IR_dot dot;
+        IR_declareLabel declareLabel;
+        IR_branchIfZero branchIfZero;
+        IR_jump jump;
+        IR_case _case;
+        IR_and _and;
+        IR_or _or;
+        IR_bitAnd bitAnd;
+        IR_bitXor bitXor;
+        IR_bitOr bitOr;
+        IR_lshift lshift;
+        IR_rshift rshift;
+        IR_eq eq;
+        IR_neq neq;
+        IR_gtr gtr;
+        IR_lsr lsr;
+        IR_gte gte;
+        IR_lte lte;
+        IR_add add;
+        IR_subtract subtract;
+        IR_multiply multiply;
+        IR_divide divide;
+        IR_modulus modulus;
+        IR_negate negate;
+        IR_bitNot bitNot;
+        IR_addrOf addrOf;
+        IR_deref deref;
+        IR_cast cast;
+        IR_call call;
     };
-} code_lowered;
+} IR;
 
 // takes a list and an ast and adds an instruction representing the ast to the list, returns id of the instruction for reference
 ir_id flatten(struct list* instructions, struct astNode* node);
 void printInstructionList(struct list* instructions);
+#endif

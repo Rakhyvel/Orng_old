@@ -19,7 +19,6 @@ static FILE* in;
 Token* prevToken;
 static List* tokens;
 // The next unique identifier used for indexing blocks
-int blockUID = 1;
 static int arrayUID = 1;
 
 static Token* accept(_TokenType type)
@@ -147,6 +146,7 @@ static ASTNode* parseArgList(SymbolNode* scope)
     return arglist;
 }
 
+static int blockUID = 1;
 ASTNode* parseBlock(SymbolNode* scope)
 {
     SymbolNode* blockScope = Symbol_Create(myItoa(blockUID++), SYMBOL_BLOCK, scope, prevToken->pos);
@@ -189,9 +189,14 @@ static ASTNode* parseIf(SymbolNode* scope)
 
 static ASTNode* parseFor(SymbolNode* scope)
 {
+    // Create a new scope so that pre is visible
+    SymbolNode* blockScope = Symbol_Create(myItoa(blockUID++), SYMBOL_BLOCK, scope, prevToken->pos);
+    ASTNode* block = AST_Create_block(blockScope, scope, prevToken->pos);
+    blockScope->def = block;
+
     ASTNode* pre = NULL;
     if (!accept(TOKEN_SEMICOLON)) {
-        pre = parseStatement(NULL);
+        pre = parseStatement(blockScope);
     }
     ASTNode* condition = NULL;
     ASTNode* post = NULL;
@@ -199,7 +204,7 @@ static ASTNode* parseFor(SymbolNode* scope)
     ASTNode* elseBlock = NULL;
 
     if (pre && accept(TOKEN_LBRACE)) {
-        body = parseBlock(scope);
+        body = parseBlock(blockScope);
         body->block.symbol->isLoop = true;
         condition = pre;
         pre = NULL;
@@ -208,16 +213,16 @@ static ASTNode* parseFor(SymbolNode* scope)
             expect(TOKEN_SEMICOLON);
         }
         if (!accept(TOKEN_SEMICOLON)) {
-            condition = parseStatement(NULL);
+            condition = parseStatement(blockScope);
             expect(TOKEN_SEMICOLON);
         }
         post = NULL;
         if (!accept(TOKEN_LBRACE)) {
-            post = parseStatement(NULL);
+            post = parseStatement(blockScope);
             expect(TOKEN_LBRACE);
         }
 
-        body = parseBlock(scope);
+        body = parseBlock(blockScope);
         body->block.symbol->isLoop = true;
     }
 
@@ -233,7 +238,7 @@ static ASTNode* parseFor(SymbolNode* scope)
 
     if (accept(TOKEN_ELSE)) {
         expect(TOKEN_LBRACE);
-        elseBlock = parseBlock(scope);
+        elseBlock = parseBlock(blockScope);
     } else {
         elseBlock = AST_Create_undef(scope, prevToken->pos);
     }
@@ -411,7 +416,7 @@ static ASTNode* parsePrefix(SymbolNode* scope)
     if ((token = accept(TOKEN_EMARK)) != NULL) {
         prefix = AST_Create_not(parsePrefix(scope), scope, token->pos);
     } else if ((token = accept(TOKEN_AMPERSAND)) != NULL) {
-        prefix = AST_Create_addr(parsePrefix(scope), scope, token->pos);
+        prefix = AST_Create_addrOf(parsePrefix(scope), scope, token->pos);
     } else if ((token = accept(TOKEN_STAR)) != NULL) {
         prefix = AST_Create_deref(parsePrefix(scope), scope, token->pos);
     } else if ((token = accept(TOKEN_MINUS)) != NULL) {
@@ -722,6 +727,7 @@ ASTNode* parseDefine(SymbolNode* scope, bool isPublic)
         symbol->pos = merge(symbol->pos, type->pos);
     } else {
         type = AST_Create_undef(scope, prevToken->pos);
+        type->isConst |= isConst;
     }
 
     if (symbol->symbolType == SYMBOL_TYPE && symbol->name[0] >= 'a' && symbol->name[0] <= 'z') {
@@ -730,6 +736,8 @@ ASTNode* parseDefine(SymbolNode* scope, bool isPublic)
 
     if (inferType || accept(TOKEN_ASSIGN)) {
         if (symbol->symbolType == SYMBOL_MODULE || symbol->symbolType == SYMBOL_PACKAGE) {
+            def = parseType(symbol, false);
+        } else if (symbol->symbolType == SYMBOL_MODULE) {
             def = parseType(symbol, false);
         } else if (symbol->symbolType == SYMBOL_TYPE) {
             def = parseType(symbol, true);

@@ -31,6 +31,10 @@ const ASTNode* TYPE_TYPE = NULL;
 const ASTNode* UNDEF_TYPE = NULL;
 const ASTNode* VOID_ADDR_TYPE = NULL;
 
+const ASTNode* TRUE_AST = NULL;
+const ASTNode* FALSE_AST = NULL;
+const ASTNode* NOTHING_AST = NULL;
+
 bool doDefTypes = false;
 
 // Generates common ptr-to-array types
@@ -85,6 +89,9 @@ void AST_Init()
     UNDEF_TYPE = AST_Create_undef(NULL, (Position) { NULL, 0, 0, 0 });
     VOID_ADDR_TYPE = AST_Create_addr(AST_Create_paramlist(NULL, (Position) { NULL, 0, 0, 0 }), NULL, (Position) { NULL, 0, 0, 0 });
     ENUM_TYPE = AST_Create_ident("Enum", NULL, (Position) { NULL, 0, 0, 0 });
+    TRUE_AST = AST_Create_true(NULL, (Position) { NULL, 0, 0, 0 });
+    FALSE_AST = AST_Create_false(NULL, (Position) { NULL, 0, 0, 0 });
+    NOTHING_AST = AST_Create_nothing(NULL, (Position) { NULL, 0, 0, 0 });
 }
 
 /*
@@ -105,8 +112,6 @@ ASTNode* AST_Create(enum astType type, SymbolNode* scope, struct position pos)
     retval->astType = type;
     retval->scope = scope;
     retval->pos = pos;
-    retval->visited = false;
-    retval->type = NULL;
     return retval;
 }
 
@@ -120,8 +125,8 @@ ASTNode* AST_Create_ident(char* data, struct symbolNode* scope, struct position 
 ASTNode* AST_Create_call(struct astNode* functionExpr, struct astNode* arglist, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_CALL, scope, pos);
-    retval->binop.left = functionExpr;
-    retval->binop.right = arglist;
+    retval->call.left = functionExpr;
+    retval->call.right = arglist;
     return retval;
 }
 
@@ -139,7 +144,7 @@ ASTNode* AST_Create_string(char* data, struct symbolNode* scope, struct position
     return retval;
 }
 
-ASTNode* AST_Create_char(char data, struct symbolNode* scope, struct position pos)
+ASTNode* AST_Create_char(char* data, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_CHAR, scope, pos);
     retval->_char.data = data;
@@ -278,6 +283,13 @@ ASTNode* AST_Create_slice(struct astNode* arrayExpr, struct astNode* lowerBound,
 ASTNode* AST_Create_not(struct astNode* expr, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_NOT, scope, pos);
+    retval->unop.expr = expr;
+    return retval;
+}
+
+ASTNode* AST_Create_addrOf(struct astNode* expr, struct symbolNode* scope, struct position pos)
+{
+    ASTNode* retval = AST_Create(AST_ADDROF, scope, pos);
     retval->unop.expr = expr;
     return retval;
 }
@@ -577,8 +589,8 @@ ASTNode* AST_Create_continue(struct symbolNode* scope, struct position pos)
 ASTNode* AST_Create_dot(struct astNode* container, struct astNode* identifier, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_DOT, scope, pos);
-    retval->binop.left = container;
-    retval->binop.right = identifier;
+    retval->dot.left = container;
+    retval->dot.right = identifier;
     return retval;
 }
 
@@ -727,12 +739,8 @@ int AST_TypeRepr(char* str, ASTNode* type)
     case AST_ADDR: {
         ASTNode* child = type->unop.expr;
         str += sprintf(str, "&");
-        if (child->visited) {
-            str += sprintf(str, "..");
-        } else {
-            child->visited = true;
-            str += AST_TypeRepr(str, child);
-        }
+        str += sprintf(str, "..");
+        // str += AST_TypeRepr(str, child);
     } break;
     case AST_ARRAY: {
         ASTNode* lengthDefine = List_Get(type->paramlist.defines, 0);

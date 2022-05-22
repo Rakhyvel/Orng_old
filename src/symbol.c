@@ -32,6 +32,7 @@ struct symbolNode* Symbol_Create(char* name, SymbolType symbolType, struct symbo
     retval->restrictions = List_Create();
     retval->defers = List_Create();
     retval->pos = pos;
+    retval->isReachable = true;
 
     strncpy_s(retval->name, 255, name, 254);
     if (parent != NULL) {

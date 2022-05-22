@@ -2,8 +2,11 @@
 #include "../util/debug.h"
 #include "../util/list.h"
 #include "ast.h"
+#include "parse.h"
 #include <stdio.h>
 #include <stdlib.h>
+
+int blockUID = 1;
 
 ir_id getID(struct list* instructions)
 {
@@ -22,7 +25,7 @@ struct label createLabel(enum labelType labelType, char* name)
 ir_id add_loadIdent(List* instructions, char* name, struct symbolNode* scope, struct position pos)
 {
     ir_id id = getID(instructions);
-    code_lowered* retval = (code_lowered*)calloc(sizeof(code_lowered), 1);
+    IR* retval = (IR*)calloc(sizeof(IR), 1);
     retval->type = IR_LOAD_IDENT;
     retval->pos = pos;
     retval->loadIdent.name = name;
@@ -34,7 +37,7 @@ ir_id add_loadIdent(List* instructions, char* name, struct symbolNode* scope, st
 ir_id add_loadInt(List* instructions, int64_t data, struct position pos)
 {
     ir_id id = getID(instructions);
-    code_lowered* retval = (code_lowered*)calloc(sizeof(code_lowered), 1);
+    IR* retval = (IR*)calloc(sizeof(IR), 1);
     retval->type = IR_LOAD_INT;
     retval->pos = pos;
     retval->loadInt.data = data;
@@ -45,7 +48,7 @@ ir_id add_loadInt(List* instructions, int64_t data, struct position pos)
 ir_id add_loadString(List* instructions, char* data, struct position pos)
 {
     ir_id id = getID(instructions);
-    code_lowered* retval = (code_lowered*)calloc(sizeof(code_lowered), 1);
+    IR* retval = (IR*)calloc(sizeof(IR), 1);
     retval->type = IR_LOAD_STRING;
     retval->pos = pos;
     retval->loadString.data = data;
@@ -56,7 +59,7 @@ ir_id add_loadString(List* instructions, char* data, struct position pos)
 ir_id add_loadChar(List* instructions, char data, struct position pos)
 {
     ir_id id = getID(instructions);
-    code_lowered* retval = (code_lowered*)calloc(sizeof(code_lowered), 1);
+    IR* retval = (IR*)calloc(sizeof(IR), 1);
     retval->type = IR_LOAD_CHAR;
     retval->pos = pos;
     retval->loadChar.data = data;
@@ -67,7 +70,7 @@ ir_id add_loadChar(List* instructions, char data, struct position pos)
 ir_id add_loadReal(List* instructions, char data, struct position pos)
 {
     ir_id id = getID(instructions);
-    code_lowered* retval = (code_lowered*)calloc(sizeof(code_lowered), 1);
+    IR* retval = (IR*)calloc(sizeof(IR), 1);
     retval->type = IR_LOAD_REAL;
     retval->pos = pos;
     retval->loadChar.data = data;
@@ -78,7 +81,7 @@ ir_id add_loadReal(List* instructions, char data, struct position pos)
 ir_id add_loadNothing(List* instructions, struct position pos)
 {
     ir_id id = getID(instructions);
-    code_lowered* retval = (code_lowered*)calloc(sizeof(code_lowered), 1);
+    IR* retval = (IR*)calloc(sizeof(IR), 1);
     retval->type = IR_LOAD_NOTHING;
     retval->pos = pos;
     List_Append(instructions, retval);
@@ -88,7 +91,7 @@ ir_id add_loadNothing(List* instructions, struct position pos)
 ir_id add_loadTrue(List* instructions, struct position pos)
 {
     ir_id id = getID(instructions);
-    code_lowered* retval = (code_lowered*)calloc(sizeof(code_lowered), 1);
+    IR* retval = (IR*)calloc(sizeof(IR), 1);
     retval->type = IR_LOAD_TRUE;
     retval->pos = pos;
     List_Append(instructions, retval);
@@ -98,7 +101,7 @@ ir_id add_loadTrue(List* instructions, struct position pos)
 ir_id add_loadFalse(List* instructions, struct position pos)
 {
     ir_id id = getID(instructions);
-    code_lowered* retval = (code_lowered*)calloc(sizeof(code_lowered), 1);
+    IR* retval = (IR*)calloc(sizeof(IR), 1);
     retval->type = IR_LOAD_FALSE;
     retval->pos = pos;
     List_Append(instructions, retval);
@@ -108,7 +111,7 @@ ir_id add_loadFalse(List* instructions, struct position pos)
 ir_id add_loadSizeOf(List* instructions, struct astNode* type, struct position pos)
 {
     ir_id id = getID(instructions);
-    code_lowered* retval = (code_lowered*)calloc(sizeof(code_lowered), 1);
+    IR* retval = (IR*)calloc(sizeof(IR), 1);
     retval->type = IR_LOAD_SIZEOF;
     retval->pos = pos;
     retval->loadSizeof.type = type;
@@ -119,7 +122,7 @@ ir_id add_loadSizeOf(List* instructions, struct astNode* type, struct position p
 ir_id add_loadArrayLiteral(List* instructions, List* members, struct position pos)
 {
     ir_id id = getID(instructions);
-    code_lowered* retval = (code_lowered*)calloc(sizeof(code_lowered), 1);
+    IR* retval = (IR*)calloc(sizeof(IR), 1);
     retval->type = IR_LOAD_ARRAY_LITERAL;
     retval->pos = pos;
     retval->loadArrayLiteral.members = members;
@@ -130,7 +133,7 @@ ir_id add_loadArrayLiteral(List* instructions, List* members, struct position po
 ir_id add_loadStructLiteral(List* instructions, List* args, struct position pos)
 {
     ir_id id = getID(instructions);
-    code_lowered* retval = (code_lowered*)calloc(sizeof(code_lowered), 1);
+    IR* retval = (IR*)calloc(sizeof(IR), 1);
     retval->type = IR_LOAD_STRUCT_LITERAL;
     retval->pos = pos;
     retval->loadStructLiteral.args = args;
@@ -141,7 +144,7 @@ ir_id add_loadStructLiteral(List* instructions, List* args, struct position pos)
 ir_id add_declareTemp(List* instructions, struct position pos)
 {
     ir_id id = getID(instructions);
-    code_lowered* retval = (code_lowered*)calloc(sizeof(code_lowered), 1);
+    IR* retval = (IR*)calloc(sizeof(IR), 1);
     retval->type = IR_DECLARE_TEMP;
     retval->pos = pos;
     List_Append(instructions, retval);
@@ -151,7 +154,7 @@ ir_id add_declareTemp(List* instructions, struct position pos)
 ir_id add_declareDefer(List* instructions, int deferID, char* symbolName, struct position pos)
 {
     ir_id id = getID(instructions);
-    code_lowered* retval = (code_lowered*)calloc(sizeof(code_lowered), 1);
+    IR* retval = (IR*)calloc(sizeof(IR), 1);
     retval->type = IR_DECLARE_DEFER;
     retval->pos = pos;
     retval->declareDefer.deferID = deferID;
@@ -163,7 +166,7 @@ ir_id add_declareDefer(List* instructions, int deferID, char* symbolName, struct
 ir_id add_assignTemp(List* instructions, ir_id dst, ir_id src, struct position pos)
 {
     ir_id id = getID(instructions);
-    code_lowered* retval = (code_lowered*)calloc(sizeof(code_lowered), 1);
+    IR* retval = (IR*)calloc(sizeof(IR), 1);
     retval->type = IR_ASSIGN_TEMP;
     retval->pos = pos;
     retval->assignTemp.dst = dst;
@@ -175,7 +178,7 @@ ir_id add_assignTemp(List* instructions, ir_id dst, ir_id src, struct position p
 ir_id add_return(List* instructions, ir_id expr, struct position pos)
 {
     ir_id id = getID(instructions);
-    code_lowered* retval = (code_lowered*)calloc(sizeof(code_lowered), 1);
+    IR* retval = (IR*)calloc(sizeof(IR), 1);
     retval->type = IR_RETURN;
     retval->pos = pos;
     retval->_return.expr = expr;
@@ -186,7 +189,19 @@ ir_id add_return(List* instructions, ir_id expr, struct position pos)
 ir_id add_setDefer(List* instructions, int deferID, char* symbolName, struct position pos)
 {
     ir_id id = getID(instructions);
-    code_lowered* retval = (code_lowered*)calloc(sizeof(code_lowered), 1);
+    IR* retval = (IR*)calloc(sizeof(IR), 1);
+    retval->type = IR_SET_DEFER;
+    retval->pos = pos;
+    retval->setDefer.deferID = deferID;
+    retval->setDefer.symbolName = symbolName;
+    List_Append(instructions, retval);
+    return id;
+}
+
+ir_id add_getDefer(List* instructions, int deferID, char* symbolName, struct position pos)
+{
+    ir_id id = getID(instructions);
+    IR* retval = (IR*)calloc(sizeof(IR), 1);
     retval->type = IR_SET_DEFER;
     retval->pos = pos;
     retval->setDefer.deferID = deferID;
@@ -198,7 +213,7 @@ ir_id add_setDefer(List* instructions, int deferID, char* symbolName, struct pos
 ir_id add_index(List* instructions, ir_id arrExprID, ir_id subscriptID, struct position pos)
 {
     ir_id id = getID(instructions);
-    code_lowered* retval = (code_lowered*)calloc(sizeof(code_lowered), 1);
+    IR* retval = (IR*)calloc(sizeof(IR), 1);
     retval->type = IR_INDEX;
     retval->pos = pos;
     retval->index.arrExprID = arrExprID;
@@ -210,7 +225,7 @@ ir_id add_index(List* instructions, ir_id arrExprID, ir_id subscriptID, struct p
 ir_id add_slice(List* instructions, ir_id arrExprID, ir_id lowerBoundID, ir_id upperBoundID, struct position pos)
 {
     ir_id id = getID(instructions);
-    code_lowered* retval = (code_lowered*)calloc(sizeof(code_lowered), 1);
+    IR* retval = (IR*)calloc(sizeof(IR), 1);
     retval->type = IR_SLICE;
     retval->pos = pos;
     retval->slice.arrExprID = arrExprID;
@@ -220,14 +235,13 @@ ir_id add_slice(List* instructions, ir_id arrExprID, ir_id lowerBoundID, ir_id u
     return id;
 }
 
-ir_id add_dot(List* instructions, ir_id leftID, char* identifier, struct position pos)
+ir_id add_dot(List* instructions, ASTNode* dotExpr, struct position pos)
 {
     ir_id id = getID(instructions);
-    code_lowered* retval = (code_lowered*)calloc(sizeof(code_lowered), 1);
+    IR* retval = (IR*)calloc(sizeof(IR), 1);
     retval->type = IR_DOT;
     retval->pos = pos;
-    retval->dot.leftID = leftID;
-    retval->dot.identifier = identifier;
+    retval->dot.dotExpr = dotExpr;
     List_Append(instructions, retval);
     return id;
 }
@@ -235,7 +249,7 @@ ir_id add_dot(List* instructions, ir_id leftID, char* identifier, struct positio
 ir_id add_declareLabel(List* instructions, struct label label, struct position pos)
 {
     ir_id id = getID(instructions);
-    code_lowered* retval = (code_lowered*)calloc(sizeof(code_lowered), 1);
+    IR* retval = (IR*)calloc(sizeof(IR), 1);
     retval->type = IR_DECLARE_LABEL;
     retval->pos = pos;
     retval->declareLabel.label = label;
@@ -246,7 +260,7 @@ ir_id add_declareLabel(List* instructions, struct label label, struct position p
 ir_id add_branchIfZero(List* instructions, ir_id condition, struct label label, struct position pos)
 {
     ir_id id = getID(instructions);
-    code_lowered* retval = (code_lowered*)calloc(sizeof(code_lowered), 1);
+    IR* retval = (IR*)calloc(sizeof(IR), 1);
     retval->type = IR_BRANCH_IF_ZERO;
     retval->pos = pos;
     retval->branchIfZero.condition = condition;
@@ -258,7 +272,7 @@ ir_id add_branchIfZero(List* instructions, ir_id condition, struct label label, 
 ir_id add_jump(List* instructions, struct label label, struct position pos)
 {
     ir_id id = getID(instructions);
-    code_lowered* retval = (code_lowered*)calloc(sizeof(code_lowered), 1);
+    IR* retval = (IR*)calloc(sizeof(IR), 1);
     retval->type = IR_JUMP;
     retval->pos = pos;
     retval->jump.label = label;
@@ -269,7 +283,7 @@ ir_id add_jump(List* instructions, struct label label, struct position pos)
 ir_id add_and(List* instructions, ir_id left, ir_id right, struct position pos)
 {
     ir_id id = getID(instructions);
-    code_lowered* retval = (code_lowered*)calloc(sizeof(code_lowered), 1);
+    IR* retval = (IR*)calloc(sizeof(IR), 1);
     retval->type = IR_AND;
     retval->pos = pos;
     retval->add.left = left;
@@ -281,7 +295,7 @@ ir_id add_and(List* instructions, ir_id left, ir_id right, struct position pos)
 ir_id add_or(List* instructions, ir_id left, ir_id right, struct position pos)
 {
     ir_id id = getID(instructions);
-    code_lowered* retval = (code_lowered*)calloc(sizeof(code_lowered), 1);
+    IR* retval = (IR*)calloc(sizeof(IR), 1);
     retval->type = IR_OR;
     retval->pos = pos;
     retval->add.left = left;
@@ -293,7 +307,7 @@ ir_id add_or(List* instructions, ir_id left, ir_id right, struct position pos)
 ir_id add_bitAnd(List* instructions, ir_id left, ir_id right, struct position pos)
 {
     ir_id id = getID(instructions);
-    code_lowered* retval = (code_lowered*)calloc(sizeof(code_lowered), 1);
+    IR* retval = (IR*)calloc(sizeof(IR), 1);
     retval->type = IR_BIT_AND;
     retval->pos = pos;
     retval->add.left = left;
@@ -305,7 +319,7 @@ ir_id add_bitAnd(List* instructions, ir_id left, ir_id right, struct position po
 ir_id add_bitXor(List* instructions, ir_id left, ir_id right, struct position pos)
 {
     ir_id id = getID(instructions);
-    code_lowered* retval = (code_lowered*)calloc(sizeof(code_lowered), 1);
+    IR* retval = (IR*)calloc(sizeof(IR), 1);
     retval->type = IR_BIT_XOR;
     retval->pos = pos;
     retval->add.left = left;
@@ -317,7 +331,7 @@ ir_id add_bitXor(List* instructions, ir_id left, ir_id right, struct position po
 ir_id add_bitOr(List* instructions, ir_id left, ir_id right, struct position pos)
 {
     ir_id id = getID(instructions);
-    code_lowered* retval = (code_lowered*)calloc(sizeof(code_lowered), 1);
+    IR* retval = (IR*)calloc(sizeof(IR), 1);
     retval->type = IR_BIT_OR;
     retval->pos = pos;
     retval->add.left = left;
@@ -329,7 +343,7 @@ ir_id add_bitOr(List* instructions, ir_id left, ir_id right, struct position pos
 ir_id add_lshift(List* instructions, ir_id left, ir_id right, struct position pos)
 {
     ir_id id = getID(instructions);
-    code_lowered* retval = (code_lowered*)calloc(sizeof(code_lowered), 1);
+    IR* retval = (IR*)calloc(sizeof(IR), 1);
     retval->type = IR_LSHIFT;
     retval->pos = pos;
     retval->add.left = left;
@@ -341,7 +355,7 @@ ir_id add_lshift(List* instructions, ir_id left, ir_id right, struct position po
 ir_id add_rshift(List* instructions, ir_id left, ir_id right, struct position pos)
 {
     ir_id id = getID(instructions);
-    code_lowered* retval = (code_lowered*)calloc(sizeof(code_lowered), 1);
+    IR* retval = (IR*)calloc(sizeof(IR), 1);
     retval->type = IR_RSHIFT;
     retval->pos = pos;
     retval->add.left = left;
@@ -353,7 +367,7 @@ ir_id add_rshift(List* instructions, ir_id left, ir_id right, struct position po
 ir_id add_eq(List* instructions, ir_id left, ir_id right, struct position pos)
 {
     ir_id id = getID(instructions);
-    code_lowered* retval = (code_lowered*)calloc(sizeof(code_lowered), 1);
+    IR* retval = (IR*)calloc(sizeof(IR), 1);
     retval->type = IR_EQ;
     retval->pos = pos;
     retval->add.left = left;
@@ -365,7 +379,7 @@ ir_id add_eq(List* instructions, ir_id left, ir_id right, struct position pos)
 ir_id add_neq(List* instructions, ir_id left, ir_id right, struct position pos)
 {
     ir_id id = getID(instructions);
-    code_lowered* retval = (code_lowered*)calloc(sizeof(code_lowered), 1);
+    IR* retval = (IR*)calloc(sizeof(IR), 1);
     retval->type = IR_NEQ;
     retval->pos = pos;
     retval->add.left = left;
@@ -377,7 +391,7 @@ ir_id add_neq(List* instructions, ir_id left, ir_id right, struct position pos)
 ir_id add_gtr(List* instructions, ir_id left, ir_id right, struct position pos)
 {
     ir_id id = getID(instructions);
-    code_lowered* retval = (code_lowered*)calloc(sizeof(code_lowered), 1);
+    IR* retval = (IR*)calloc(sizeof(IR), 1);
     retval->type = IR_GTR;
     retval->pos = pos;
     retval->add.left = left;
@@ -389,7 +403,7 @@ ir_id add_gtr(List* instructions, ir_id left, ir_id right, struct position pos)
 ir_id add_lsr(List* instructions, ir_id left, ir_id right, struct position pos)
 {
     ir_id id = getID(instructions);
-    code_lowered* retval = (code_lowered*)calloc(sizeof(code_lowered), 1);
+    IR* retval = (IR*)calloc(sizeof(IR), 1);
     retval->type = IR_LSR;
     retval->pos = pos;
     retval->add.left = left;
@@ -401,7 +415,7 @@ ir_id add_lsr(List* instructions, ir_id left, ir_id right, struct position pos)
 ir_id add_gte(List* instructions, ir_id left, ir_id right, struct position pos)
 {
     ir_id id = getID(instructions);
-    code_lowered* retval = (code_lowered*)calloc(sizeof(code_lowered), 1);
+    IR* retval = (IR*)calloc(sizeof(IR), 1);
     retval->type = IR_GTE;
     retval->pos = pos;
     retval->add.left = left;
@@ -413,7 +427,7 @@ ir_id add_gte(List* instructions, ir_id left, ir_id right, struct position pos)
 ir_id add_lte(List* instructions, ir_id left, ir_id right, struct position pos)
 {
     ir_id id = getID(instructions);
-    code_lowered* retval = (code_lowered*)calloc(sizeof(code_lowered), 1);
+    IR* retval = (IR*)calloc(sizeof(IR), 1);
     retval->type = IR_LTE;
     retval->pos = pos;
     retval->add.left = left;
@@ -425,7 +439,7 @@ ir_id add_lte(List* instructions, ir_id left, ir_id right, struct position pos)
 ir_id add_add(List* instructions, ir_id left, ir_id right, struct position pos)
 {
     ir_id id = getID(instructions);
-    code_lowered* retval = (code_lowered*)calloc(sizeof(code_lowered), 1);
+    IR* retval = (IR*)calloc(sizeof(IR), 1);
     retval->type = IR_ADD;
     retval->pos = pos;
     retval->add.left = left;
@@ -437,7 +451,7 @@ ir_id add_add(List* instructions, ir_id left, ir_id right, struct position pos)
 ir_id add_subtract(List* instructions, ir_id left, ir_id right, struct position pos)
 {
     ir_id id = getID(instructions);
-    code_lowered* retval = (code_lowered*)calloc(sizeof(code_lowered), 1);
+    IR* retval = (IR*)calloc(sizeof(IR), 1);
     retval->type = IR_SUBTRACT;
     retval->pos = pos;
     retval->add.left = left;
@@ -449,7 +463,7 @@ ir_id add_subtract(List* instructions, ir_id left, ir_id right, struct position 
 ir_id add_multiply(List* instructions, ir_id left, ir_id right, struct position pos)
 {
     ir_id id = getID(instructions);
-    code_lowered* retval = (code_lowered*)calloc(sizeof(code_lowered), 1);
+    IR* retval = (IR*)calloc(sizeof(IR), 1);
     retval->type = IR_MULTIPLY;
     retval->pos = pos;
     retval->add.left = left;
@@ -461,7 +475,7 @@ ir_id add_multiply(List* instructions, ir_id left, ir_id right, struct position 
 ir_id add_divide(List* instructions, ir_id left, ir_id right, struct position pos)
 {
     ir_id id = getID(instructions);
-    code_lowered* retval = (code_lowered*)calloc(sizeof(code_lowered), 1);
+    IR* retval = (IR*)calloc(sizeof(IR), 1);
     retval->type = IR_DIVIDE;
     retval->pos = pos;
     retval->add.left = left;
@@ -473,7 +487,7 @@ ir_id add_divide(List* instructions, ir_id left, ir_id right, struct position po
 ir_id add_modulus(List* instructions, ir_id left, ir_id right, struct position pos)
 {
     ir_id id = getID(instructions);
-    code_lowered* retval = (code_lowered*)calloc(sizeof(code_lowered), 1);
+    IR* retval = (IR*)calloc(sizeof(IR), 1);
     retval->type = IR_MODULUS;
     retval->pos = pos;
     retval->add.left = left;
@@ -493,6 +507,7 @@ ir_id flatten(struct list* instructions, struct astNode* node)
     case AST_BLOCK: {
         List_Push(blockStack, node);
         SymbolNode* symbolTree = node->block.symbol;
+        strncpy(symbolTree->name, myItoa(blockUID++), 255);
 
         for (int i = 0; i < symbolTree->defers->size; i++) {
             add_declareDefer(instructions, i, symbolTree->name, node->pos);
@@ -506,7 +521,29 @@ ir_id flatten(struct list* instructions, struct astNode* node)
         }
         List_Pop(blockStack);
 
-		// TODO: generate defers
+        struct label returnLabel = createLabel(LABEL_RETURN, symbolTree->name);
+        struct label breakLabel = createLabel(LABEL_BREAK, symbolTree->name);
+        struct label continueLabel = createLabel(LABEL_CONTINUE, symbolTree->name);
+        struct label endLabel = createLabel(LABEL_END, symbolTree->name);
+        if (!List_IsEmpty(blockStack) && (node->containsReturn || node->containsContinue || node->containsBreak) && symbolTree->defers->size > 0) {
+            add_jump(instructions, continueLabel, node->pos);
+            if (node->containsReturn) {
+                add_declareLabel(instructions, returnLabel, node->pos);
+                // TODO: generate defers
+                ASTNode* parentBlock = List_Peek(blockStack);
+                SymbolNode* parentSymbol = parentBlock->block.symbol;
+                struct label parentReturnLabel = createLabel(LABEL_RETURN, parentSymbol);
+                add_jump(instructions, parentReturnLabel, node->pos);
+            }
+
+            if (node->containsBreak) {
+                add_declareLabel(instructions, breakLabel, node->pos);
+                // TODO: generate defers
+                add_jump(instructions, endLabel, node->pos);
+            }
+            add_declareLabel(instructions, continueLabel, node->pos);
+            // TODO: generate defers
+        }
 
         return lastID;
     }
@@ -597,6 +634,9 @@ ir_id flatten(struct list* instructions, struct astNode* node)
         add_jump(instructions, continueLabel, node->pos);
         return -1;
     }
+    case AST_DEFINE: {
+
+	}
     case AST_DEFER: {
         return add_setDefer(instructions, node->defer.deferID, node->scope->name, node->pos);
     }
@@ -677,12 +717,7 @@ ir_id flatten(struct list* instructions, struct astNode* node)
         return add_slice(instructions, arrExprID, lowerBoundID, upperBoundID, node->pos);
     }
     case AST_DOT: {
-        ASTNode* left = node->binop.left;
-        ASTNode* identifier = node->binop.right;
-
-        ASTNode* leftID = flatten(instructions, left);
-
-        return add_dot(instructions, leftID, identifier->ident.data, node->pos);
+        return add_dot(instructions, node, node->pos);
     }
     case AST_AND: {
         ASTNode* left = node->binop.left;
@@ -838,7 +873,7 @@ void printInstructionList(struct list* instructions)
     ListElem* elem = List_Begin(instructions);
     int i = 0;
     for (; elem != List_End(instructions); elem = elem->next, i++) {
-        code_lowered* instruction = (code_lowered*)elem->data;
+        IR* instruction = (IR*)elem->data;
         printf("%d ", i);
         switch (instruction->type) {
         case IR_LOAD_IDENT: {
@@ -922,7 +957,7 @@ void printInstructionList(struct list* instructions)
             break;
         }
         case IR_DOT: {
-            printf("IR_DOT %d.%s", instruction->dot.leftID, instruction->dot.identifier);
+            printf("IR_DOT");
             break;
         }
         case IR_DECLARE_LABEL: {
