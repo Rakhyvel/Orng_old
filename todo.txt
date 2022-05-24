@@ -270,22 +270,11 @@ x imitation LLVM
 	x shorten stdlib to std
 	x rework restrictions to only restrict sibling symbols. Error if a symbol is not a sibling?
 	x find a way to make multi line strings, the way I have it now isnt tokenizable line-by-line
-- Rework the compiler to be better [ast-union-type]
+x Rework the compiler to be better [ast-union-type]
 	x case/mapping rather than switch/case
 	x use a union for AST Nodes, like you would if you were to rewrite this in Orng
 		x create function to create an AST for every possible AST type
 		x no more guessing the child element in a list! Can now just use it
-	- convert AST to IR before, evaluate this, then 1:1 generate it out
-		1. For each symbol, flatten it's AST definition to an untyped IR list
-			- IR instructions should have a union with the different instructions too, like ASTs
-		2. perform semantic analysis on the untyped IR list
-			- Two different types for untyped IR instr and analyzed IR instr
-			- Have a function that takes in untyped IR, analyzes it, emits an error or returns the new analyzed IR
-			- untyped IRs have ptrs to the analyzed IR, so that IRs that refered to the untyped version can get the typed version
-	- ASTs will likely not be typed, however, types will always be represented with ASTs I think
-	- analyzed IR instructions probably will be typed, if they can be
-	- make types expressions so that you can return them!
-	- only comptime const expr in modules, packages ARE modules, no Package type
 - unions like in julia and haskell
 	- Only practical uses are Either, and Maybe. Either is only ever used to pass error messages
 	- Tagged union and enums
@@ -331,7 +320,7 @@ x imitation LLVM
 		- may need to write out grammar for this to work, but after this is should be pretty much solidified
 	- if comptime, acts as generics
 	- if runtime, a separate function is "stamped" and memoized, this function is called
-	- allocators with free and new methods that take in addrs and types, replace free and new
+	- rewrite util data structures to be generic
 - interfaces (traits in rust https://theburningmonk.com/2015/05/rust-memory-safety-without-gc/)
 	- https://www.nmichaels.org/zig/interfaces.html interfaces in Zig
 		- compose an interface within each struct
@@ -363,14 +352,9 @@ x imitation LLVM
 	- maybe a post condition built in expression for like "|< no IO output happened during this function"
 	- conceptually, |> evaluates itself, then evaluates child
 	- |< evaluates its child at the end of the chain, captures it and performs condition
-- quantifiers from Alloy- or maybe these would be better as interfaces?
-	- basically just iterators, use interface above
-	- should be expressions, generate as a function call
-	- for x : X  {}		# for each loop
-	- all x : X, P		# all x in X satisfy P
-	- some x : X, P		# one or more x in X satisfy P
-- LLVM (?)
-- @attributes
+- allocators and IO 'monads'
+- immutability
+- @attributes, then test suite
 	- define a type, can then congregate those symbols at compiletime in an array
 	- global namespace? or maybe a separate namespace from other identifiers
 	- @[stdlib.main] for main function
@@ -397,7 +381,6 @@ x imitation LLVM
 				}
 			}
 		}
-- rewrite in Orng
 - `if let` from zig or odin or whatever
 	// Wrap if in a separate scope
 	if node := isASTStateful(symbol->def); node != NULL && symbol.symbolType == SYMBOL_FUNCTION {
@@ -405,8 +388,12 @@ x imitation LLVM
 	} else if node % 2 != 0 {
 		
 	}
-
-	
+- quantifiers from Alloy- or maybe these would be better as interfaces?
+	- basically just iterators, use interface above
+	- should be expressions, generate as a function call
+	- for x : X  {}		# for each loop
+	- all x : X, P		# all x in X satisfy P
+	- some x : X, P		# one or more x in X satisfy P
 
 
 
