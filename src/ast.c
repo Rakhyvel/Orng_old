@@ -178,6 +178,14 @@ ASTNode* AST_Create_arrayLiteral(struct symbolNode* scope, struct position pos)
     return retval;
 }
 
+ASTNode* AST_Create_unionLiteral(int tag, struct astNode* expr, struct symbolNode* scope, struct position pos)
+{
+    ASTNode* retval = AST_Create(AST_UNION_LITERAL, scope, pos);
+    retval->unionLiteral.tag = tag;
+    retval->unionLiteral.expr = expr;
+    return retval;
+}
+
 ASTNode* AST_Create_true(struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_TRUE, scope, pos);
@@ -622,6 +630,13 @@ ASTNode* AST_Create_paramlist(struct symbolNode* scope, struct position pos)
     return retval;
 }
 
+ASTNode* AST_Create_unionset(struct symbolNode* scope, struct position pos)
+{
+    ASTNode* retval = AST_Create(AST_UNIONSET, scope, pos);
+    retval->paramlist.defines = List_Create();
+    return retval;
+}
+
 ASTNode* AST_Create_array(struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_ARRAY, scope, pos);
@@ -722,6 +737,18 @@ int AST_TypeRepr(char* str, ASTNode* type)
             ASTNode* param = elem->data;
             str += AST_TypeRepr(str, param);
             if (elem->next == List_End(type->paramlist.defines)) {
+                str += sprintf(str, ")");
+            } else {
+                str += sprintf(str, ", ");
+            }
+        }
+        break;
+    case AST_UNIONSET:
+        str += sprintf(str, "(|");
+        for (struct listElem* elem = List_Begin(type->unionset.defines); elem != List_End(type->unionset.defines); elem = elem->next) {
+            ASTNode* param = elem->data;
+            str += AST_TypeRepr(str, param);
+            if (elem->next == List_End(type->unionset.defines)) {
                 str += sprintf(str, ")");
             } else {
                 str += sprintf(str, ", ");
@@ -911,8 +938,6 @@ char* AST_GetString(enum astType type)
         return "AST_ADDR";
     case AST_ARRAY:
         return "AST_ARRAY";
-    case AST_ENUM:
-        return "AST_ENUM";
     case AST_EXTERN:
         return "AST_EXTERN";
     case AST_DEFER:

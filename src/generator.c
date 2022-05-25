@@ -120,7 +120,8 @@ static void printType(FILE* out, ASTNode* type)
         fprintf(out, "*");
         break;
     case AST_ARRAY:
-    case AST_PARAMLIST: {
+    case AST_PARAMLIST:
+    case AST_UNIONSET: {
         fprintf(out, "struct ");
         printStructOrd(out, type);
     } break;
@@ -133,11 +134,6 @@ static void printType(FILE* out, ASTNode* type)
         ASTNode* ret = type->function.codomainType;
         printType(out, ret);
         break;
-
-    case AST_ENUM: {
-        fprintf(out, "unsigned int");
-        break;
-    }
     case AST_EXTERN: {
         SymbolNode* var = type->_extern.symbol;
         fprintf(out, "%s", var->externName);
@@ -626,7 +622,7 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
     case AST_NOTHING: {
         int id = printTempVarType(out, node, INT64_TYPE);
         fprintf(out, "0;\n");
-		return id;
+        return id;
     }
     case AST_INT: {
         int id = -1;
@@ -693,6 +689,29 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
         }
         fprintf(out, "}};\n");
         List_Destroy(ids);
+        return id;
+    }
+    case AST_UNION_LITERAL: {
+        int id = -1;
+        if (node->unionLiteral.expr) {
+            int exprID = generateAST(out, node->unionLiteral.expr, false);
+            id = printTempVarUndef(out, node);
+            ASTNode* memberDefine = List_Get(node->type->unionset.defines, node->unionLiteral.tag);
+            SymbolNode* symbol = memberDefine->define.symbol;
+            fprintf(out, "\t_%d.tag = %d;\n", id, node->unionLiteral.tag);
+            fprintf(out, "\t_%d.%s = _%d;\n", id, symbol->name, node->unionLiteral.tag);
+        } else {
+            id = printTempVarUndef(out, node);
+            ASTNode* memberDefine = List_Get(node->type->unionset.defines, node->unionLiteral.tag);
+            SymbolNode* symbol = memberDefine->define.symbol;
+            fprintf(out, "\t_%d.tag = %d;\n", id, node->unionLiteral.tag);
+            if (symbol->type->astType != AST_VOID) {
+                fprintf(out, "\t_%d.%s = ", id, symbol->name);
+                generateDefaultValue(out, symbol->type);
+                fprintf(out, ";\n");
+            }
+        }
+
         return id;
     }
     case AST_INDEX: {
@@ -1292,6 +1311,8 @@ static void generateIncludes(FILE* out, Map* includes)
     fprintf(out, "\n");
 }
 
+void generateUnion(FILE* out, DGraph* graphNode);
+
 static void generateStruct(FILE* out, DGraph* graphNode)
 {
     if (graphNode->visited) {
@@ -1304,7 +1325,11 @@ static void generateStruct(FILE* out, DGraph* graphNode)
     ListElem* elem = List_Begin(graphNode->dependencies);
     for (; elem != List_End(graphNode->dependencies); elem = elem->next) {
         DGraph* child = elem->data;
-        generateStruct(out, child);
+        if (child->structDef->astType == AST_UNIONSET) {
+            generateUnion(out, child);
+        } else {
+            generateStruct(out, child);
+        }
     }
 
     ASTNode* _struct = graphNode->structDef;
@@ -1325,13 +1350,70 @@ static void generateStruct(FILE* out, DGraph* graphNode)
     fprintf(out, "};\n\n");
 }
 
+void generateUnion(FILE* out, DGraph* graphNode)
+{
+    if (graphNode->visited) {
+        return;
+    } else {
+        graphNode->visited = true;
+    }
+
+    // Print out all dependencies
+    ListElem* elem = List_Begin(graphNode->dependencies);
+    for (; elem != List_End(graphNode->dependencies); elem = elem->next) {
+        DGraph* child = elem->data;
+        if (child->structDef->astType == AST_UNIONSET) {
+            generateUnion(out, child);
+        } else {
+            generateStruct(out, child);
+        }
+    }
+
+    ASTNode* _union = graphNode->structDef;
+    char* structOrdStr = myItoa(graphNode->ordinal + 1);
+    fprintf(out, "struct struct_%s {\n\tint64_t tag;\n", structOrdStr);
+
+    int numOfNonVoidMembers = 0;
+    ListElem* paramElem = List_Begin(_union->unionset.defines);
+    for (; paramElem != List_End(_union->unionset.defines); paramElem = paramElem->next) {
+        ASTNode* define = paramElem->data;
+        SymbolNode* var = define->define.symbol;
+        if (var->type->astType != AST_VOID) {
+            numOfNonVoidMembers = 1;
+            break;
+        }
+    }
+
+    if (numOfNonVoidMembers > 0) {
+        fprintf(out, "\tunion {\n");
+
+        paramElem = List_Begin(_union->unionset.defines);
+        // For each parameter in the procedure's parameter list, print it out
+        for (; paramElem != List_End(_union->unionset.defines); paramElem = paramElem->next) {
+            ASTNode* define = paramElem->data;
+            SymbolNode* var = define->define.symbol;
+            if (!(var->symbolType == SYMBOL_FUNCTION && var->type->isConst) && var->type->astType != AST_VOID) {
+                fprintf(out, "\t\t");
+                generateDefine(out, var, true);
+                fprintf(out, ";\n");
+            }
+        }
+        fprintf(out, "\t};\n");
+    }
+    fprintf(out, "};\n\n");
+}
+
 void generateStructDefinitions(FILE* out, List* depenGraph)
 {
     fprintf(out, "/* Struct definitions */\n");
     ListElem* elem = List_Begin(depenGraph);
     for (; elem != List_End(depenGraph); elem = elem->next) {
-        struct graph* graphNode = elem->data;
-        generateStruct(out, graphNode);
+        DGraph* graphNode = elem->data;
+        if (graphNode->structDef->astType == AST_UNIONSET) {
+            generateUnion(out, graphNode);
+        } else {
+            generateStruct(out, graphNode);
+        }
     }
 }
 

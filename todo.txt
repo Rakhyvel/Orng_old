@@ -276,18 +276,15 @@ x Rework the compiler to be better [ast-union-type]
 		x create function to create an AST for every possible AST type
 		x no more guessing the child element in a list! Can now just use it
 - unions like in julia and haskell
-	- Only practical uses are Either, and Maybe. Either is only ever used to pass error messages
 	- Tagged union and enums
-		Syntax: (|<ident> (:<type>)? (=<constexpr int>)?)+
+		- members in union must have either a unique type, or the void type
+		- all types are enumerated with an ID, unions are tagged with that ID to determine which type is active in the union
+		- void typed fields somehow get a unique ID too
+		- void fields in unions aren't generated
 		- void type is implied if no type is given
-		- void fields in unions aren't generated, but their type is still used
-		- number is assigned if none is given. Clashes are not permitted
-		- accessing the identifier through a union namespace evaluates to the type_id for that identifier
-		- enums are tagged unions with the identifiers having a default void value
-		MyUnion::Type = || int:Int || char:Char || nothing
-		MyEnum::Type = || RED || BLUE || GREEN
+		- accessing the identifier through a union namespace evaluates to the default value for the type of the identifier in the union
 	- runtime errors
-		- !<Type> which is just shorthand for || Error || <Type>
+		- !<Type> which is just shorthand for (|wrong:Error, right:<Type>)
 		- return an error code, maybe with a message? (how do stack traces error messages work?)
 		- try unwraps value if no error, or returns the error
 		- catch unwraps value if no error, or evaluates to default expression
@@ -295,11 +292,11 @@ x Rework the compiler to be better [ast-union-type]
 		- array indexing checks array size, returns error if out of bounds (panic instead of giving an option to catch)
 		- panic if new fails
 	- Void type union
-		- ?<Type> which is just shorthand for || Nothing || <Type>
+		- ?<Type> which is just shorthand for (|nothing,  just:<Type>)
 		- only void typed symbols can be null, null is of type void
 		- else-less if statements give optional types
 			x: ?Int = if true; 5
-- compile time evaluation
+- compile time COLLAPSE (not evaluation (maybe it is idk))
 	- GOOD RULE OF THUMB:
 		if it'd be a pain to implement for compile-time evaluation, don't add it as a feature
 		LESS features is better!
@@ -316,21 +313,24 @@ x Rework the compiler to be better [ast-union-type]
 		- map input parameter values -> output instruction
 - generics
 	- you would need a function that 'returns' a type
-		- make types expressions so that `return <type>` works
-		- may need to write out grammar for this to work, but after this is should be pretty much solidified
-	- if comptime, acts as generics
-	- if runtime, a separate function is "stamped" and memoized, this function is called
+	- if a function takes in all compile-time constant arguments and returns something compile-time constant, replace call with function definition
+		- can do this because:
+		- referential transparency- most function calls can simply be replaced with their definition
+			- return statements break this
+		- all parameters are compile-time known, can simply replace references to the parameters with the arguments in the definition
+			- doesn't this imply we'd need to clone the def AST?
 	- rewrite util data structures to be generic
 - interfaces (traits in rust https://theburningmonk.com/2015/05/rust-memory-safety-without-gc/)
 	- https://www.nmichaels.org/zig/interfaces.html interfaces in Zig
 		- compose an interface within each struct
-		- requires in-struct function definitions, which shouldn't be too much of a problem
+		- requires a backwards pointer, and knowdledge of memory alignment
+	- other implementations have vtables which are passed along with the interface and a pointer to the base data, better
 	- possibly like typeclasses in Haskell? WANT!
 		Iter::Class = (
 			next:(self:&Iter)->&Iter
 		)
-	- interfaces define a list of functions for a struct type
-	- if there exists function definitions for the struct type ANYWHERE in the program, the struct type implements the interface
+	- should be able to define NEW data types that OLD functions work with
+	- should be able to define NEW functions that apply to OLD data types
 - refinement types, contracts, pre/post conditions
 	- why?
 		- comments are useless

@@ -423,9 +423,8 @@ static ASTNode* parsePrefix(SymbolNode* scope)
         prefix = AST_Create_neg(parsePrefix(scope), scope, token->pos);
     } else if ((token = accept(TOKEN_TILDE)) != NULL) {
         prefix = AST_Create_bitNot(parsePrefix(scope), scope, token->pos);
-    } else if ((token = accept(TOKEN_BAR)) != NULL) {
+    } else if ((token = accept(TOKEN_SIZEOF)) != NULL) {
         prefix = AST_Create_sizeof(parseType(scope, false), scope, token->pos);
-        expect(TOKEN_BAR);
     } else {
         prefix = parsePostfix(scope);
     }
@@ -714,8 +713,6 @@ ASTNode* parseDefine(SymbolNode* scope, bool isPublic)
             symbol->symbolType = SYMBOL_MODULE;
         } else if (type->astType == AST_IDENT && !strcmp(type->ident.data, "Type")) {
             symbol->symbolType = SYMBOL_TYPE;
-        } else if (type->astType == AST_IDENT && !strcmp(type->ident.data, "Enum")) {
-            symbol->symbolType = SYMBOL_ENUM;
         } else if (type->astType == AST_FUNCTION && type->isConst) {
             symbol->symbolType = SYMBOL_FUNCTION;
         } else {
@@ -770,6 +767,16 @@ ASTNode* parseTypeAtom(SymbolNode* scope, bool isPublic)
         child->pos = merge(child->pos, token->pos);
         if (child->paramlist.defines->size == 0) {
             child->astType = AST_VOID;
+        }
+    } else if ((token = accept(TOKEN_UNION)) != NULL) {
+        child = AST_Create_unionset(scope, token->pos);
+        while (!accept(TOKEN_RPAREN)) {
+            List_Append(child->unionset.defines, parseDefine(scope, isPublic));
+            accept(TOKEN_COMMA);
+        }
+        child->pos = merge(child->pos, token->pos);
+        if (child->unionset.defines->size == 0) {
+            error(token->pos, "empty union set");
         }
     } else {
         error(prevToken->pos, "expected type, got '%s'", Token_GetErrorMsgRepr(nextToken()->type));

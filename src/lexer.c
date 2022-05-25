@@ -16,6 +16,57 @@ int line;
 int span = 1;
 bool inComment = false;
 
+// some legal identifiers in Orng are keywords in C
+// should decouple Orng source from output C. Orng programmer shouldn't care about C at all
+static bool cNameClash(char* str)
+{
+    return (!strcmp(str, "auto")
+        || !strcmp(str, "char")
+        || !strcmp(str, "const")
+        || !strcmp(str, "default")
+        || !strcmp(str, "do")
+        || !strcmp(str, "double")
+        || !strcmp(str, "enum")
+        || !strcmp(str, "extern")
+        || !strcmp(str, "float")
+        || !strcmp(str, "goto")
+        || !strcmp(str, "inline")
+        || !strcmp(str, "int")
+        || !strcmp(str, "long")
+        || !strcmp(str, "register")
+        || !strcmp(str, "restrict")
+        || !strcmp(str, "short")
+        || !strcmp(str, "signed")
+        || !strcmp(str, "static")
+        || !strcmp(str, "struct")
+        || !strcmp(str, "switch")
+        || !strcmp(str, "typedef")
+        || !strcmp(str, "union")
+        || !strcmp(str, "unsigned")
+        || !strcmp(str, "void")
+        || !strcmp(str, "volatile")
+        || !strcmp(str, "while")
+        || !strcmp(str, "_Alignas")
+        || !strcmp(str, "_Alignof")
+        || !strcmp(str, "_Atomic")
+        || !strcmp(str, "_Bool")
+        || !strcmp(str, "_Complex")
+        || !strcmp(str, "_Generic")
+        || !strcmp(str, "_Imaginary")
+        || !strcmp(str, "_Noreturn")
+        || !strcmp(str, "_Static_assert")
+        || !strcmp(str, "_Thread_local"));
+}
+
+static bool prependWithUnderscore(char* str)
+{
+    int len = strlen(str);
+    for (int i = len; i > 0; i--) {
+        str[i] = str[i - 1];
+    }
+    str[0] = '_';
+}
+
 static bool strContains(char* str, char c)
 {
     for (int i = 0; str[i] != '\0'; i++) {
@@ -46,7 +97,6 @@ Returns whether or not to split a token based on the begining character of the t
 static bool shouldSplitToken(char c, char start, int length)
 {
     if (start == '\n'
-        || start == '('
         || start == ')'
         || start == '{'
         || start == '}'
@@ -55,6 +105,7 @@ static bool shouldSplitToken(char c, char start, int length)
         || start == ';'
         || start == '?'
         || start == ':'
+        || (start == '(' && c != '|')
         || (start == '=' && c != '=' & c != '>')
         || (start == '&' && c != '&' && c != '=')
         || (start == '|' && c != '|' && c != '=')
@@ -146,6 +197,9 @@ Token* Lexer_GetNextToken(FILE* in)
                 }
             } else {
                 token->type = TOKEN_IDENT;
+                if (cNameClash(token->data)) {
+                    prependWithUnderscore(token->data);
+                }
             }
         }
     }

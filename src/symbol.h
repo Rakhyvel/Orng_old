@@ -12,7 +12,6 @@ typedef enum symbolType {
     SYMBOL_MODULE,
     SYMBOL_FUNCTION,
     SYMBOL_TYPE, // typedef or struct def
-    SYMBOL_ENUM,
     SYMBOL_BLOCK,
     SYMBOL_VARIABLE
 } SymbolType;

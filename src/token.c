@@ -283,6 +283,8 @@ const char* Token_GetRepr(_TokenType type)
         return "]";
     case TOKEN_RESTRICT:
         return "-[";
+    case TOKEN_UNION:
+        return "(|";
     case TOKEN_IF:
         return "if";
     case TOKEN_ELSE:
@@ -305,6 +307,8 @@ const char* Token_GetRepr(_TokenType type)
         return "free";
     case TOKEN_DEFER:
         return "defer";
+    case TOKEN_SIZEOF:
+        return "sizeof";
     case TOKEN_ARROW:
         return "->";
     case TOKEN_BIG_ARROW:

@@ -1,6 +1,38 @@
 testModule::Module = (
+	Union::Type = (|
+		int:Int
+		str:String
+		none:()
+	)
+
+	Enum::Type = (|
+		red:()
+		green:()
+		blue:()
+	)
+
 	main::(args:[]String)->Int = {
-		leetcode.test_maxArea()
+		-- union <- value
+		-- if unionset, expect a type in the unionset
+		-- is then coerced into the union set
+		y: Union = Union.int
+
+		-- union -> value
+		-- switch on x's id field, then within each mapping, only that field is allowed
+		--case x {
+			-- accessing a union's field is only permitted if the field is active
+		--	.int  -> std.system.println("%s", x.int.name)
+		--	.str  -> std.system.println("%d", x.str.data)
+		--	.none -> std.system.println("Nothing!")
+		--}
+		--case y {
+		--	.red   -> std.system.println("Red")
+		--	.green -> std.system.println("Green")
+		--	.blue  -> std.system.println("Blue")
+		--}
+		-- will add typeof and type comparison
+		-- implies unified syntax
+		-- would be nice to switc on the type of something
 		0
 	}
 )
