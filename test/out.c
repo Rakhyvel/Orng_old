@@ -58,10 +58,17 @@ struct struct_1 string_10;
 struct struct_1 string_11;
 struct struct_1 string_12;
 struct struct_1 string_13;
+struct struct_1 string_14;
+struct struct_1 string_15;
+struct struct_1 string_16;
+struct struct_1 string_17;
+struct struct_1 string_18;
+struct struct_1 string_19;
 
 /* Forward global declarations */
 
 /* Forward function and procedure declarations */
+struct struct_3 test_testModule_testFn();
 int64_t test_testModule_main(struct struct_2 _args);
 void std_debug_assert(bool _predicate, struct struct_1 _msg);
 FILE* std_system_open(struct struct_1 _filename, struct struct_1 _mode);
@@ -82,8 +89,8 @@ struct struct_1 std_string_substring(struct struct_1 _s, int64_t _start, int64_t
 int8_t* std_string_itoa(int64_t __int);
 struct struct_1 std_string_format(int64_t _n, struct struct_1 _f, ...);
 
-#ifndef ORANGE_PROGRAM_21
-#define ORANGE_PROGRAM_21
+#ifndef ORANGE_PROGRAM_28021
+#define ORANGE_PROGRAM_28021
 
 /* String definitions */
 struct struct_1 string_0 = {18, (char[]){'a', 's', 's', 'e', 'r', 't', 'i', 'o', 'n', ' ', 'f', 'a', 'i', 'l', 'e', 'd', ':', ' ', '\0'}};
@@ -100,24 +107,113 @@ struct struct_1 string_10 = {10, (char[]){'<', 's', 't', 'r', 'i', 'n', 'g', '.'
 struct struct_1 string_11 = {8, (char[]){'<', 't', 'i', 'm', 'e', '.', 'h', '>', '\0'}};
 struct struct_1 string_12 = {225, (char[]){'i', 'n', 't', ' ', 's', 't', 'd', '_', 's', 'y', 's', 't', 'e', 'm', '_', 'p', 'r', 'i', 'n', 't', 'l', 'n', '(', 's', 't', 'r', 'u', 'c', 't', ' ', 's', 't', 'r', 'u', 'c', 't', '_', '1', ' ', '_', 'f', 'o', 'r', 'm', 'a', 't', ',', ' ', '.', '.', '.', ')', ' ', '{', 'v', 'a', '_', 'l', 'i', 's', 't', ' ', '_', '2', '5', '_', 'a', 'r', 'g', 's', ';', 'v', 'a', '_', 's', 't', 'a', 'r', 't', '(', '_', '2', '5', '_', 'a', 'r', 'g', 's', ',', ' ', '_', 'f', 'o', 'r', 'm', 'a', 't', '.', 'd', 'a', 't', 'a', ')', ';', 'i', 'n', 't', ' ', 'r', 'e', 't', 'v', 'a', 'l', ' ', '=', ' ', 'v', 'p', 'r', 'i', 'n', 't', 'f', '(', '_', 'f', 'o', 'r', 'm', 'a', 't', '.', 'd', 'a', 't', 'a', ',', ' ', '_', '2', '5', '_', 'a', 'r', 'g', 's', ')', ';', 'v', 'a', '_', 'e', 'n', 'd', '(', '_', '2', '5', '_', 'a', 'r', 'g', 's', ')', ';', 'c', 'h', 'a', 'r', ' ', 'n', 'e', 'w', 'L', 'i', 'n', 'e', '[', '2', ']', ' ', '=', ' ', '{', '\'', '\n', '\'', ',', ' ', '\'', '\0', '\'', '}', ';', 'p', 'r', 'i', 'n', 't', 'f', '(', 'n', 'e', 'w', 'L', 'i', 'n', 'e', ')', ';', 'r', 'e', 't', 'u', 'r', 'n', ' ', 'r', 'e', 't', 'v', 'a', 'l', ';', '\0'}};
 struct struct_1 string_13 = {1, (char[]){'}', '\0'}};
+struct struct_1 string_14 = {2, (char[]){'%', 's', '\0'}};
+struct struct_1 string_15 = {2, (char[]){'%', 'd', '\0'}};
+struct struct_1 string_16 = {3, (char[]){'R', 'e', 'd', '\0'}};
+struct struct_1 string_17 = {5, (char[]){'G', 'r', 'e', 'e', 'n', '\0'}};
+struct struct_1 string_18 = {4, (char[]){'B', 'l', 'u', 'e', '\0'}};
+struct struct_1 string_19 = {5, (char[]){'H', 'e', 'l', 'l', 'o', '\0'}};
 
 /* Function and procedure definitions */
+struct struct_3 test_testModule_testFn()
+{
+	struct struct_3 retval;
+	struct struct_3 _0;
+// AST_RETURN
+// test/testModule.orng:15
+	int64_t _1 = 0;
+	struct struct_3 _2;
+	_2.tag = 0;
+	_2._int = _1;
+	retval = _2;
+	goto return_block_35;
+	_0 = _2;
+	retval = _0;
+return_block_35:;
+	return retval;
+}
+
 int64_t test_testModule_main(struct struct_2 _args)
 {
 	int64_t retval;
 	int64_t _0;
 // AST_DEFINE
-// test/testModule.orng:18
-	struct struct_3 _1;
+// test/testModule.orng:22
+	struct struct_4 _1;
 	_1.tag = 0;
-	_1._int = 0;
-	struct struct_3 _35_y = _1;
+	struct struct_4 _36_y = _1;
+// AST_DEFINE
+// test/testModule.orng:23
+	int64_t _2 = 4;
+	struct struct_3 _3;
+	_3.tag = 0;
+	_3._int = _2;
+	struct struct_3 _36_x = _3;
+// Unknown ASTNode type
+// test/testModule.orng:27
+	struct struct_3 _4 = _36_x;
+	switch (_4.tag) {
+	case 0:
+	{
+	struct struct_1 _5 = string_14;
+	struct struct_3 _6 = _36_x;
+	int64_t _7 = _6._int;
+	int64_t _8 = std_system_println(_5, _7);
+	break;
+	} // end case
+	case 1:
+	{
+	struct struct_1 _9 = string_15;
+	struct struct_3 _10 = _36_x;
+	struct struct_1 _11 = _10.str;
+	int64_t _12 = std_system_println(_9, _11);
+	break;
+	} // end case
+	case 2:
+	{
+	break;
+	} // end case
+	} // end switch
+// Unknown ASTNode type
+// test/testModule.orng:34
+	struct struct_4 _13 = _36_y;
+	switch (_13.tag) {
+	case 0:
+	{
+	struct struct_1 _14 = string_16;
+	int64_t _15 = std_system_println(_14);
+	break;
+	} // end case
+	case 1:
+	{
+	struct struct_1 _16 = string_17;
+	int64_t _17 = std_system_println(_16);
+	break;
+	} // end case
+	case 2:
+	{
+	struct struct_3 _18;
+// AST_CALL
+// test/testModule.orng:37
+	struct struct_1 _19 = string_18;
+	int64_t _20 = std_system_println(_19);
+// AST_ASSIGN
+// test/testModule.orng:37
+	struct struct_1 _21 = string_19;
+	struct struct_3 _22;
+	_22.tag = 1;
+	_22.str = _21;
+	_36_x = _22;
+	_18 = _22;
+	break;
+	} // end case
+	} // end switch
 // AST_INT
-// test/testModule.orng:36
-	int64_t _2 = 0;
-	_0 = _2;
+// test/testModule.orng:40
+	int64_t _23 = 0;
+	_0 = _23;
 	retval = _0;
-return_block_35:;
+return_block_36:;
 	return retval;
 }
 

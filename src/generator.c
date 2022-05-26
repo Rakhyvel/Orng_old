@@ -196,6 +196,11 @@ static void generateDefaultValue(FILE* out, ASTNode* type)
         }
         fprintf(out, "})");
     } break;
+    case AST_UNIONSET: {
+        fprintf(out, "((");
+        printType(out, type);
+        fprintf(out, "){-1})");
+    }
     }
 }
 
@@ -453,7 +458,7 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
         if (node->type->astType != AST_UNDEF) {
             id = printTempVarUndef(out, node);
         }
-        int exprID = generateAST(out, expr, true);
+        int exprID = generateAST(out, expr, false);
         fprintf(out, "\tswitch (_%d) {", exprID);
         ListElem* elem = List_Begin(node->_case.mappings);
         for (; elem != List_End(node->_case.mappings); elem = elem->next) {
@@ -473,6 +478,37 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
                     fprintf(out, "\n\tcase %d:", (int)intExpr->_int.data);
                 }
                 fprintf(out, "\n\t{\n");
+                int bodyID = generateAST(out, child->mapping.expr, false);
+                if (bodyID != -1 && id != -1) {
+                    fprintf(out, "\t_%d = _%d;\n", id, bodyID);
+                }
+                fprintf(out, "\tbreak;\n\t} // end case");
+            }
+        }
+        fprintf(out, "\n\t} // end switch\n");
+        return id;
+    }
+    case AST_FIELD_CASE: {
+        ASTNode* expr = node->_case.expr;
+        int id = -1;
+        if (node->type->astType != AST_UNDEF) {
+            id = printTempVarUndef(out, node);
+        }
+        int exprID = generateAST(out, expr, false);
+        fprintf(out, "\tswitch (_%d.tag) {", exprID);
+        ListElem* elem = List_Begin(node->_case.mappings);
+        for (; elem != List_End(node->_case.mappings); elem = elem->next) {
+            ASTNode* child = elem->data;
+            if (child->mapping.exprs->size == 0) {
+                fprintf(out, "\n\tdefault:\n\t{\n");
+                ASTNode* body = child->mapping.expr;
+                int bodyID = generateAST(out, body, false);
+                if (bodyID != -1 && id != -1) {
+                    fprintf(out, "\t_%d = _%d;\n", id, bodyID);
+                }
+                fprintf(out, "\tbreak;\n\t} // end default");
+            } else {
+                fprintf(out, "\n\tcase %d:\n\t{\n", child->fieldMapping.tag);
                 int bodyID = generateAST(out, child->mapping.expr, false);
                 if (bodyID != -1 && id != -1) {
                     fprintf(out, "\t_%d = _%d;\n", id, bodyID);
@@ -699,7 +735,7 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
             ASTNode* memberDefine = List_Get(node->type->unionset.defines, node->unionLiteral.tag);
             SymbolNode* symbol = memberDefine->define.symbol;
             fprintf(out, "\t_%d.tag = %d;\n", id, node->unionLiteral.tag);
-            fprintf(out, "\t_%d.%s = _%d;\n", id, symbol->name, node->unionLiteral.tag);
+            fprintf(out, "\t_%d.%s = _%d;\n", id, symbol->name, exprID);
         } else {
             id = printTempVarUndef(out, node);
             ASTNode* memberDefine = List_Get(node->type->unionset.defines, node->unionLiteral.tag);

@@ -277,12 +277,17 @@ x Rework the compiler to be better [ast-union-type]
 		x no more guessing the child element in a list! Can now just use it
 - unions like in julia and haskell
 	- Tagged union and enums
-		- members in union must have either a unique type, or the void type
-		- all types are enumerated with an ID, unions are tagged with that ID to determine which type is active in the union
-		- void typed fields somehow get a unique ID too
-		- void fields in unions aren't generated
+		x generate union type structs
+		x coerce to union
+		x union dot constructor
+		x union case
 		- void type is implied if no type is given
-		- accessing the identifier through a union namespace evaluates to the default value for the type of the identifier in the union
+		- validate that members in union must have either a unique type, or the void type
+		- collect types, use type id as union tag
+		- union tags are type id, or are void id
+		- typeof operator which gets the type id of an expression
+		- typeid operator (or better name) which gets the type id of a type
+		- union sets should behave like sets, and not care about order, but rather use the name/type combo
 	- runtime errors
 		- !<Type> which is just shorthand for (|wrong:Error, right:<Type>)
 		- return an error code, maybe with a message? (how do stack traces error messages work?)
@@ -317,13 +322,18 @@ x Rework the compiler to be better [ast-union-type]
 		- can do this because:
 		- referential transparency- most function calls can simply be replaced with their definition
 			- return statements break this
+			- remove return statements?
+				- loops would still be a challenge, 
 		- all parameters are compile-time known, can simply replace references to the parameters with the arguments in the definition
 			- doesn't this imply we'd need to clone the def AST?
 	- rewrite util data structures to be generic
+	- typeof operator which gets the compiletime type tag of a type
 - interfaces (traits in rust https://theburningmonk.com/2015/05/rust-memory-safety-without-gc/)
+	- add method calling for stack structs, just take the address in the call
 	- https://www.nmichaels.org/zig/interfaces.html interfaces in Zig
 		- compose an interface within each struct
 		- requires a backwards pointer, and knowdledge of memory alignment
+	- https://zig.news/kilianvounckx/zig-interfaces-for-the-uninitiated-an-update-4gf1
 	- other implementations have vtables which are passed along with the interface and a pointer to the base data, better
 	- possibly like typeclasses in Haskell? WANT!
 		Iter::Class = (

@@ -111,7 +111,7 @@ static SymbolNode* getDotSymbol(ASTNode* type)
             }
         }
         // Resolved, will iterate through paramlist
-        else if (newLeft->astType == AST_PARAMLIST || newLeft->astType == AST_ARRAY) {
+        else if (newLeft->astType == AST_PARAMLIST || newLeft->astType == AST_ARRAY || newLeft->astType == AST_UNIONSET) {
             resolved = true;
         }
         // newLeft is in the first child
@@ -166,7 +166,7 @@ static SymbolNode* getDotSymbol(ASTNode* type)
     SymbolNode* rightSymbol = NULL;
     if (!newLeft) {
         error(left->pos, "left side could not be resolved to a container");
-    } else if (newLeft->astType == AST_PARAMLIST || newLeft->astType == AST_ARRAY) {
+    } else if (newLeft->astType == AST_PARAMLIST || newLeft->astType == AST_ARRAY || newLeft->astType == AST_UNIONSET) {
         // Search paramlists' defines for a symbol that matches
         ListElem* elem = List_Begin(newLeft->paramlist.defines);
         for (; rightSymbol == NULL && elem != List_End(newLeft->paramlist.defines); elem = elem->next) {
@@ -178,9 +178,9 @@ static SymbolNode* getDotSymbol(ASTNode* type)
             }
         }
         if (rightSymbol == NULL) {
-            error(type->pos, "identifier '%s' not a member of parameterlist", right->ident.data);
+            error(type->pos, "symbol '%s' is not a member of expression", right->ident.data);
         }
-    } else { // ERROR! NOT A PARAMLIST!
+    } else { // ERROR! NOT A PARAM LIST NOR UNION SET!
         // Search symbol for a symbol that matches
         rightSymbol = Map_Get(leftSymbol->children, right->ident.data);
         if (rightSymbol == NULL) {
@@ -498,10 +498,6 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
         }
         break;
     }
-    case AST_NOTHING: {
-        type = AST_Create_void(node->scope, (Position) { 0, 0, 0, 0 });
-        break;
-    }
     case AST_SIZEOF: {
         type = CONST_INT64_TYPE;
         break;
@@ -544,7 +540,7 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
     case AST_BLOCK: {
         ASTNode* lastNode = List_Get(node->block.children, node->block.children->size - 1);
         if (lastNode != NULL) {
-            type = getType(lastNode, false, false);
+            type = getType(validateAST(lastNode), false, false);
         } else {
             type = UNDEF_TYPE;
         }
@@ -554,10 +550,12 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
         type = getType(node->_for.bodyBlock, false, false);
         break;
     }
+    case AST_FIELD_MAPPING:
     case AST_MAPPING: {
         type = getType(node->mapping.expr, false, false);
         break;
     }
+    case AST_FIELD_CASE:
     case AST_CASE: {
         if (node->_case.mappings->size < 1) {
             type = UNDEF_TYPE;
@@ -583,7 +581,8 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
     case AST_FREE:
     case AST_DEFER:
     case AST_BREAK:
-    case AST_CONTINUE: {
+    case AST_CONTINUE:
+    case AST_NOTHING: {
         type = UNDEF_TYPE;
         break;
     }
@@ -633,6 +632,8 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
         } else if (leftType->astType == AST_EXTERN) {
             SymbolNode* leftSymbol = leftType->_extern.symbol;
             paramlist = leftSymbol->def;
+        } else if (leftType->astType == AST_UNIONSET) {
+            paramlist = leftType;
         } else {
             error(left->pos, "left side of dot must be container");
         }
@@ -645,9 +646,6 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
             error(left->pos, "left side of dot must be container");
         }
 
-        if (paramlist->astType == AST_UNIONSET) {
-            return paramlist;
-        }
         ListElem* elem = List_Begin(paramlist->paramlist.defines);
         SymbolNode* attr = NULL;
         for (; type == NULL && elem != List_End(paramlist->paramlist.defines); elem = elem->next) {
@@ -655,9 +653,6 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
             attr = define->define.symbol;
             if (!strcmp(attr->name, right->ident.data)) {
                 ASTNode* retval = expandTypeIdent(attr->type, reassigning);
-                if (leftType->astType == AST_IDENT && !strcmp(leftType->ident.data, "Type") && !retval->isConst) {
-                    error(node->pos, "type access is not a constant");
-                }
                 if (intermediate && retval->astType == AST_IDENT && (!strcmp(retval->ident.data, "Module") || !strcmp(retval->ident.data, "Package"))) {
                     type = attr->def;
                     break;
@@ -1115,7 +1110,7 @@ void validateType(ASTNode* node, bool collectThisType)
             ASTNode* fieldDefine = paramElem->data;
             SymbolNode* fieldVar = fieldDefine->define.symbol;
             ASTNode* fieldType = expandTypeIdent(fieldVar->type, true);
-            if (fieldType->astType == AST_PARAMLIST || fieldType->astType == AST_ARRAY) {
+            if (fieldType->astType == AST_PARAMLIST || fieldType->astType == AST_ARRAY || fieldType->astType == AST_UNIONSET) {
                 DGraph* dependency = addGraphNode(depenGraph, fieldType);
                 List_Append(graphNode->dependencies, dependency);
             }
@@ -1128,25 +1123,36 @@ void validateType(ASTNode* node, bool collectThisType)
 ASTNode* tryCoerceToUnion(ASTNode* unionType, ASTNode* member)
 {
     validateType(unionType, true);
+
     ASTNode* expandedUnionType = expandTypeIdent(unionType, false);
     if (expandedUnionType->astType != AST_UNIONSET) {
         return NULL;
-    }
-
-    ASTNode* memberType = getType(member, false, false);
-    ListElem* elem = List_Begin(expandedUnionType->unionset.defines);
-    int i = 0;
-    for (; elem != List_End(expandedUnionType->unionset.defines); elem = elem->next, i++) {
-        ASTNode* define = elem->data;
-        SymbolNode* var = define->define.symbol;
-        ASTNode* defineType = var->type;
-        if (typesAreEquivalent(memberType, defineType)) {
-            ASTNode* retval = AST_Create_unionLiteral(i, member, member->scope, member->pos);
+    } else if (member->astType == AST_NOTHING) {
+        ASTNode* firstDefine = List_Get(unionType->unionset.defines, 0);
+        SymbolNode* firstVar = firstDefine->define.symbol;
+        if (!strcmp(firstVar->name, "nothing")) {
+            ASTNode* retval = AST_Create_unionLiteral(0, member, member->scope, member->pos);
             retval->type = expandedUnionType;
             return retval;
+        } else {
+            return NULL;
         }
+    } else {
+        ASTNode* memberType = getType(member, false, false);
+        ListElem* elem = List_Begin(expandedUnionType->unionset.defines);
+        int i = 0;
+        for (; elem != List_End(expandedUnionType->unionset.defines); elem = elem->next, i++) {
+            ASTNode* define = elem->data;
+            SymbolNode* var = define->define.symbol;
+            ASTNode* defineType = var->type;
+            if (typesAreEquivalent(memberType, defineType)) {
+                ASTNode* retval = AST_Create_unionLiteral(i, member, member->scope, member->pos);
+                retval->type = expandedUnionType;
+                return retval;
+            }
+        }
+        return NULL;
     }
-    return NULL;
 }
 
 void inferTypes(SymbolNode* var)
@@ -1157,9 +1163,6 @@ void inferTypes(SymbolNode* var)
         }
         // if type is undef, type is type of def
         // else, type must match type of def
-        if (var->def->astType == AST_UNDEF && !strcmp(var->name, "c")) {
-            printf("stop herhe\n");
-        }
         ASTNode* defType = getType(var->def, false, true);
         if (var->type->astType == AST_UNDEF) {
             // No type annot., infer types
@@ -1533,26 +1536,108 @@ ASTNode* validateAST(ASTNode* node)
     }
     case AST_CASE: {
         ASTNode* validExpr = validateAST(node->_case.expr);
+
+        // switch expression must be integral
+        ASTNode* elementType = getType(validExpr, false, false);
+        bool isUnionCase = false;
+        if (!typesAreEquivalent(elementType, INT64_TYPE)) {
+            if (elementType->astType == AST_UNIONSET) {
+                isUnionCase = true;
+            } else {
+                typeMismatchError(validExpr->pos, INT64_TYPE, elementType);
+            }
+        }
+
         List* validMappings = List_Create();
         for (ListElem* elem = List_Begin(node->_case.mappings); elem != List_End(node->_case.mappings); elem = elem->next) {
             ASTNode* mapping = elem->data;
             List_Append(validMappings, validateAST(mapping));
         }
 
-        // switch expression must be integral
-        ASTNode* elementType = getType(validExpr, false, false);
-        if (!typesAreEquivalent(elementType, INT64_TYPE)) {
-            typeMismatchError(validExpr->pos, INT64_TYPE, elementType);
-        }
-        // only one 'else' case
+        // only one 'else' mapping
         int elseCaseCount = 0;
         ListElem* elem = List_Begin(validMappings);
         for (; elem != List_End(validMappings); elem = elem->next) {
             ASTNode* mapping = elem->data;
-            if (mapping->mapping.exprs->size == 1) {
+            if (mapping->mapping.exprs->size == 0) {
                 elseCaseCount++;
                 if (elseCaseCount > 1) {
-                    error(mapping->pos, "multiple else cases in switch statement");
+                    error(mapping->pos, "multiple 'else' mappings in case statement");
+                }
+            }
+        }
+        // TODO: all cases have different numbers
+        // TODO: all cases must be comptime integer exprs
+        node->_case.expr = validExpr;
+        node->_case.mappings = validMappings;
+        retval = node;
+        break;
+    }
+    case AST_FIELD_CASE: {
+        ASTNode* validExpr = validateAST(node->_case.expr);
+
+        // switch expression must be integral
+        ASTNode* elementType = getType(validExpr, false, false);
+        bool isUnionCase = false;
+        if (!typesAreEquivalent(elementType, INT64_TYPE)) {
+            if (elementType->astType == AST_UNIONSET) {
+                isUnionCase = true;
+            } else {
+                typeMismatchError(validExpr->pos, INT64_TYPE, elementType);
+            }
+        }
+
+        List* validMappings = List_Create();
+        for (ListElem* elem = List_Begin(node->_case.mappings); elem != List_End(node->_case.mappings); elem = elem->next) {
+            ASTNode* mapping = elem->data;
+            ASTNode* validMapping = NULL;
+            SymbolNode* var = NULL;
+            if (node->_case.expr->astType == AST_IDENT) {
+                var = Symbol_Find(node->_case.expr->ident.data, node->scope);
+            } else if (node->_case.expr->astType == AST_DOT) {
+                var = getDotSymbol(node->_case.expr);
+            } else {
+                error(node->pos, "cannot resolve to symbol");
+            }
+            if (mapping->fieldMapping.exprs->size == 1) {
+                ASTNode* mappingIdent = List_Get(mapping->fieldMapping.exprs, 0);
+                if (mappingIdent->astType != AST_IDENT) {
+                    error(mappingIdent->pos, "expected identifier");
+                }
+                var->activeFieldName = mappingIdent->ident.data;
+            }
+            validMapping = validateAST(mapping);
+            if (validMapping->fieldMapping.exprs->size > 1) {
+                error(validMapping->pos, "field mapping with too many expressions");
+            }
+            ASTNode* validMappingIdent = List_Get(validMapping->fieldMapping.exprs, 0);
+            bool found = false;
+            int i = 0;
+            for (ListElem* elem = List_Begin(elementType->unionset.defines); elem != List_End(elementType->unionset.defines); elem = elem->next) {
+                ASTNode* unionDefine = elem->data;
+                SymbolNode* var = unionDefine->define.symbol;
+                if (!strcmp(var->name, validMappingIdent->ident.data)) {
+                    found = true;
+                    validMapping->fieldMapping.tag = i;
+                    break;
+                }
+                i++;
+            }
+            if (!found) {
+                error(validMapping->pos, "the field '%s' is not found in union", validMappingIdent->ident.data);
+            }
+            List_Append(validMappings, validMapping);
+        }
+
+        // only one 'else' mapping
+        int elseCaseCount = 0;
+        ListElem* elem = List_Begin(validMappings);
+        for (; elem != List_End(validMappings); elem = elem->next) {
+            ASTNode* mapping = elem->data;
+            if (mapping->mapping.exprs->size == 0) {
+                elseCaseCount++;
+                if (elseCaseCount > 1) {
+                    error(mapping->pos, "multiple 'else' mappings in case statement");
                 }
             }
         }
@@ -1571,6 +1656,12 @@ ASTNode* validateAST(ASTNode* node)
         }
         ASTNode* validExpr = validateAST(node->mapping.expr);
         node->mapping.exprs = validExprs;
+        node->mapping.expr = validExpr;
+        retval = node;
+        break;
+    }
+    case AST_FIELD_MAPPING: {
+        ASTNode* validExpr = validateAST(node->mapping.expr);
         node->mapping.expr = validExpr;
         retval = node;
         break;
@@ -1595,7 +1686,12 @@ ASTNode* validateAST(ASTNode* node)
             typesAreEquivalent(retType, functionRetType);
         }
         if (!typesAreEquivalent(retType, functionRetType)) {
-            typeMismatchError(node->pos, functionRetType, retType);
+            ASTNode* coerced = NULL;
+            if (coerced = tryCoerceToUnion(functionRetType, validRetval)) {
+                validRetval = coerced;
+            } else {
+                typeMismatchError(node->pos, functionRetType, retType);
+            }
         }
 
         node->unop.expr = validRetval;
@@ -1784,16 +1880,36 @@ ASTNode* validateAST(ASTNode* node)
     }
     case AST_DOT: {
         ASTNode* left = validateAST(node->dot.left);
+        ASTNode* leftType = getType(left, false, false);
         ASTNode* dotType = getType(node, false, true);
-        if (dotType->astType == AST_UNIONSET) {
-            retval = AST_Create_unionLiteral(0, NULL, node->scope, node->pos);
-            retval->type = dotType;
-            break;
+        if (leftType->astType == AST_UNIONSET) {
         }
+        SymbolNode* leftVar = NULL;
+        if (node->_case.expr->astType == AST_IDENT) {
+            leftVar = Symbol_Find(node->_case.expr->ident.data, node->scope);
+        } else if (node->_case.expr->astType == AST_DOT) {
+            leftVar = getDotSymbol(node->_case.expr);
+        } else {
+            error(node->pos, "cannot resolve to symbol");
+        }
+
         getDotSymbol(node);
         if (node->dot.symbol == NULL) {
             error(node->pos, "not an l-value");
         } else { // TODO: comptime collapse
+            if (left->astType == AST_UNIONSET) {
+                retval = AST_Create_unionLiteral(0, NULL, node->scope, node->pos);
+                retval->type = left;
+                break;
+            } else if (leftType->astType == AST_UNIONSET) {
+                // check with symbol if field is allowed to be activated
+                if (!leftVar->activeFieldName || strcmp(leftVar->activeFieldName, node->dot.right->ident.data)) {
+                    error(node->dot.right->pos, "union field '%s' is not active", node->dot.right->ident.data, leftVar->activeFieldName);
+                }
+                if (dotType->astType == AST_VOID) {
+                    return NOTHING_AST;
+                }
+            }
             retval = node;
             break;
         }
@@ -2336,7 +2452,13 @@ ASTNode* validateAST(ASTNode* node)
         ASTNode* rightType = getType(right, false, true);
         if (!typesAreEquivalent(rightType, leftType)) {
             // check if can coerce to union given leftType, if so, set right to it, else give error
-            typeMismatchError(right->pos, leftType, rightType);
+            ASTNode* coerced = NULL;
+            if (coerced = tryCoerceToUnion(leftType, right)) {
+                right = coerced;
+                right->type = leftType;
+            } else {
+                typeMismatchError(right->pos, leftType, rightType);
+            }
         } else {
             right->type = leftType;
         }
@@ -2816,7 +2938,9 @@ Program Validator_Validate(SymbolNode* symbol)
         if (!symbol->isExtern && retType->astType != AST_VOID) {
             if (symbol->def->astType != AST_UNDEF && getType(symbol->def, false, false)->astType != AST_UNDEF) {
                 if (!typesAreEquivalent(getType(symbol->def, false, false), retType)) {
-                    typeMismatchError(symbol->pos, retType, symbol->def->type);
+                    if (!tryCoerceToUnion(retType, symbol->def)) {
+                        typeMismatchError(symbol->pos, getType(symbol->def, false, false), retType);
+                    }
                 }
             } else if (!allReturnPath(symbol->def)) {
                 error(symbol->pos, "not all paths return a value in '%s'", symbol->name);

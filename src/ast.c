@@ -552,6 +552,14 @@ ASTNode* AST_Create_mapping(struct astNode* expr, List* exprs, struct symbolNode
     return retval;
 }
 
+ASTNode* AST_Create_fieldMapping(struct astNode* expr, List* exprs, struct symbolNode* scope, struct position pos)
+{
+    ASTNode* retval = AST_Create(AST_FIELD_MAPPING, scope, pos);
+    retval->mapping.exprs = exprs;
+    retval->mapping.expr = expr;
+    return retval;
+}
+
 ASTNode* AST_Create_new(struct astNode* type, struct astNode* init, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_NEW, scope, pos);
