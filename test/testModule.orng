@@ -1,42 +1,6 @@
 testModule::Module = (
-	Union::Type = (|
-		int:Int
-		str:String
-		none
-	)
-
-	Enum::Type = (|
-		red
-		green
-		blue
-	)
-
-	testFn::()->Union = {
-		return 0
-	}
-
 	main::(args:[]String)->Int = {
-		-- union <- value
-		-- if unionset, expect a type in the unionset
-		-- is then coerced into the union set
-		y: Enum = Enum.red
-		x: Union = 4
-
-		-- union -> value
-		-- switch on x's id field, then within each mapping, only that field is allowed
-		case x {
-			-- accessing a union's field is only permitted if the field is active
-			.int  -> std.system.println("%s", x.int);
-			.str  -> std.system.println("%d", x.str);
-			.none -> {}
-		}
-
-		case y {
-			.red   -> std.system.println("Red");
-			.green -> std.system.println("Green");
-			.blue  -> {std.system.println("Blue"); x = "Hello"}
-		}
-
+		leetcode.test_all()
 		0
 	}
 )

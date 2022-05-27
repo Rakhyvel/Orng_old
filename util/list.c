@@ -23,6 +23,24 @@ List* List_Create()
     return list;
 }
 
+List* List_Concat(List* a, List* b)
+{
+    if (a == NULL && b != NULL) {
+        return b;
+    } else if (a != NULL && b == NULL) {
+        return a;
+    } else if (a == NULL && b == NULL) {
+        return a;
+    } else {
+        a->tail.prev->next = b->head.next;
+        b->head.next->prev = a->tail.prev;
+        b->tail.prev->next = &a->tail;
+        a->tail = b->tail;
+        a->size += b->size;
+        return a;
+    }
+}
+
 /*  Gives the starting point of the list */
 struct listElem* List_Begin(struct list* list)
 {

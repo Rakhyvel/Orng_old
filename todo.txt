@@ -276,18 +276,42 @@ x Rework the compiler to be better [ast-union-type]
 		x create function to create an AST for every possible AST type
 		x no more guessing the child element in a list! Can now just use it
 - unions like in julia and haskell
-	- Tagged union and enums
+	x Tagged union and enums
 		x generate union type structs
 		x coerce to union
 		x union dot constructor
 		x union case
-		- void type is implied if no type is given
-		- validate that members in union must have either a unique type, or the void type
-		- collect types, use type id as union tag
-		- union tags are type id, or are void id
-		- typeof operator which gets the type id of an expression
-		- typeid operator (or better name) which gets the type id of a type
-		- union sets should behave like sets, and not care about order, but rather use the name/type combo
+		x void type is implied if no type is given
+		x validate that members in union must have either a unique type, or the void type
+		- in field cases, make it so that you need to union name
+	- Maybe type union
+		x ?<Type> which is just shorthand for (|nothing,  just:<Type>)
+		x can use the name of the maybe variable as-is if the compiler can reason about whether or not the variable is nothing
+			x weak SAT model:
+			sat::(expr:&AST, assumption:Bool)->(trueASTs:?&List(&AST), falseASTs:?&List(&AST)) =
+				case expr {
+					.not -> sat(expr.expr, !assumption)								-- flip assumption
+					.and -> if assumption {
+							union(sat(expr.left, true), sat(expr.right, true))		-- if assuming expr is true, both left and right must be true
+						} else
+							(nothing, nothing)										-- if assuming expr is false, cannot say anything about left and right
+						}
+					.or  -> if !assumption {
+							union(sat(expr.left, false), sat(expr.right, false))	-- if assuming expr is false, both left and right must be false
+						} else
+							(nothing, nothing)										-- if assuming expr is true, cannot say anything about left and right
+						}
+					else ->  if assumption {
+							(List(&AST).create([expr]), nothing)					-- if assuming expr is true, expr is true
+						} else
+							(nothing, List(&AST).create([expr]))					-- if assuming expr is false, expr is false
+						}
+				}
+		x replace uses of symbol when a known field is active with that field
+		x generate nothing comparisons
+		x assumptions for for loops too
+		- orelse operator
+		- .? operator
 	- runtime errors
 		- !<Type> which is just shorthand for (|wrong:Error, right:<Type>)
 		- return an error code, maybe with a message? (how do stack traces error messages work?)
@@ -296,11 +320,6 @@ x Rework the compiler to be better [ast-union-type]
 		- errdefer is another return exit path if return is an error, a subset of defers (ie it defers all defers, and also errdefers if return is error)
 		- array indexing checks array size, returns error if out of bounds (panic instead of giving an option to catch)
 		- panic if new fails
-	- Void type union
-		- ?<Type> which is just shorthand for (|nothing,  just:<Type>)
-		- only void typed symbols can be null, null is of type void
-		- else-less if statements give optional types
-			x: ?Int = if true; 5
 - compile time COLLAPSE (not evaluation (maybe it is idk))
 	- GOOD RULE OF THUMB:
 		if it'd be a pain to implement for compile-time evaluation, don't add it as a feature
@@ -328,6 +347,7 @@ x Rework the compiler to be better [ast-union-type]
 			- doesn't this imply we'd need to clone the def AST?
 	- rewrite util data structures to be generic
 	- typeof operator which gets the compiletime type tag of a type
+	- subtype operator which does compile time type checking
 - interfaces (traits in rust https://theburningmonk.com/2015/05/rust-memory-safety-without-gc/)
 	- add method calling for stack structs, just take the address in the call
 	- https://www.nmichaels.org/zig/interfaces.html interfaces in Zig
@@ -398,6 +418,9 @@ x Rework the compiler to be better [ast-union-type]
 	} else if node % 2 != 0 {
 		
 	}
+	INCREDIBLY USEFUL FOR DEFINING AN IDENT AS A DOT AND CHECKING FOR NOTHING!
+	since you we can't reason about dots, can only reason about ident symbols
+	can assign an ident to a dot, which then 
 - quantifiers from Alloy- or maybe these would be better as interfaces?
 	- basically just iterators, use interface above
 	- should be expressions, generate as a function call

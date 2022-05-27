@@ -108,6 +108,9 @@ struct symbolNode* Symbol_Find(const char* symbolName, const struct symbolNode* 
     if (!symbolName || !scope) {
         return NULL;
     }
+    if (!strcmp(symbolName, scope->name)) {
+        return scope;
+    }
 
     struct symbolNode* symbol = Map_Get(scope->children, symbolName);
     if (symbol != NULL) {

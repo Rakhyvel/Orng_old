@@ -275,9 +275,13 @@ static ASTNode* parseFieldMapping(SymbolNode* scope)
         expect(TOKEN_ARROW);
     } else {
         expect(TOKEN_DOT);
-        token = expect(TOKEN_IDENT);
         char* text = malloc(sizeof(char) * 255);
-        strncpy_s(text, 255, token->data, 254);
+        if (token = accept(TOKEN_IDENT)) {
+            strncpy_s(text, 255, token->data, 254);
+        } else {
+            token = expect(TOKEN_NOTHING);
+            strncpy_s(text, 255, "nothing", 254);
+        }
         List_Append(exprs, AST_Create_ident(text, scope, token->pos));
         expect(TOKEN_ARROW);
     }
@@ -297,7 +301,8 @@ static ASTNode* parseCase(SymbolNode* scope)
     if (nextToken()->type == TOKEN_DOT) {
         caseNode->astType = AST_FIELD_CASE;
         while (!accept(TOKEN_RBRACE)) {
-            List_Append(caseNode->_case.mappings, parseFieldMapping(scope));
+            ASTNode* mapping = parseFieldMapping(scope);
+            List_Append(caseNode->_case.mappings, mapping);
             if (accept(TOKEN_RBRACE)) {
                 break;
             } else if (!accept(TOKEN_SEMICOLON)) {
@@ -908,6 +913,22 @@ ASTNode* parseTypeNonConst(SymbolNode* scope)
     } else if ((token = accept(TOKEN_DAMPERSAND)) != NULL) {
         ASTNode* type = AST_Create_addr(parseType(scope), scope, token->pos);
         return AST_Create_addr(type, scope, token->pos);
+    } else if ((token = accept(TOKEN_QMARK)) != NULL) {
+        ASTNode* maybeUnion = AST_Create_unionset(scope, token->pos);
+
+        SymbolNode* nothingSymbol = Symbol_Create("nothing", SYMBOL_VARIABLE, NULL, maybeUnion->pos);
+        ASTNode* nothingDefine = AST_Create_define(nothingSymbol, scope, token->pos);
+        ASTNode* nothingType = AST_Create_void(scope, token->pos);
+        nothingSymbol->type = nothingType;
+
+        SymbolNode* somethingSymbol = Symbol_Create("something", SYMBOL_VARIABLE, NULL, maybeUnion->pos);
+        ASTNode* somethingDefine = AST_Create_define(somethingSymbol, scope, token->pos);
+        ASTNode* somethingType = parseType(scope);
+        somethingSymbol->type = somethingType;
+
+        List_Append(maybeUnion->unionset.defines, nothingDefine);
+        List_Append(maybeUnion->unionset.defines, somethingDefine);
+        return maybeUnion;
     } else if ((token = accept(TOKEN_LSQUARE)) != NULL) {
         ASTNode* arrStruct = AST_Create_array(scope, token->pos);
 
@@ -930,14 +951,12 @@ ASTNode* parseTypeNonConst(SymbolNode* scope)
         ASTNode* dataDefine = AST_Create_define(dataSymbol, scope, token->pos);
         ASTNode* dataType = AST_Create_addr(parseType(scope), scope, token->pos);
         arrStruct->pos = merge(arrStruct->pos, dataType->pos);
-
         ASTNode* dataCode = AST_Create_undef(scope, token->pos);
         dataSymbol->def = dataCode;
         dataSymbol->type = dataType;
 
         List_Append(arrStruct->paramlist.defines, lengthDefine);
         List_Append(arrStruct->paramlist.defines, dataDefine);
-
         return arrStruct;
     } else {
         return parseTypeFunction(scope);
