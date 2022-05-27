@@ -1,6 +1,15 @@
 testModule::Module = (
+	maybeEven::()->?Int = {
+		std.math.seedRand(std.system.clock())
+		res: Int = std.math.rand()
+		if res % 2 == 0 {return res} else {return nothing}
+	}
+
 	main::(args:[]String)->Int = {
-		leetcode.test_all()
+		for true {
+			std.system.println("working...")
+			y: ?Int = maybeEven() orelse break
+		}
 		0
 	}
 )

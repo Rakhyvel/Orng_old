@@ -449,6 +449,8 @@ static ASTNode* parsePostfix(SymbolNode* scope)
             strncpy_s(text, 255, token->data, 254);
             ASTNode* ident = AST_Create_ident(text, scope, token->pos);
             child = AST_Create_dot(child, ident, scope, token->pos, false);
+        } else if ((token = accept(TOKEN_ORELSE)) != NULL) {
+            child = AST_Create_orelse(child, parseStatement(scope), scope, token->pos);
         } else {
             break;
         }
@@ -712,6 +714,8 @@ ASTNode* parseDefine(SymbolNode* scope)
             Token* externName = expect(TOKEN_IDENT);
             strcpy_s(symbol->externName, 255, externName->data);
             expect(TOKEN_RSQUARE);
+        } else {
+            strcpy_s(symbol->externName, 255, symbol->name);
         }
     } else {
         strcpy_s(symbol->externName, 255, symbol->name);

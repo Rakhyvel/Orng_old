@@ -404,6 +404,10 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
         type = CONST_INT64_TYPE;
         break;
     }
+    case AST_NOTHING: {
+        type = VOID_TYPE;
+        break;
+    }
     case AST_ADD:
     case AST_SUBTRACT:
     case AST_MULTIPLY:
@@ -446,6 +450,24 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
     case AST_RETURN: { // TODO: Maybe add a more nuanced system?
         ASTNode* left = node->unop.expr;
         type = getType(left, false, reassigning);
+        break;
+    }
+    case AST_ORELSE: {
+        ASTNode* left = validateAST(node->binop.left);
+        ASTNode* leftType = getType(left, false, false);
+        ASTNode* right = validateAST(node->binop.right);
+        ASTNode* rightType = getType(right, false, false);
+
+        ASTNode* innerType = NULL;
+        ListElem* elem = List_Begin(leftType->unionset.defines);
+        for (; elem != List_End(leftType->unionset.defines); elem = elem->next) {
+            ASTNode* define = elem->data;
+            if (!strcmp(define->define.symbol->name, "something")) {
+                innerType = define->define.symbol->type;
+                break;
+            }
+        }
+		type = innerType;
         break;
     }
     case AST_PAREN: {
@@ -581,8 +603,7 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
     case AST_FREE:
     case AST_DEFER:
     case AST_BREAK:
-    case AST_CONTINUE:
-    case AST_NOTHING: {
+    case AST_CONTINUE: {
         type = UNDEF_TYPE;
         break;
     }
@@ -1080,7 +1101,7 @@ void validateType(ASTNode* node, bool collectThisType)
         ASTNode* params = node->function.domainType;
         ASTNode* rets = node->function.codomainType;
         validateType(params, false);
-        validateType(rets, false);
+        validateType(rets, true);
         break;
     }
     case AST_ADDR: {
@@ -1089,7 +1110,7 @@ void validateType(ASTNode* node, bool collectThisType)
     }
     case AST_EXTERN: {
         SymbolNode* type = node->_extern.symbol;
-        if (!typesAreEquivalent(type->type, TYPE_TYPE) && !typesAreEquivalent(type->type, ENUM_TYPE)) {
+        if (!typesAreEquivalent(type->type, TYPE_TYPE)) {
             typeMismatchError(node->pos, TYPE_TYPE, type->type);
         }
         break;
@@ -1738,15 +1759,11 @@ ASTNode* validateAST(ASTNode* node)
     case AST_FIELD_CASE: {
         ASTNode* validExpr = validateAST(node->_case.expr);
 
-        // switch expression must be integral
+        // switch expression must be a union set
         ASTNode* elementType = getType(validExpr, false, false);
         bool isUnionCase = false;
-        if (!typesAreEquivalent(elementType, INT64_TYPE)) {
-            if (elementType->astType == AST_UNIONSET) {
-                isUnionCase = true;
-            } else {
-                typeMismatchError(validExpr->pos, INT64_TYPE, elementType);
-            }
+        if (elementType->astType != AST_UNIONSET) {
+            error(node->pos, "must be a union set type");
         }
 
         List* validMappings = List_Create();
@@ -1756,11 +1773,10 @@ ASTNode* validateAST(ASTNode* node)
             SymbolNode* var = NULL;
             if (node->_case.expr->astType == AST_IDENT) {
                 var = Symbol_Find(node->_case.expr->ident.data, node->scope);
-            } else if (node->_case.expr->astType == AST_DOT) {
-                var = getDotSymbol(node->_case.expr);
             } else {
-                error(node->pos, "cannot resolve to symbol");
+                error(node->pos, "cannot resolve case expression to symbol");
             }
+            // TODO: change syntax so that only one field mapping is parsed
             if (mapping->fieldMapping.exprs->size == 1) {
                 ASTNode* mappingIdent = List_Get(mapping->fieldMapping.exprs, 0);
                 if (mappingIdent->astType != AST_IDENT) {
@@ -1789,6 +1805,7 @@ ASTNode* validateAST(ASTNode* node)
                 error(validMapping->pos, "the field '%s' is not found in union", validMappingIdent->ident.data);
             }
             List_Append(validMappings, validMapping);
+            var->activeFieldName = NULL;
         }
 
         // only one 'else' mapping
@@ -2055,7 +2072,7 @@ ASTNode* validateAST(ASTNode* node)
         } else if (node->dot.left->astType == AST_DOT) {
             leftVar = getDotSymbol(node->dot.left);
         } else {
-            error(node->pos, "cannot resolve to symbol");
+            error(node->pos, "cannot resolve left side of dot expression to symbol");
         }
 
         ASTNode* leftType = getType(left, false, false);
@@ -2902,6 +2919,31 @@ ASTNode* validateAST(ASTNode* node)
         retval = UNDEF_TYPE;
         break;
     }
+    case AST_ORELSE: {
+        ASTNode* left = validateAST(node->binop.left);
+        ASTNode* leftType = getType(left, false, false);
+        ASTNode* right = validateAST(node->binop.right);
+        ASTNode* rightType = getType(right, false, false);
+
+        ASTNode* innerType = NULL;
+        ListElem* elem = List_Begin(leftType->unionset.defines);
+        for (; elem != List_End(leftType->unionset.defines); elem = elem->next) {
+            ASTNode* define = elem->data;
+            if (!strcmp(define->define.symbol->name, "something")) {
+                innerType = define->define.symbol->type;
+                break;
+            }
+        }
+
+        if (rightType->astType != AST_UNDEF && !(typesAreEquivalent(rightType, innerType) || typesAreEquivalent(innerType, rightType))) {
+            incompatibleTypesError(node->pos, innerType, rightType);
+        }
+
+        node->binop.left = left;
+        node->binop.right = right;
+        retval = node;
+        break;
+    }
     case AST_ADDR:
     case AST_FUNCTION:
     case AST_UNDEF:
@@ -3115,7 +3157,10 @@ Program Validator_Validate(SymbolNode* symbol)
         if (!symbol->isExtern && retType->astType != AST_VOID) {
             if (symbol->def->astType != AST_UNDEF && symbol->def->type->astType != AST_UNDEF) {
                 if (!typesAreEquivalent(symbol->def->type, retType)) {
-                    if (!tryCoerceToUnion(retType, symbol->def)) {
+                    ASTNode* coerced = tryCoerceToUnion(retType, symbol->def);
+                    if (coerced) {
+                        symbol->def = coerced;
+                    } else {
                         typeMismatchError(symbol->pos, symbol->def->type, retType);
                     }
                 }

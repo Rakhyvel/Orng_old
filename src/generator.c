@@ -556,7 +556,8 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
         } else {
             fprintf(out, "\tgoto break_defer_%s;\n", parentSymbol->name);
         }
-    } break;
+        return -1;
+    } 
     case AST_CONTINUE: {
         ASTNode* parentBlock = List_Peek(blockStack);
         SymbolNode* parentSymbol = parentBlock->block.symbol;
@@ -564,7 +565,8 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
             parentSymbol = parentSymbol->parent;
         }
         fprintf(out, "\tgoto continue_%s;\n", parentSymbol->name);
-    } break;
+        return -1;
+    }
     case AST_DEFER: {
         fprintf(out, "\tdefer_%d = 1;\n", node->defer.deferID);
         return -1;
@@ -574,7 +576,7 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
         if (!(var->symbolType == SYMBOL_FUNCTION && var->type->isConst)) {
             generateDefine(out, var, false);
         }
-        break;
+        return -1;
     case AST_NEW: {
         ASTNode* type = node->binop.left;
         ASTNode* init = node->binop.right;
@@ -954,6 +956,26 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
         if (!isLValue) {
             fprintf(out, ";\n");
         }
+        return id;
+    }
+    case AST_ORELSE: {
+        ASTNode* left = node->binop.left;
+        ASTNode* right = node->binop.right;
+
+        int id = printTempVarUndef(out, node);
+        int leftID = generateAST(out, left, false);
+        int elseLabel = newLabel(node);
+        int endLabel = newLabel(node);
+
+        fprintf(out, "\tif (_%d.tag == 0) goto else_%d;\n", leftID, elseLabel);
+        fprintf(out, "\t_%d = _%d.something;\n", id, leftID);
+        fprintf(out, "\tgoto end_%d;\nelse_%d:;\n", endLabel, elseLabel);
+        int rightID = generateAST(out, right, false);
+        if (rightID != -1 && id != -1) {
+            fprintf(out, "\t_%d = _%d;\n", id, rightID);
+        }
+        fprintf(out, "end_%d:;\n", endLabel);
+        return id;
         return id;
     }
     case AST_AND: {

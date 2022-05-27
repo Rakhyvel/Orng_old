@@ -88,7 +88,7 @@ void AST_Init()
     PACKAGE_TYPE = AST_Create_ident("Package", NULL, (Position) { NULL, 0, 0, 0 });
     UNDEF_TYPE = AST_Create_undef(NULL, (Position) { NULL, 0, 0, 0 });
     VOID_ADDR_TYPE = AST_Create_addr(AST_Create_paramlist(NULL, (Position) { NULL, 0, 0, 0 }), NULL, (Position) { NULL, 0, 0, 0 });
-    ENUM_TYPE = AST_Create_ident("Enum", NULL, (Position) { NULL, 0, 0, 0 });
+    VOID_TYPE = AST_Create_void(NULL, (Position) { NULL, 0, 0, 0 });
     TRUE_AST = AST_Create_true(NULL, (Position) { NULL, 0, 0, 0 });
     FALSE_AST = AST_Create_false(NULL, (Position) { NULL, 0, 0, 0 });
     NOTHING_AST = AST_Create_nothing(NULL, (Position) { NULL, 0, 0, 0 });
@@ -252,6 +252,14 @@ ASTNode* AST_Create_divide(struct astNode* left, struct astNode* right, struct s
 ASTNode* AST_Create_modulus(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_MODULUS, scope, pos);
+    retval->binop.left = left;
+    retval->binop.right = right;
+    return retval;
+}
+
+ASTNode* AST_Create_orelse(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos)
+{
+    ASTNode* retval = AST_Create(AST_ORELSE, scope, pos);
     retval->binop.left = left;
     retval->binop.right = right;
     return retval;

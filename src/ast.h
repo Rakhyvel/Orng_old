@@ -42,6 +42,7 @@ enum astType {
     AST_INDEX,
     AST_SLICE,
     AST_ADDROF,
+	AST_ORELSE,
     // Boolean
     AST_NOT,
     AST_OR,
@@ -301,7 +302,7 @@ const ASTNode* TYPE_TYPE;
 const ASTNode* PACKAGE_TYPE;
 const ASTNode* UNDEF_TYPE;
 const ASTNode* VOID_ADDR_TYPE;
-const ASTNode* ENUM_TYPE;
+const ASTNode* VOID_TYPE;
 
 const ASTNode* TRUE_AST;
 const ASTNode* FALSE_AST;
@@ -327,6 +328,7 @@ ASTNode* AST_Create_subtract(struct astNode* left, struct astNode* right, struct
 ASTNode* AST_Create_multiply(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_divide(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_modulus(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_orelse(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_paren(struct astNode* expr, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_deref(struct astNode* expr, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_index(struct astNode* arrayExpr, struct astNode* subscript, struct symbolNode* scope, struct position pos);

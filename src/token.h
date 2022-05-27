@@ -84,6 +84,7 @@ typedef enum {
     TOKEN_NEW,
     TOKEN_FREE,
 	TOKEN_SIZEOF,
+	TOKEN_ORELSE,
     // Types
     TOKEN_ARROW,
 	TOKEN_BIG_ARROW,

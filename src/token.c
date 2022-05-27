@@ -309,6 +309,8 @@ const char* Token_GetRepr(_TokenType type)
         return "defer";
     case TOKEN_SIZEOF:
         return "sizeof";
+    case TOKEN_ORELSE:
+        return "orelse";
     case TOKEN_ARROW:
         return "->";
     case TOKEN_BIG_ARROW:
