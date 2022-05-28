@@ -26,6 +26,7 @@ enum astType {
     AST_ARGLIST,
     AST_NAMED_ARG,
     AST_ARRAY_LITERAL,
+    AST_UNION_LITERAL,
     AST_UNDEF,
     AST_DOC,
     // Math
@@ -40,7 +41,8 @@ enum astType {
     AST_DEREF,
     AST_INDEX,
     AST_SLICE,
-	AST_ADDROF,
+    AST_ADDROF,
+	AST_ORELSE,
     // Boolean
     AST_NOT,
     AST_OR,
@@ -76,7 +78,9 @@ enum astType {
     AST_IF,
     AST_FOR,
     AST_CASE,
+	AST_FIELD_CASE,
     AST_MAPPING,
+	AST_FIELD_MAPPING,
     AST_RETURN,
     AST_NEW, // Replace with allocator method
     AST_FREE, // Replace with allocator method
@@ -90,10 +94,10 @@ enum astType {
     AST_VOID,
     AST_CAST,
     AST_PARAMLIST,
+    AST_UNIONSET,
     AST_FUNCTION,
     AST_ADDR,
     AST_ARRAY,
-    AST_ENUM,
     AST_EXTERN
 };
 
@@ -135,6 +139,11 @@ typedef struct astNode_namedArg {
 typedef struct astNode_arrayLiteral {
     List* members; // members in the array literal, all of which are the same type
 } astNode_arrayLiteral;
+
+typedef struct astNode_unionLiteral {
+    int tag;
+    struct astNode* expr;
+} astNode_unionLiteral;
 
 typedef struct astNode_unop {
     struct astNode* expr;
@@ -201,10 +210,20 @@ typedef struct astNode_mapping {
     struct astNode* expr;
 } astNode_mapping;
 
+typedef struct astNode_fieldMapping {
+    List* exprs;
+    struct astNode* expr;
+    int tag;
+} astNode_fieldMapping;
+
 // for parameter lists, modules, structs, arrays, unions, a lot!
 typedef struct astNode_paramlist {
     List* defines;
 } astNode_paramlist;
+
+typedef struct astNode_unionset {
+    List* defines;
+} astNode_unionset;
 
 typedef struct astNode_function {
     struct astNode* domainType;
@@ -244,6 +263,7 @@ typedef struct astNode {
         astNode_arglist arglist;
         astNode_namedArg namedArg;
         astNode_arrayLiteral arrayLiteral;
+        astNode_unionLiteral unionLiteral;
         astNode_unop unop;
         astNode_binop binop;
         astNode_call call;
@@ -256,7 +276,9 @@ typedef struct astNode {
         astNode_for _for;
         astNode_case _case;
         astNode_mapping mapping;
+        astNode_fieldMapping fieldMapping;
         astNode_paramlist paramlist;
+        astNode_paramlist unionset;
         astNode_function function;
         astNode_extern _extern;
     };
@@ -280,7 +302,7 @@ const ASTNode* TYPE_TYPE;
 const ASTNode* PACKAGE_TYPE;
 const ASTNode* UNDEF_TYPE;
 const ASTNode* VOID_ADDR_TYPE;
-const ASTNode* ENUM_TYPE;
+const ASTNode* VOID_TYPE;
 
 const ASTNode* TRUE_AST;
 const ASTNode* FALSE_AST;
@@ -295,6 +317,7 @@ ASTNode* AST_Create_real(double data, struct symbolNode* scope, struct position 
 ASTNode* AST_Create_arglist(struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_namedArg(char* name, struct astNode* expr, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_arrayLiteral(struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_unionLiteral(int tag, struct astNode* expr, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_true(struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_false(struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_nothing(struct symbolNode* scope, struct position pos);
@@ -305,6 +328,7 @@ ASTNode* AST_Create_subtract(struct astNode* left, struct astNode* right, struct
 ASTNode* AST_Create_multiply(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_divide(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_modulus(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_orelse(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_paren(struct astNode* expr, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_deref(struct astNode* expr, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_index(struct astNode* arrayExpr, struct astNode* subscript, struct symbolNode* scope, struct position pos);
@@ -341,6 +365,7 @@ ASTNode* AST_Create_if(struct astNode* condition, struct astNode* bodyBlock, str
 ASTNode* AST_Create_for(struct astNode* pre, struct astNode* condition, struct astNode* post, struct astNode* bodyBlock, struct astNode* elseBlock, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_case(struct astNode* expr, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_mapping(struct astNode* block, List* exprs, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_fieldMapping(struct astNode* block, List* exprs, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_new(struct astNode* type, struct astNode* init, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_free(struct astNode* expr, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_return(struct astNode* expr, struct symbolNode* scope, struct position pos);
@@ -352,6 +377,7 @@ ASTNode* AST_Create_sizeof(struct astNode* type, struct symbolNode* scope, struc
 ASTNode* AST_Create_void(struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_cast(struct astNode* expr, struct astNode* type, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_paramlist(struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_unionset(struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_array(struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_function(struct astNode* domain, struct astNode* codomain, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_addr(struct astNode* type, struct symbolNode* scope, struct position pos);

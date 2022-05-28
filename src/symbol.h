@@ -12,7 +12,6 @@ typedef enum symbolType {
     SYMBOL_MODULE,
     SYMBOL_FUNCTION,
     SYMBOL_TYPE, // typedef or struct def
-    SYMBOL_ENUM,
     SYMBOL_BLOCK,
     SYMBOL_VARIABLE
 } SymbolType;
@@ -47,8 +46,8 @@ typedef struct symbolNode {
     List* restrictionExpr; // list of symbol_expr
     List* restrictions; // list of symbol*
 
-	// IR
-    List* instructions; // list of code_lowered instructions
+	// Union sets
+    char* activeFieldName;
 
 	// Defer/block
     List* defers; // list of ast's, in order of declaration

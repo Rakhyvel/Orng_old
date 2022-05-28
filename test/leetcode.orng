@@ -63,7 +63,7 @@ leetcode::Module = (
         if nums[ans[0]] + nums[ans[1]] == target {
             std.system.println("twoSum: Passed!")
         } else {
-            std.system.println("twoSum: Failed")
+            std.system.println("twoSum: Failed %d %d", nums[ans[0]], nums[ans[1]])
         }
     }
 
@@ -75,14 +75,13 @@ leetcode::Module = (
     -- https://leetcode.com/problems/add-two-numbers/
     ListNode::Type = (
         val:Int
-        next:&ListNode
+        next:?&ListNode
     )
 
-    convertToInt::(l:&ListNode)->Int =
-        if l.next == 0:&ListNode {
-            l.val
-        } else {
-            l.val + convertToInt(l.next) * 10
+    convertToInt::(l:?&ListNode)->Int =
+        case l {
+            .nothing   -> 0;
+            .something -> l.val + convertToInt(l.next) * 10
         }
 
     convertToList::(i:Int)->&ListNode =
@@ -105,7 +104,14 @@ leetcode::Module = (
 
         ans := addTwoNumbers(l1, l2)
 
-        if ans.val == 7 && ans.next.val == 0 && ans.next.next.val == 8 {
+        hasValue::(node:?&ListNode, x:[]Int)->Bool =
+            if node != nothing {
+                node.val == x[0] && hasValue(node.next, x[1;])
+            } else {
+                true
+            }
+
+        if hasValue(ans, [7, 0, 8]) {
             std.system.println("addTwoNumbers: Passed!")
         } else {
             std.system.println("addTwoNumbers: Failed")
@@ -316,17 +322,16 @@ leetcode::Module = (
     -- [-2^31, 2^31 - 1], then return 0.
     -- https://leetcode.com/problems/reverse-integer/
     reverseList::(list:&ListNode)->&ListNode = {
-        prev:&ListNode = 0:&ListNode
-        curr:&ListNode = list
-        next:&ListNode = 0:&ListNode
-        for curr != 0:&ListNode {
-            next = curr.next
-            curr.next = prev
-            prev = curr
-            curr = next
+        newList: &ListNode
+        next := list.next
+        if next == nothing {
+            return list
+        } else {
+            newList = reverseList(next)
+            next.next = list
         }
-        list = prev
-        return list
+        list.next = nothing
+        return newList
     }
     
     reverse::(x:Int)->Int = convertToInt(reverseList(convertToList(x)))
@@ -388,14 +393,17 @@ leetcode::Module = (
     -- Given an integer x, return true if x is palindrome integer.
     -- An integer is a palindrome when it reads the same backward as forward.
     isPalindrome::(x:Int)->Bool = {
-        list := convertToList(x)
-        reversedList := reverseList(convertToList(x))
-        for list != 0:&ListNode {
+        list: &ListNode = convertToList(x)
+        reversedList: &ListNode = reverseList(convertToList(x))
+
+        -- can assume that list and reversedList have the same length
+        for true {
             if list.val != reversedList.val {
                 return false
+            } else {
+                list = list.next orelse break
+                reversedList = reversedList.next orelse break
             }
-            list = list.next
-            reversedList = reversedList.next
         }
         return true
     }
@@ -464,13 +472,12 @@ leetcode::Module = (
     maxArea::(height:[]Int, max:Int=0)->Int =
         for i := 0; i < height.length - 1; i += 1 {
             for j := i + 1; j < height.length; j += 1 {
-                std.system.println("%d", std.math.abs(i - j))
                 max = std.math.max(max, std.math.abs(i - j) * std.math.min(height[i], height[j])):Int
             }
         }
 
     test_maxArea::()->() = {
-        height := [1,8,6,2,5,4,8,3,7]
+        height := [1,8,6,2,5,4,8,3,7] 
 
         ans := maxArea(height)
 

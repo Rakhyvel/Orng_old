@@ -88,7 +88,7 @@ void AST_Init()
     PACKAGE_TYPE = AST_Create_ident("Package", NULL, (Position) { NULL, 0, 0, 0 });
     UNDEF_TYPE = AST_Create_undef(NULL, (Position) { NULL, 0, 0, 0 });
     VOID_ADDR_TYPE = AST_Create_addr(AST_Create_paramlist(NULL, (Position) { NULL, 0, 0, 0 }), NULL, (Position) { NULL, 0, 0, 0 });
-    ENUM_TYPE = AST_Create_ident("Enum", NULL, (Position) { NULL, 0, 0, 0 });
+    VOID_TYPE = AST_Create_void(NULL, (Position) { NULL, 0, 0, 0 });
     TRUE_AST = AST_Create_true(NULL, (Position) { NULL, 0, 0, 0 });
     FALSE_AST = AST_Create_false(NULL, (Position) { NULL, 0, 0, 0 });
     NOTHING_AST = AST_Create_nothing(NULL, (Position) { NULL, 0, 0, 0 });
@@ -178,6 +178,14 @@ ASTNode* AST_Create_arrayLiteral(struct symbolNode* scope, struct position pos)
     return retval;
 }
 
+ASTNode* AST_Create_unionLiteral(int tag, struct astNode* expr, struct symbolNode* scope, struct position pos)
+{
+    ASTNode* retval = AST_Create(AST_UNION_LITERAL, scope, pos);
+    retval->unionLiteral.tag = tag;
+    retval->unionLiteral.expr = expr;
+    return retval;
+}
+
 ASTNode* AST_Create_true(struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_TRUE, scope, pos);
@@ -244,6 +252,14 @@ ASTNode* AST_Create_divide(struct astNode* left, struct astNode* right, struct s
 ASTNode* AST_Create_modulus(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_MODULUS, scope, pos);
+    retval->binop.left = left;
+    retval->binop.right = right;
+    return retval;
+}
+
+ASTNode* AST_Create_orelse(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos)
+{
+    ASTNode* retval = AST_Create(AST_ORELSE, scope, pos);
     retval->binop.left = left;
     retval->binop.right = right;
     return retval;
@@ -544,6 +560,14 @@ ASTNode* AST_Create_mapping(struct astNode* expr, List* exprs, struct symbolNode
     return retval;
 }
 
+ASTNode* AST_Create_fieldMapping(struct astNode* expr, List* exprs, struct symbolNode* scope, struct position pos)
+{
+    ASTNode* retval = AST_Create(AST_FIELD_MAPPING, scope, pos);
+    retval->mapping.exprs = exprs;
+    retval->mapping.expr = expr;
+    return retval;
+}
+
 ASTNode* AST_Create_new(struct astNode* type, struct astNode* init, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_NEW, scope, pos);
@@ -618,6 +642,13 @@ ASTNode* AST_Create_cast(struct astNode* expr, struct astNode* type, struct symb
 ASTNode* AST_Create_paramlist(struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_PARAMLIST, scope, pos);
+    retval->paramlist.defines = List_Create();
+    return retval;
+}
+
+ASTNode* AST_Create_unionset(struct symbolNode* scope, struct position pos)
+{
+    ASTNode* retval = AST_Create(AST_UNIONSET, scope, pos);
     retval->paramlist.defines = List_Create();
     return retval;
 }
@@ -722,6 +753,18 @@ int AST_TypeRepr(char* str, ASTNode* type)
             ASTNode* param = elem->data;
             str += AST_TypeRepr(str, param);
             if (elem->next == List_End(type->paramlist.defines)) {
+                str += sprintf(str, ")");
+            } else {
+                str += sprintf(str, ", ");
+            }
+        }
+        break;
+    case AST_UNIONSET:
+        str += sprintf(str, "(|");
+        for (struct listElem* elem = List_Begin(type->unionset.defines); elem != List_End(type->unionset.defines); elem = elem->next) {
+            ASTNode* param = elem->data;
+            str += AST_TypeRepr(str, param);
+            if (elem->next == List_End(type->unionset.defines)) {
                 str += sprintf(str, ")");
             } else {
                 str += sprintf(str, ", ");
@@ -911,8 +954,6 @@ char* AST_GetString(enum astType type)
         return "AST_ADDR";
     case AST_ARRAY:
         return "AST_ARRAY";
-    case AST_ENUM:
-        return "AST_ENUM";
     case AST_EXTERN:
         return "AST_EXTERN";
     case AST_DEFER:

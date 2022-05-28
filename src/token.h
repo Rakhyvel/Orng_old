@@ -70,6 +70,7 @@ typedef enum {
     TOKEN_LSQUARE,
     TOKEN_RSQUARE,
     TOKEN_RESTRICT,
+	TOKEN_UNION,
     // Keywords
     TOKEN_IF,
     TOKEN_ELSE,
@@ -82,6 +83,8 @@ typedef enum {
     TOKEN_DEFER,
     TOKEN_NEW,
     TOKEN_FREE,
+	TOKEN_SIZEOF,
+	TOKEN_ORELSE,
     // Types
     TOKEN_ARROW,
 	TOKEN_BIG_ARROW,

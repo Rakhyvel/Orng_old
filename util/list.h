@@ -5,8 +5,8 @@
 
 // Doubly linked list node
 struct listElem {
-    struct listElem* next; 
-    struct listElem* prev; 
+    struct listElem* next;
+    struct listElem* prev;
     void* data;
 };
 typedef struct listElem ListElem;
@@ -20,6 +20,7 @@ typedef struct list List;
 
 List* List_Create();
 void List_Destroy(List* list);
+List* List_Concat(List* a, List* b);
 struct listElem* List_Begin(struct list*);
 struct listElem* List_Next(struct listElem*);
 struct listElem* List_End(struct list*);

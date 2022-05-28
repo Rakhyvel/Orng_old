@@ -270,78 +270,132 @@ x imitation LLVM
 	x shorten stdlib to std
 	x rework restrictions to only restrict sibling symbols. Error if a symbol is not a sibling?
 	x find a way to make multi line strings, the way I have it now isnt tokenizable line-by-line
-- Rework the compiler to be better [ast-union-type]
+x Rework the compiler to be better [ast-union-type]
 	x case/mapping rather than switch/case
 	x use a union for AST Nodes, like you would if you were to rewrite this in Orng
 		x create function to create an AST for every possible AST type
 		x no more guessing the child element in a list! Can now just use it
-	- convert AST to IR before, evaluate this, then 1:1 generate it out
-		1. For each symbol, flatten it's AST definition to an untyped IR list
-			- IR instructions should have a union with the different instructions too, like ASTs
-		2. perform semantic analysis on the untyped IR list
-			- Two different types for untyped IR instr and analyzed IR instr
-			- Have a function that takes in untyped IR, analyzes it, emits an error or returns the new analyzed IR
-			- untyped IRs have ptrs to the analyzed IR, so that IRs that refered to the untyped version can get the typed version
-	- ASTs will likely not be typed, however, types will always be represented with ASTs I think
-	- analyzed IR instructions probably will be typed, if they can be
-	- make types expressions so that you can return them!
-	- only comptime const expr in modules, packages ARE modules, no Package type
 - unions like in julia and haskell
-	- Only practical uses are Either, and Maybe. Either is only ever used to pass error messages
-	- Tagged union and enums
-		Syntax: (|<ident> (:<type>)? (=<constexpr int>)?)+
-		- void type is implied if no type is given
-		- void fields in unions aren't generated, but their type is still used
-		- number is assigned if none is given. Clashes are not permitted
-		- accessing the identifier through a union namespace evaluates to the type_id for that identifier
-		- enums are tagged unions with the identifiers having a default void value
-		MyUnion::Type = || int:Int || char:Char || nothing
-		MyEnum::Type = || RED || BLUE || GREEN
+	x Tagged union and enums
+		x generate union type structs
+		x coerce to union
+		x union dot constructor
+		x union case
+		x void type is implied if no type is given
+		x validate that members in union must have either a unique type, or the void type
+		- in field cases, make it so that you need to union name
+	- Maybe type union
+		x ?<Type> which is just shorthand for (|nothing,  just:<Type>)
+		x can use the name of the maybe variable as-is if the compiler can reason about whether or not the variable is nothing
+			x weak SAT model:
+			sat::(expr:&AST, assumption:Bool)->(trueASTs:?&List(&AST), falseASTs:?&List(&AST)) =
+				case expr {
+					.not -> sat(expr.expr, !assumption)								-- flip assumption
+					.and -> if assumption {
+							union(sat(expr.left, true), sat(expr.right, true))		-- if assuming expr is true, both left and right must be true
+						} else
+							(nothing, nothing)										-- if assuming expr is false, cannot say anything about left and right
+						}
+					.or  -> if !assumption {
+							union(sat(expr.left, false), sat(expr.right, false))	-- if assuming expr is false, both left and right must be false
+						} else
+							(nothing, nothing)										-- if assuming expr is true, cannot say anything about left and right
+						}
+					else ->  if assumption {
+							(List(&AST).create([expr]), nothing)					-- if assuming expr is true, expr is true
+						} else
+							(nothing, List(&AST).create([expr]))					-- if assuming expr is false, expr is false
+						}
+				}
+		x replace uses of symbol when a known field is active with that field
+		x generate nothing comparisons
+		x assumptions for for loops too
+		x orelse operator
 	- runtime errors
-		- !<Type> which is just shorthand for || Error || <Type>
-		- return an error code, maybe with a message? (how do stack traces error messages work?)
+		- || type operator that operates on any union sets
+			- combines left and right union sets
+			- ok for names to collide, so long as their types are EQUAL (not just subtype)
+			- how do tags work? How can I coerce a union literal?
+			Color::Type = (|
+				red			-- tag = 0
+				orange		-- tag = 1
+				blue		-- tag = 2
+			)
+			Fruit::Type = (|
+				orange		-- tag = 0
+				apple		-- tag = 1
+				banana		-- tag = 2
+			)
+			Color || Fruit ::Type = (|
+				red			-- tag = 0
+				orange		-- tag = 1
+				blue		-- tag = 2
+				apple		-- tag = 3
+				banana		-- tag = 4
+			)
+			x : Color || Fruit = Color.orange -- needs to be coerced up to superset
+		- <UnionSetType>!<Type> type operator
+			- shorthand for (|success:<Type>) || <UnionSetType>
+			- binds looser than ||
+			- errors are regular unions, become errors with the ! operator
+			- no global error set
+		- can case on an error union just like any other union set
+			-- uses if-def idiom, very useful! implement it now!!!
+			file = case fileErr := openFile("filename.txt"); fileErr {
+				.Success -> fileErr
+				.FileNotFound -> {
+					std.system.println("could not find the file")
+					return fileErr
+				}
+				.FileInUse -> {
+					std.system.println("file is in use by another program")
+					return fileErr
+				}
+			}
 		- try unwraps value if no error, or returns the error
 		- catch unwraps value if no error, or evaluates to default expression
 		- errdefer is another return exit path if return is an error, a subset of defers (ie it defers all defers, and also errdefers if return is error)
-		- array indexing checks array size, returns error if out of bounds (panic instead of giving an option to catch)
-		- panic if new fails
-	- Void type union
-		- ?<Type> which is just shorthand for || Nothing || <Type>
-		- only void typed symbols can be null, null is of type void
-		- else-less if statements give optional types
-			x: ?Int = if true; 5
+		- infer error set using !<Type> operator
 - compile time evaluation
-	- GOOD RULE OF THUMB:
-		if it'd be a pain to implement for compile-time evaluation, don't add it as a feature
-		LESS features is better!
-	- setup a runtime environment with stackframes and a map of variable names to a "value" union
-		- values can be integer, string, array literal, whatever
-		- probably can't be pointers since that would be hard (but Jai does it somehow...)
-	- validate that all switch cases are unique numbers
-	- validate that all switch case exprs are comptime
+	- convert AST representation to IR
+		- validate the AST and then return an IR list instead
+		- there will likely be challenges figuring out alignment, how to maintain interop with external C code, etc. FIGURE IT OUT! Trust me it'll be worth it
+	- when evaluating something at compile time, just simply run the IR
+		- list of temp variables that act as registers with infinite width, single assign cannot be reassigned except for if/for/case/block evals
+		- variables as defined in Orng are then just addresses to data in memory
+	- validate that all cases mappings are unique, integer literals numbers
 	- validate that default function parameters and struct fields are constant expressions
-	- if index is comptime, must be postive
-	- if denominator is comptime, must not be 0
-	- dead code trimming
-	- calls to functions with all comptime parameters are memoized
+	x if index is comptime, must be postive
+	x if denominator is comptime, must not be 0
+	x dead code trimming
+	- calls to functions with compile time constant return type are memoized
 		- map input parameter values -> output instruction
 - generics
 	- you would need a function that 'returns' a type
-		- make types expressions so that `return <type>` works
-		- may need to write out grammar for this to work, but after this is should be pretty much solidified
-	- if comptime, acts as generics
-	- if runtime, a separate function is "stamped" and memoized, this function is called
-	- allocators with free and new methods that take in addrs and types, replace free and new
+	- if a function takes in all compile-time constant arguments and returns something compile-time constant, replace call with function definition
+		- can do this because:
+		- referential transparency- most function calls can simply be replaced with their definition
+			- return statements break this
+			- remove return statements?
+				- loops would still be a challenge, 
+		- all parameters are compile-time known, can simply replace references to the parameters with the arguments in the definition
+			- doesn't this imply we'd need to clone the def AST?
+	- rewrite util data structures to be generic
+	- typeof operator which gets the compiletime type tag of a type
+	- subtype operator which does compile time type checking
 - interfaces (traits in rust https://theburningmonk.com/2015/05/rust-memory-safety-without-gc/)
+	- add method calling for stack structs, just take the address in the call
 	- https://www.nmichaels.org/zig/interfaces.html interfaces in Zig
 		- compose an interface within each struct
-		- requires in-struct function definitions, which shouldn't be too much of a problem
+		- requires a backwards pointer, and knowdledge of memory alignment
+	- https://zig.news/kilianvounckx/zig-interfaces-for-the-uninitiated-an-update-4gf1
+	- other implementations have vtables which are passed along with the interface and a pointer to the base data, better
 	- possibly like typeclasses in Haskell? WANT!
 		Iter::Class = (
 			next:(self:&Iter)->&Iter
 		)
-	- interfaces define a list of functions for a struct type
-	- if there exists function definitions for the struct type ANYWHERE in the program, the struct type implements the interface
+	- should be able to define NEW data types that OLD functions work with
+	- should be able to define NEW functions that apply to OLD data types
 - refinement types, contracts, pre/post conditions
 	- why?
 		- comments are useless
@@ -363,14 +417,19 @@ x imitation LLVM
 	- maybe a post condition built in expression for like "|< no IO output happened during this function"
 	- conceptually, |> evaluates itself, then evaluates child
 	- |< evaluates its child at the end of the chain, captures it and performs condition
-- quantifiers from Alloy- or maybe these would be better as interfaces?
-	- basically just iterators, use interface above
-	- should be expressions, generate as a function call
-	- for x : X  {}		# for each loop
-	- all x : X, P		# all x in X satisfy P
-	- some x : X, P		# one or more x in X satisfy P
-- LLVM (?)
-- @attributes
+- allocators and IO 'monads'
+	new::(T::Type)->?&T = 
+		if retval := calloc(sizeof T, 1):&T; (retval:Int) == 0 {
+			nothing
+		} else {
+			*retval = default T -- since there's no new, there's no way to force allocators to set a default, but there should be a way to get a default value of a struct
+			retval
+		}
+- immutability
+	- variables are always "readers" of data
+	- mutable variables can be writers of data
+	- immutable variables cannot be writers of data
+- @attributes, then test suite
 	- define a type, can then congregate those symbols at compiletime in an array
 	- global namespace? or maybe a separate namespace from other identifiers
 	- @[stdlib.main] for main function
@@ -397,7 +456,6 @@ x imitation LLVM
 				}
 			}
 		}
-- rewrite in Orng
 - `if let` from zig or odin or whatever
 	// Wrap if in a separate scope
 	if node := isASTStateful(symbol->def); node != NULL && symbol.symbolType == SYMBOL_FUNCTION {
@@ -405,8 +463,15 @@ x imitation LLVM
 	} else if node % 2 != 0 {
 		
 	}
-
-	
+	INCREDIBLY USEFUL FOR DEFINING AN IDENT AS A DOT AND CHECKING FOR NOTHING!
+	since you we can't reason about dots, can only reason about ident symbols
+	can assign an ident to a dot, which then 
+- quantifiers from Alloy- or maybe these would be better as interfaces?
+	- basically just iterators, use interface above
+	- should be expressions, generate as a function call
+	- for x : X  {}		# for each loop
+	- all x : X, P		# all x in X satisfy P
+	- some x : X, P		# one or more x in X satisfy P
 
 
 

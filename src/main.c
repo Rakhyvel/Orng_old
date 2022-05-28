@@ -394,7 +394,7 @@ int main(int argc, char** argv)
             exit(1);
         }
 
-		Generator_Generate(programStruct, out);
+        Generator_Generate(programStruct, out);
 
         if (fclose(out)) {
             perror(outFilename);
