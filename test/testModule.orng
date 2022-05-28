@@ -1,15 +1,34 @@
 testModule::Module = (
-	maybeEven::()->?Int = {
-		std.math.seedRand(std.system.clock())
-		res: Int = std.math.rand()
-		if res % 2 == 0 {return res} else {return nothing}
-	}
-
-	main::(args:[]String)->Int = {
-		for true {
-			std.system.println("working...")
-			y: ?Int = maybeEven() orelse break
+	Allocator::Type = (
+		new::(T::Type)->?&T = {
+			retval := calloc(sizeof T, 1):&T
+			if retval:Int == 0 {
+				nothing
+			} else {
+				*retval = default T
+				retval
+			}
 		}
+	)
+
+	main::(args:[]String)->FileError||ArithmeticError!() = {
+		myInt: Int = system.allocator.new(Int)
+		leetcode.test_all()
+		file = case fileErr := openFile("filename.txt"); fileErr {
+				.Success -> fileErr
+				.FileNotFound -> {
+					std.system.println("could not find the file")
+					return fileErr
+				}
+				.FileInUse -> {
+					std.system.println("file is in use by another program")
+					return fileErr
+				}
+				else -> {
+					std.system.println("file is bad")
+					return fileErr
+				}
+			}
 		0
 	}
 )

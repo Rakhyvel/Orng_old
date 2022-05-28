@@ -56,8 +56,7 @@ static bool cNameClash(char* str)
         || !strcmp(str, "_Noreturn")
         || !strcmp(str, "_Static_assert")
         || !strcmp(str, "_Thread_local")
-        || !strcmp(str, "tag")
-        || !strcmp(str, "something"));
+        || !strcmp(str, "tag"));
 }
 
 static bool prependWithUnderscore(char* str)

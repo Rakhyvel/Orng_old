@@ -396,12 +396,13 @@ leetcode::Module = (
         list: &ListNode = convertToList(x)
         reversedList: &ListNode = reverseList(convertToList(x))
 
+        -- can assume that list and reversedList have the same length
         for true {
             if list.val != reversedList.val {
                 return false
             } else {
-                list = {next := list.next; if next != nothing {next} else {break; list}}
-                reversedList = {next := reversedList.next; if next != nothing {next} else {break; reversedList}}
+                list = list.next orelse break
+                reversedList = reversedList.next orelse break
             }
         }
         return true
@@ -471,7 +472,6 @@ leetcode::Module = (
     maxArea::(height:[]Int, max:Int=0)->Int =
         for i := 0; i < height.length - 1; i += 1 {
             for j := i + 1; j < height.length; j += 1 {
-                std.system.println("%d", std.math.abs(i - j))
                 max = std.math.max(max, std.math.abs(i - j) * std.math.min(height[i], height[j])):Int
             }
         }
