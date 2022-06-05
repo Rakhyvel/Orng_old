@@ -26,6 +26,7 @@ struct listElem* List_Next(struct listElem*);
 struct listElem* List_End(struct list*);
 void List_Insert(List* list, ListElem* before, void* data);
 void List_Append(List* list, void* data);
+void List_Remove(ListElem* elem);
 void List_Push(List* list, void* data);
 void* List_Get(List* list, int i);
 void* List_Peek(List* list);

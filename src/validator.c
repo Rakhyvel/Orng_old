@@ -4,6 +4,7 @@
 #include "./main.h"
 #include "./position.h"
 #include <assert.h>
+#include <stdlib.h>
 #include <string.h>
 
 static const List* functions = NULL;
@@ -58,6 +59,84 @@ static void restrictedOrUndefError(struct position pos1, struct position pos2, c
         error2(pos1, pos2, "symbol '%s' is undefined or not allowed through restriction", symbolName);
     } else {
         error(pos1, "symbol '%s' is undefined", symbolName);
+    }
+}
+
+int getTypeSize(ASTNode* type)
+{
+    switch (type->astType) {
+    case AST_IDENT: {
+        if (!strcmp(type->ident.data, "Int")) {
+            return 8;
+        } else if (!strcmp(type->ident.data, "Char")) {
+            return 1;
+        } else if (!strcmp(type->ident.data, "Bool")) {
+            return 1;
+        } else if (!strcmp(type->ident.data, "Real")) {
+            return 8;
+        } else if (!strcmp(type->ident.data, "String")) {
+            return 16;
+        } else if (!strcmp(type->ident.data, "Int8")) {
+            return 1;
+        } else if (!strcmp(type->ident.data, "Int16")) {
+            return 2;
+        } else if (!strcmp(type->ident.data, "Int32")) {
+            return 4;
+        } else if (!strcmp(type->ident.data, "Int64")) {
+            return 8;
+        } else if (!strcmp(type->ident.data, "Real32")) {
+            return 4;
+        } else if (!strcmp(type->ident.data, "Real64")) {
+            return 8;
+        }
+        return -1;
+    }
+    case AST_ARRAY:
+    case AST_PARAMLIST: {
+        int prevAlign = 0;
+        int size = 0;
+        for (ListElem* elem = List_Begin(type->paramlist.defines); elem != List_End(type->paramlist.defines); elem = elem->next) {
+            ASTNode* memberDefine = elem->data;
+            SymbolNode* memberSymbol = memberDefine->define.symbol;
+            memberSymbol->typeSize = getTypeSize(memberSymbol->type);
+            int padding = memberSymbol->typeSize - prevAlign;
+            if (memberSymbol->symbolType != SYMBOL_VARIABLE) {
+                memberSymbol->offset = size;
+            }
+            size += memberSymbol->typeSize + padding;
+            prevAlign = size;
+        }
+        return size;
+    }
+    case AST_UNIONSET: {
+        int maxMemberSize = 0;
+        for (ListElem* elem = List_Begin(type->paramlist.defines); elem != List_End(type->paramlist.defines); elem = elem->next) {
+            ASTNode* memberDefine = elem->data;
+            SymbolNode* memberSymbol = memberDefine->define.symbol;
+            memberSymbol->typeSize = getTypeSize(memberSymbol->type);
+            maxMemberSize = max(maxMemberSize, memberSymbol->typeSize);
+            memberSymbol->offset = 8;
+        }
+        return maxMemberSize + 8; // add 8 for the tag size
+    }
+    case AST_FUNCTION: {
+        return 8;
+    }
+    case AST_ADDR: {
+        return 8;
+    }
+    case AST_VOID: {
+        return 0;
+    }
+    case AST_EXTERN:
+        return 0;
+    case AST_DOT:
+    case AST_UNDEF: {
+        error(type->pos, "idk how to calculate this size yet");
+    }
+    default: {
+        error(type->pos, "not a type");
+    }
     }
 }
 
@@ -467,7 +546,7 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
                 break;
             }
         }
-		type = innerType;
+        type = innerType;
         break;
     }
     case AST_PAREN: {
@@ -1206,7 +1285,7 @@ void inferTypes(SymbolNode* var)
 {
     if (var->def && var->symbolType != SYMBOL_FUNCTION) {
         if (!var->def->isValid) {
-            var->def = validateAST(var->def);
+            var->def = validateAST(var->def); // TODO: change this to create the IR if it isn't created yet?
         }
         // if type is undef, type is type of def
         // else, type must match type of def
@@ -1245,17 +1324,6 @@ void inferTypes(SymbolNode* var)
                 var->type = expandTypeIdent(var->type, true);
                 validateType(var->type, true);
                 var->def->type = var->type;
-                /*
-                if (var->def->astType == AST_ARRAY_LITERAL) {
-                    ASTNode* dataDefine = List_Get(var->type->paramlist.defines, 1);
-                    SymbolNode* dataSymbol = dataDefine->define.symbol;
-                    ASTNode* dataType = dataSymbol->type;
-                    for (ListElem* elem = List_Begin(var->def->paramlist.defines); elem != List_End(var->def->paramlist.defines); elem = elem->next) {
-                        ASTNode* child = elem->data;
-                        child->type = dataType;
-                    }
-                }
-				*/
             }
         }
     }
@@ -1530,8 +1598,9 @@ ASTNode* validateAST(ASTNode* node)
             restrictedOrUndefError(node->pos, rejectingSymbol->pos, node->ident.data);
         }
         Validator_Validate(var);
-        if (var->type->isConst) {
+        if (var->type->isConst && var->symbolType != SYMBOL_FUNCTION) {
             retval = var->def;
+            retval->scope = node->scope;
             break;
         } else if (var->activeFieldName) {
             ASTNode* right = AST_Create_ident(var->activeFieldName, node->scope, node->pos);
@@ -1597,7 +1666,6 @@ ASTNode* validateAST(ASTNode* node)
         retval = node;
         break;
     }
-    case AST_PAREN:
     case AST_ARGLIST: {
         List* validArgs = List_Create();
         for (ListElem* elem = List_Begin(node->arglist.args); elem != List_End(node->arglist.args); elem = elem->next) {
@@ -1606,6 +1674,11 @@ ASTNode* validateAST(ASTNode* node)
         }
         node->arglist.args = validArgs;
         retval = node;
+        break;
+    }
+    case AST_PAREN: {
+        ASTNode* validExpr = validateAST(List_Get(node->arglist.args, 0));
+        retval = validExpr;
         break;
     }
     case AST_SIZEOF: {
@@ -1617,9 +1690,15 @@ ASTNode* validateAST(ASTNode* node)
     }
     case AST_BLOCK: {
         List* validChildren = List_Create();
+        bool deadCode = false;
         for (ListElem* elem = List_Begin(node->block.children); elem != List_End(node->block.children); elem = elem->next) {
-            ASTNode* child = elem->data;
-            List_Append(validChildren, validateAST(child));
+            ASTNode* validChild = validateAST(elem->data);
+            if (!deadCode) {
+                List_Append(validChildren, validChild);
+            }
+            if (validChild->astType == AST_RETURN || validChild->astType == AST_BREAK || validChild->astType == AST_CONTINUE) {
+                deadCode = true;
+            }
         }
         node->block.children = validChildren;
         retval = node;
@@ -1894,7 +1973,7 @@ ASTNode* validateAST(ASTNode* node)
         break;
     }
     case AST_DEFER: {
-        ASTNode* validStatement = node->defer.statement;
+        ASTNode* validStatement = validateAST(node->defer.statement);
         if (node->containsReturn) {
             error(node->pos, "defer statement cannot contain return");
         } else if (node->containsBreak) {
@@ -2107,25 +2186,6 @@ ASTNode* validateAST(ASTNode* node)
         }
         break;
     }
-    case AST_OR: {
-        // left and right are bool types
-        ASTNode* left = validateAST(node->binop.left);
-        ASTNode* right = validateAST(node->binop.right);
-        if (!typesAreEquivalent(getType(left, false, false), BOOL_TYPE)) {
-            typeMismatchError(left->pos, BOOL_TYPE, getType(left, false, false));
-        } else if (!typesAreEquivalent(getType(right, false, false), BOOL_TYPE)) {
-            typeMismatchError(right->pos, BOOL_TYPE, getType(right, false, false));
-        }
-        node->binop.left = left;
-        node->binop.right = right;
-        if (left->astType == AST_TRUE || right->astType == AST_TRUE) {
-            retval = TRUE_AST;
-            break;
-        } else {
-            retval = node;
-            break;
-        }
-    }
     case AST_AND: {
         // left and right are bool types
         ASTNode* left = validateAST(node->binop.left);
@@ -2145,7 +2205,26 @@ ASTNode* validateAST(ASTNode* node)
             break;
         }
     }
-    case AST_BIT_OR: {
+    case AST_OR: {
+        // left and right are bool types
+        ASTNode* left = validateAST(node->binop.left);
+        ASTNode* right = validateAST(node->binop.right);
+        if (!typesAreEquivalent(getType(left, false, false), BOOL_TYPE)) {
+            typeMismatchError(left->pos, BOOL_TYPE, getType(left, false, false));
+        } else if (!typesAreEquivalent(getType(right, false, false), BOOL_TYPE)) {
+            typeMismatchError(right->pos, BOOL_TYPE, getType(right, false, false));
+        }
+        node->binop.left = left;
+        node->binop.right = right;
+        if (left->astType == AST_TRUE || right->astType == AST_TRUE) {
+            retval = TRUE_AST;
+            break;
+        } else {
+            retval = node;
+            break;
+        }
+    }
+    case AST_BIT_AND: {
         ASTNode* left = validateAST(node->binop.left);
         ASTNode* right = validateAST(node->binop.right);
         if (!typesAreEquivalent(getType(left, false, false), INT64_TYPE)) {
@@ -2157,7 +2236,7 @@ ASTNode* validateAST(ASTNode* node)
         node->binop.left = left;
         node->binop.right = right;
         if (left->astType == AST_INT && right->astType == AST_INT) {
-            retval = AST_Create_int(left->_int.data | left->_int.data, node->scope, node->pos);
+            retval = AST_Create_int(left->_int.data & left->_int.data, node->scope, node->pos);
             break;
         } else {
             retval = node;
@@ -2183,7 +2262,7 @@ ASTNode* validateAST(ASTNode* node)
             break;
         }
     }
-    case AST_BIT_AND: {
+    case AST_BIT_OR: {
         ASTNode* left = validateAST(node->binop.left);
         ASTNode* right = validateAST(node->binop.right);
         if (!typesAreEquivalent(getType(left, false, false), INT64_TYPE)) {
@@ -2195,7 +2274,7 @@ ASTNode* validateAST(ASTNode* node)
         node->binop.left = left;
         node->binop.right = right;
         if (left->astType == AST_INT && right->astType == AST_INT) {
-            retval = AST_Create_int(left->_int.data & left->_int.data, node->scope, node->pos);
+            retval = AST_Create_int(left->_int.data | left->_int.data, node->scope, node->pos);
             break;
         } else {
             retval = node;
@@ -2510,7 +2589,19 @@ ASTNode* validateAST(ASTNode* node)
             retval = AST_Create_real(left->real.data + (double)right->_int.data, node->scope, node->pos);
             break;
         } else if (left->astType == AST_INT && right->astType == AST_INT) {
-            retval = AST_Create_real(left->real.data + right->real.data, node->scope, node->pos);
+            retval = AST_Create_int(left->_int.data + right->_int.data, node->scope, node->pos);
+            break;
+        } else if (left->astType == AST_INT && left->_int.data == 0) {
+            retval = right;
+            break;
+        } else if (right->astType == AST_INT && right->_int.data == 0) {
+            retval = left;
+            break;
+        } else if (left->astType == AST_REAL && left->real.data == 0.0) {
+            retval = right;
+            break;
+        } else if (right->astType == AST_REAL && right->real.data == 0.0) {
+            retval = left;
             break;
         } else {
             retval = node;
@@ -2540,7 +2631,19 @@ ASTNode* validateAST(ASTNode* node)
             retval = AST_Create_real(left->real.data - (double)right->_int.data, node->scope, node->pos);
             break;
         } else if (left->astType == AST_INT && right->astType == AST_INT) {
-            retval = AST_Create_real(left->real.data - right->real.data, node->scope, node->pos);
+            retval = AST_Create_int(left->_int.data - right->_int.data, node->scope, node->pos);
+            break;
+        } else if (left->astType == AST_INT && left->_int.data == 0) {
+            retval = right;
+            break;
+        } else if (right->astType == AST_INT && right->_int.data == 0) {
+            retval = left;
+            break;
+        } else if (left->astType == AST_REAL && left->real.data == 0.0) {
+            retval = right;
+            break;
+        } else if (right->astType == AST_REAL && right->real.data == 0.0) {
+            retval = left;
             break;
         } else {
             retval = node;
@@ -2570,7 +2673,19 @@ ASTNode* validateAST(ASTNode* node)
             retval = AST_Create_real(left->real.data * (double)right->_int.data, node->scope, node->pos);
             break;
         } else if (left->astType == AST_INT && right->astType == AST_INT) {
-            retval = AST_Create_real(left->real.data * right->real.data, node->scope, node->pos);
+            retval = AST_Create_int(left->_int.data * right->_int.data, node->scope, node->pos);
+            break;
+        } else if (left->astType == AST_INT && left->_int.data == 1) {
+            retval = right;
+            break;
+        } else if (right->astType == AST_INT && right->_int.data == 1) {
+            retval = left;
+            break;
+        } else if (left->astType == AST_REAL && left->real.data == 1.0) {
+            retval = right;
+            break;
+        } else if (right->astType == AST_REAL && right->real.data == 1.0) {
+            retval = left;
             break;
         } else {
             retval = node;
@@ -2606,7 +2721,13 @@ ASTNode* validateAST(ASTNode* node)
             retval = AST_Create_real(left->real.data / (double)right->_int.data, node->scope, node->pos);
             break;
         } else if (left->astType == AST_INT && right->astType == AST_INT) {
-            retval = AST_Create_real(left->real.data / right->real.data, node->scope, node->pos);
+            retval = AST_Create_int(left->_int.data / right->_int.data, node->scope, node->pos);
+            break;
+        } else if (right->astType == AST_INT && right->_int.data == 1) {
+            retval = left;
+            break;
+        } else if (right->astType == AST_REAL && right->real.data == 1.0) {
+            retval = left;
             break;
         } else {
             retval = node;
@@ -2626,7 +2747,7 @@ ASTNode* validateAST(ASTNode* node)
         node->binop.right = right;
 
         if (left->astType == AST_INT && right->astType == AST_INT) {
-            retval = AST_Create_real(left->_int.data % right->_int.data, node->scope, node->pos);
+            retval = AST_Create_int(left->_int.data % right->_int.data, node->scope, node->pos);
             break;
         } else {
             retval = node;
@@ -2900,16 +3021,6 @@ ASTNode* validateAST(ASTNode* node)
         retval = node;
         break;
     }
-    case AST_PARAMLIST:
-    case AST_ARRAY: {
-        ListElem* elem = List_Begin(node->paramlist.defines);
-        for (; elem != List_End(node->paramlist.defines); elem = elem->next) {
-            ASTNode* define = elem->data;
-            validateAST(define);
-        }
-        retval = UNDEF_TYPE;
-        break;
-    }
     case AST_UNIONSET: {
         ListElem* elem = List_Begin(node->unionset.defines);
         for (; elem != List_End(node->unionset.defines); elem = elem->next) {
@@ -2948,7 +3059,9 @@ ASTNode* validateAST(ASTNode* node)
     case AST_FUNCTION:
     case AST_UNDEF:
     case AST_VOID:
-    case AST_NAMED_ARG: {
+    case AST_NAMED_ARG:
+    case AST_PARAMLIST:
+    case AST_ARRAY: {
         retval = UNDEF_TYPE;
         break;
     }
@@ -3103,14 +3216,12 @@ Program Validator_Validate(SymbolNode* symbol)
             if (!child->type->isConst) {
                 char typeBuffer[255];
                 AST_TypeRepr(typeBuffer, child->type);
-                printf("%s\n", typeBuffer);
                 error(child->pos, "immediate child symbol '%s' of package '%s' is not constant", child->name, symbol->name);
             }
         }
         if (symbol->def->astType != AST_PARAMLIST && symbol->def->astType != AST_VOID) {
             error(symbol->pos, "expected parameter list");
         }
-        validateAST(symbol->def);
 
         SymbolNode* includesSymbol = Map_Get(symbol->children, "includes");
         SymbolNode* verbatimSymbol = Map_Get(symbol->children, "verbatim");
@@ -3143,31 +3254,24 @@ Program Validator_Validate(SymbolNode* symbol)
         break;
     }
     case SYMBOL_FUNCTION: {
-        if (!symbol->isExtern) {
-            List_Append(functions, symbol);
-        }
+        // Validate children
         ListElem* elem = List_Begin(children);
         for (; elem != List_End(children); elem = elem->next) {
             SymbolNode* child = Map_Get(symbol->children, elem->data);
             Validator_Validate(child);
         }
+
+        // TODO: generate IR list from def AST
         validateAST(symbol->def);
 
-        ASTNode* retType = symbol->type->function.codomainType;
-        if (!symbol->isExtern && retType->astType != AST_VOID) {
-            if (symbol->def->astType != AST_UNDEF && symbol->def->type->astType != AST_UNDEF) {
-                if (!typesAreEquivalent(symbol->def->type, retType)) {
-                    ASTNode* coerced = tryCoerceToUnion(retType, symbol->def);
-                    if (coerced) {
-                        symbol->def = coerced;
-                    } else {
-                        typeMismatchError(symbol->pos, symbol->def->type, retType);
-                    }
-                }
-            } else if (!allReturnPath(symbol->def)) {
-                error(symbol->pos, "not all paths return a value in '%s'", symbol->name);
-            }
+        // Calculate parameter size/offsets
+        if (symbol->type) {
+            symbol->typeSize = getTypeSize(symbol->type);
         }
+
+        // TODO: calculate local variable list and offsets
+
+        // Check if this function is a main function
         if (!strcmp(symbol->name, "main") && typesAreEquivalent(mainFunctionType, symbol->type)) {
             if (mainFunction) {
                 error2(symbol->pos, mainFunction->pos, "multiple main function definitions");
@@ -3175,21 +3279,38 @@ Program Validator_Validate(SymbolNode* symbol)
                 mainFunction = symbol;
             }
         }
+
+        // Add to list of function
+        if (!symbol->isExtern) {
+            List_Append(functions, symbol);
+        }
         break;
     }
     case SYMBOL_VARIABLE:
+        // Validate children
         ListElem* elem = List_Begin(children);
         for (; elem != List_End(children); elem = elem->next) {
             SymbolNode* child = Map_Get(symbol->children, elem->data);
             Validator_Validate(child);
         }
+
+        // TODO: replace this with def
+        inferTypes(symbol);
+
+        // Calculate type size/offsets
+        if (symbol->type) {
+            symbol->typeSize = getTypeSize(symbol->type);
+        }
         break;
     case SYMBOL_TYPE: {
+        // Types must be constant
         if (!symbol->type->isConst) {
             error(symbol->pos, "type '%s' is not constant", symbol->name);
         }
-        // validate valid type def
+
+        // Validate type definition
         validateType(symbol->def, true);
+
         // if def ast type is param list then for all define in paramlist children, define symbol is not extern
         if (symbol->def->astType == AST_PARAMLIST || symbol->def->astType == AST_UNIONSET) {
             for (ListElem* elem = List_Begin(symbol->def->paramlist.defines); elem != List_End(symbol->def->paramlist.defines); elem = elem->next) {
@@ -3209,25 +3330,18 @@ Program Validator_Validate(SymbolNode* symbol)
         ListElem* elem = List_Begin(children);
         for (; elem != List_End(children); elem = elem->next) {
             SymbolNode* child = Map_Get(symbol->children, elem->data);
-            Validator_Validate(child);
-            if (!child->isExtern) {
-                if (child->symbolType == SYMBOL_VARIABLE) {
-                    List_Append(globalVars, child);
-                }
+            if (!child->type->isConst) {
+                error(child->pos, "module '%s' is not constant", child->name);
             }
+            Validator_Validate(child);
         }
-        validateAST(symbol->def);
         break;
     }
-    case SYMBOL_BLOCK: { // Always validated as defs or as children of other block ASTs
+    case SYMBOL_BLOCK: {
         ListElem* elem = List_Begin(children);
         for (; elem != List_End(children); elem = elem->next) {
             SymbolNode* child = Map_Get(symbol->children, elem->data);
             Validator_Validate(child);
-        }
-        for (elem = List_Begin(symbol->defers); elem != List_End(symbol->defers); elem = elem->next) {
-            ASTNode* child = elem->data;
-            validateAST(child);
         }
         break;
     }

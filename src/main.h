@@ -35,9 +35,9 @@ typedef struct {
 
 char* getRelPath(char*);
 char* pathToFilename(char* path);
-void gen_error(const char* message, ...);
-void error(struct position pos, const char* message, ...);
-void error2(struct position pos1, Position pos2, const char* message, ...);
+__declspec(noreturn) void gen_error(const char* message, ...);
+__declspec(noreturn) void error(struct position pos, const char* message, ...);
+__declspec(noreturn) void error2(Position pos1, Position pos2, const char* message, ...);
 void unVisitSymbolTree(SymbolNode* node);
 
 #endif

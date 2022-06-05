@@ -24,6 +24,9 @@ Allocates and initializes the program struct
 struct symbolNode* Symbol_Create(char* name, SymbolType symbolType, struct symbolNode* parent, struct position pos)
 {
     struct symbolNode* retval = (struct symbolNode*)calloc(1, sizeof(struct symbolNode));
+    if (!retval) {
+        gen_error("out of memory");
+    }
 
     retval->symbolType = symbolType;
     retval->parent = parent;
@@ -33,6 +36,7 @@ struct symbolNode* Symbol_Create(char* name, SymbolType symbolType, struct symbo
     retval->defers = List_Create();
     retval->pos = pos;
     retval->isReachable = true;
+    retval->versions = List_Create();
 
     strncpy_s(retval->name, 255, name, 254);
     if (parent != NULL) {

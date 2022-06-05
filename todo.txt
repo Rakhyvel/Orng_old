@@ -333,7 +333,7 @@ x Rework the compiler to be better [ast-union-type]
 				apple		-- tag = 3
 				banana		-- tag = 4
 			)
-			x : Color || Fruit = Color.orange -- needs to be coerced up to superset
+			x : Color || Fruit = Color.orange -- needs to be coerced up to superset; OK to coerce to superset, not OK to coerce to subset
 		- <UnionSetType>!<Type> type operator
 			- shorthand for (|success:<Type>) || <UnionSetType>
 			- binds looser than ||
@@ -356,22 +356,48 @@ x Rework the compiler to be better [ast-union-type]
 		- catch unwraps value if no error, or evaluates to default expression
 		- errdefer is another return exit path if return is an error, a subset of defers (ie it defers all defers, and also errdefers if return is error)
 		- infer error set using !<Type> operator
-- compile time evaluation
-	- convert AST representation to IR
-		- validate the AST and then return an IR list instead
-		- there will likely be challenges figuring out alignment, how to maintain interop with external C code, etc. FIGURE IT OUT! Trust me it'll be worth it
-	- when evaluating something at compile time, just simply run the IR
-		- list of temp variables that act as registers with infinite width, single assign cannot be reassigned except for if/for/case/block evals
-		- variables as defined in Orng are then just addresses to data in memory
-	- validate that all cases mappings are unique, integer literals numbers
-	- validate that default function parameters and struct fields are constant expressions
+- AST flattening/simplification
 	x if index is comptime, must be postive
 	x if denominator is comptime, must not be 0
 	x dead code trimming
-	- calls to functions with compile time constant return type are memoized
-		- map input parameter values -> output instruction
+	x flatten add/sub 0, mult/div 1
+	x flatten sizeof to size
+	x if return, break, continue in block, remove all statements after IN BLOCK
+	x raise literals out of parenthesis
+	- eliminate assign to self
+	- eliminate bitwise or 0, logical or true, logical and false, lshift/rshift 0, mod of whatever
+	x always-true if statement evals to block
+	x always-false if statement evals to else block if exists, nothing if not
+	- validate that all cases mappings are unique, integer literals numbers
+	- validate that default function parameters and struct fields are constant expressions
+- IR and comptime execution
+	- pass main function symbol to generate call graph with
+		- each function has a control-flow graph with basic blocks as nodes
+		- each control-flow graph has an entry basic block, and some awareness of the versions of variables and temporaries used
+		- each basic block has a linked list of three-address-code nodes, that ends in a terminator (jump to another BB, or branch to a BB)
+		- use SSA IR instructions, so that every time a variable is assigned, a "version" of that variable is created and assigned
+			- whenever a symbol is being assigned, check if it has a version already
+			- if so, create a new version and assign that instead
+			- whenever a symbol is used, check the version and use the latest version
+		- only those functions reachable from the main function should be generated
+	- generate assembly from call graph
+	- DO ERROR UNIONS HERE
+	- local optimizations- done on a single basic block
+		- common subexpression optimization
+		- copy propagation optimization
+		- nop optimization, for example an assignment that isn't used
+	- peephole optimizations- scan a window of assembly code for patterns, replace
+		- mov r2 r1; mov r1 r2				->	mov r2 r1
+		- addiu r1, r1, i; addiu r1, r1, j	->	addiu r1, r1, i+j
+	- global optimizations-
+		- constant propagation, SSA really helps here!
+		- dead code elimination
+		- register allocation
+- generate assembly
 - generics
 	- you would need a function that 'returns' a type
+		- this would require a unification of type and value syntax
+		- can I find any instances where this leads to ambiguity that cannot be solved?
 	- if a function takes in all compile-time constant arguments and returns something compile-time constant, replace call with function definition
 		- can do this because:
 		- referential transparency- most function calls can simply be replaced with their definition

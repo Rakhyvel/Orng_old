@@ -404,7 +404,9 @@ static ASTNode* parsePostfix(SymbolNode* scope)
     Token* token = NULL;
     while (true) {
         if (nextTokenMaybeNewline()->type != TOKEN_NEWLINE && (token = accept(TOKEN_LPAREN)) != NULL) {
-            child = AST_Create_call(child, parseArgList(scope), scope, token->pos);
+            ASTNode* arglist = parseArgList(scope);
+            arglist->astType = AST_ARGLIST;
+            child = AST_Create_call(child, arglist, scope, token->pos);
         } else if ((token = accept(TOKEN_LSQUARE)) != NULL) {
             // [ <expr>? :? <expr>? ]
             ASTNode* parent = NULL;

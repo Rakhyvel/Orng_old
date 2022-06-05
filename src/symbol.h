@@ -2,13 +2,14 @@
 #define SYMBOL_H
 
 #include "../util/map.h"
+#include "./ir.h"
 #include "./position.h"
 
 struct astNode;
 
 typedef enum symbolType {
     SYMBOL_PROGRAM,
-	SYMBOL_PACKAGE,
+    SYMBOL_PACKAGE,
     SYMBOL_MODULE,
     SYMBOL_FUNCTION,
     SYMBOL_TYPE, // typedef or struct def
@@ -27,14 +28,16 @@ typedef enum symbolType {
     - The program as a whole */
 typedef struct symbolNode {
     SymbolType symbolType;
-    struct astNode* type;
     char name[255];
     char externName[255];
     char desc[255];
 
+    struct astNode* type;
+    int typeSize;
     struct astNode* def; // SymbolDefine ASTNode where this symbol is defined
-	
-	bool isDeclared;
+    List* instructions;
+
+    bool isDeclared;
     bool isExtern;
     bool isRestricted;
     bool isVararg;
@@ -43,13 +46,16 @@ typedef struct symbolNode {
     // Parse tree
     struct symbolNode* parent;
     Map* children; // name -> other symbolNodes
+    int offset; // for variable symbols. offset from function base OR from struct base in bytes
     List* restrictionExpr; // list of symbol_expr
     List* restrictions; // list of symbol*
 
-	// Union sets
+	List* versions; // Used to keep track of how many versions this symbol has, list of SymbolVersion*
+
+    // Union sets
     char* activeFieldName;
 
-	// Defer/block
+    // Defer/block
     List* defers; // list of ast's, in order of declaration
     bool isLoop;
     int tempVars;

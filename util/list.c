@@ -61,15 +61,15 @@ struct listElem* List_End(struct list* list)
 }
 
 /*
-    Inserts a new list element after a given list element. */
-void List_Insert(List* list, ListElem* before, void* data)
+    Inserts a new list element before a given list element. */
+void List_Insert(List* list, ListElem* successor, void* data)
 {
     ListElem* elem = (ListElem*)malloc(sizeof(struct listElem));
     elem->data = data;
-    elem->prev = before->prev;
-    elem->next = before;
-    before->prev->next = elem;
-    before->prev = elem;
+    elem->prev = successor->prev;
+    elem->next = successor;
+    successor->prev->next = elem;
+    successor->prev = elem;
     list->size++;
 }
 
@@ -78,6 +78,14 @@ void List_Insert(List* list, ListElem* before, void* data)
 void List_Append(List* list, void* data)
 {
     List_Insert(list, &list->tail, data);
+}
+
+void List_Remove(ListElem* elem)
+{
+    ListElem* prev = elem->prev;
+    ListElem* next = elem->next;
+    prev->next = next;
+    next->prev = prev;
 }
 
 /*

@@ -1,34 +1,8 @@
 testModule::Module = (
-	Allocator::Type = (
-		new::(T::Type)->?&T = {
-			retval := calloc(sizeof T, 1):&T
-			if retval:Int == 0 {
-				nothing
-			} else {
-				*retval = default T
-				retval
-			}
-		}
-	)
-
-	main::(args:[]String)->FileError||ArithmeticError!() = {
-		myInt: Int = system.allocator.new(Int)
-		leetcode.test_all()
-		file = case fileErr := openFile("filename.txt"); fileErr {
-				.Success -> fileErr
-				.FileNotFound -> {
-					std.system.println("could not find the file")
-					return fileErr
-				}
-				.FileInUse -> {
-					std.system.println("file is in use by another program")
-					return fileErr
-				}
-				else -> {
-					std.system.println("file is bad")
-					return fileErr
-				}
-			}
-		0
+	main::(args:[]String)->Int = {
+		x := 0
+		y := 4
+		x = 3 + y
+		return x + y
 	}
 )

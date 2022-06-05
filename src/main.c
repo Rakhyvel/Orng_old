@@ -384,8 +384,10 @@ int main(int argc, char** argv)
             ASTNode* outnameDef = outnameSymbol->def;
             strcat_s(outFilename, 255, outnameDef->string.data);
         } else {
-            strcat_s(outFilename, 255, "out.c");
+            strcat_s(outFilename, 255, "out.asm");
         }
+
+        CFG* cfg = createCFG(programStruct.mainFunction);
 
         FILE* out;
         fopen_s(&out, outFilename, "w");
@@ -394,7 +396,7 @@ int main(int argc, char** argv)
             exit(1);
         }
 
-        Generator_Generate(programStruct, out);
+        Generator_Generate(out, cfg);
 
         if (fclose(out)) {
             perror(outFilename);
@@ -404,9 +406,10 @@ int main(int argc, char** argv)
 
     t = clock() - t;
     double time_taken = ((double)t) / CLOCKS_PER_SEC; // in seconds
-    printf("%d ms\n", (int)(time_taken * 1000.0));
+    printf("%d ms", (int)(time_taken * 1000.0));
 
-    system("pause");
+    system("cd test && nasm -f win64 -g out.asm -o out.obj && GoLink /console /mix /entry _start msvcr100.dll out.obj && out.exe");
+    system("echo Return code: %ERRORLEVEL% && pause");
 }
 
 /*
