@@ -219,7 +219,7 @@ static void generateIR(FILE* out, IR* ir)
     }
     case IR_COPY: {
         fprintf(out, "\t; copy\n");
-        generateDouble(out, "mov", ir->dest, ir->src1->dest);
+        generateDouble(out, "mov", ir->dest, ir->src1);
         break;
     }
     case IR_DECLARE_LABEL: // Just don't do anything... these instructions are generated at the end of a basic block
@@ -229,19 +229,24 @@ static void generateIR(FILE* out, IR* ir)
     }
     case IR_RET: {
         fprintf(out, "\t; return\n");
-        generateRetMov(out, ir->src1->dest);
+        generateRetMov(out, ir->src1);
         break;
     }
     case IR_ADD: {
         fprintf(out, "\t; add\n");
-        generateDouble(out, "mov", ir->dest, ir->src1->dest);
-        generateDouble(out, "add", ir->dest, ir->src2->dest);
+        generateDouble(out, "mov", ir->dest, ir->src1);
+        generateDouble(out, "add", ir->dest, ir->src2);
         break;
     }
     case IR_LSR: {
         fprintf(out, "\t; lt\n");
-        generateDouble(out, "cmp", ir->src1->dest, ir->src2->dest);
+        generateDouble(out, "cmp", ir->src1, ir->src2);
         generateSingle(out, "setl", ir->dest);
+        break;
+    }
+    case IR_PHI: {
+        fprintf(out, ";%d", ir->src1->version);
+        generateSingle(out, "phi", ir->src1);
         break;
     }
     default: {
@@ -262,17 +267,17 @@ static void generateBasicBlock(FILE* out, BasicBlock* bb)
     }
 
     if (bb->hasBranch) {
-        generateImmediate(out, "cmp", bb->condition->dest, 0);
+        generateImmediate(out, "cmp", bb->condition, 0);
         fprintf(out, "\tje .L%d\n", (int)bb->branch->id);
         if (bb->next->visited) { // will likely be generated now, chill!
-            fprintf(out, "\tjmp .L%d\n", (int)bb->next->id);
         }
+        fprintf(out, "\tjmp .L%d\n", (int)bb->next->id);
         generateBasicBlock(out, bb->next);
         generateBasicBlock(out, bb->branch);
     } else {
-        if (bb->next->visited) { // will likely be generated now, chill!
-            fprintf(out, "\tjmp .L%d\n", (int)bb->next->id);
+        if (!bb->next->visited) { // will likely be generated now, chill!
         }
+        fprintf(out, "\tjmp .L%d\n", (int)bb->next->id);
         if (bb->next->id != 0) {
             generateBasicBlock(out, bb->next);
         }

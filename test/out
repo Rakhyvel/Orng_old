@@ -1,8 +1,0 @@
-
-C:\Users\Joseph\source\repos\Language\Orange\test>nasm -f win64 -g out.asm -o out.obj 
-
-C:\Users\Joseph\source\repos\Language\Orange\test>GoLink /console /mix /entry _start msvcr100.dll out.obj 
-﻿
-GoLink.Exe Version 1.0.4.1  Copyright Jeremy Gordon 2002-2022   info@goprog.com
-Output file: out.exe
-Format: X64   Size: 1,024 bytes

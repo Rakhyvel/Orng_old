@@ -408,8 +408,7 @@ int main(int argc, char** argv)
     double time_taken = ((double)t) / CLOCKS_PER_SEC; // in seconds
     printf("%d ms", (int)(time_taken * 1000.0));
 
-    system("cd test && nasm -f win64 -g out.asm -o out.obj && GoLink /console /mix /entry _start msvcr100.dll out.obj && out.exe");
-    system("echo Return code: %ERRORLEVEL% && pause");
+    system("cd test && nasm -f win64 -g out.asm -o out.obj && GoLink /console /mix /entry _start msvcr100.dll out.obj && pause");
 }
 
 /*

@@ -29,6 +29,7 @@ typedef enum ir_type {
     IR_LOAD_STR, //															Loads a string literal from .data
 
     // Variables and assigning
+    IR_PHI,
     IR_COPY, //																Copies one symbol to another
     IR_LOAD, //					data at addr		<type at addr>			Loads the data at an address in memory with offset relative to base pointer
     IR_STORE, //				nothing				()						Stores the data of another register to an address in memory with offset relative to base pointer
@@ -52,6 +53,7 @@ typedef enum ir_type {
     IR_GTE, //					a >= b				Bool					Greater than or equal to
     IR_LTE, //					a <= b				Bool					Less than or equal to
     IR_ADD, //					a + b				Real					Addition
+    IR_ADDI,
     IR_SUBTRACT, //				a - b				Real					Subtraction
     IR_MULTIPLY, //				a * b				Real					Multiplication
     IR_DIVIDE, //				a / b				Real					Division
@@ -88,6 +90,9 @@ typedef struct SymbolVersion {
     int startpoint;
     int endpoint;
 
+    bool removed;
+    bool used;
+
     int isReg;
     union {
         int reg;
@@ -99,8 +104,8 @@ typedef struct IR {
     ir_type type;
 
     SymbolVersion* dest;
-    struct IR* src1;
-    struct IR* src2;
+    SymbolVersion* src1;
+    SymbolVersion* src2;
     union {
         int64_t intData;
         double doubleData;
@@ -117,9 +122,11 @@ typedef struct BasicBlock {
     struct IR* entry;
     bool hasBranch;
     int id;
-    struct IR* condition; // Used for conditional jumps
+    struct SymbolVersion* condition; // Used for conditional jumps
     struct BasicBlock* next; // Used by jump, and branch if condition is true
     struct BasicBlock* branch; // Used by branch if condition is false
+    struct List* parameters; // These symbols are needed to be phi-noded. They are defined somewhere in this BB, and are used by children BB
+	struct List* arguments;
     bool visited;
 } BasicBlock;
 

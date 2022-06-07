@@ -3,6 +3,8 @@
 
 #include <stdbool.h>
 
+#define forall(e, l) for (ListElem* e = List_Begin(l); e != List_End(l); e = e->next)
+
 // Doubly linked list node
 struct listElem {
     struct listElem* next;
