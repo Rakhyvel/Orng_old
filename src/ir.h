@@ -21,15 +21,40 @@ code_typed		- all types are known
 Then optimizations can be made!
 */
 
+typedef enum reg {
+    A,
+    B,
+    C,
+    D,
+    DI,
+    SI,
+    R8,
+    R9,
+    R10,
+    R11,
+    R12,
+    R13,
+    R14,
+    R15,
+    XMM0,
+    XMM1,
+    XMM2,
+    XMM3,
+    XMM4,
+    XMM5,
+    XMM6,
+    XMM7,
+} reg;
+
 typedef enum ir_type {
     // Constants and literals
     IR_LOAD_IDENT,
     IR_LOAD_INT, //				integer value		Int						Loads an integer constant
     IR_LOAD_REAL, //			real value			Real					Loads a real constant
     IR_LOAD_STR, //															Loads a string literal from .data
+    IR_PHONY,
 
     // Variables and assigning
-    IR_PHI,
     IR_COPY, //																Copies one symbol to another
     IR_LOAD, //					data at addr		<type at addr>			Loads the data at an address in memory with offset relative to base pointer
     IR_STORE, //				nothing				()						Stores the data of another register to an address in memory with offset relative to base pointer
@@ -64,6 +89,7 @@ typedef enum ir_type {
     IR_NOT, //					!a					Bool					Boolean not
     IR_BIT_NOT, //				~a					Int						Bitwise not
     IR_ADDR_OF, //				addr of a			&*						Address of identifier
+    IR_CONVERT,
 } ir_type;
 
 /*
@@ -84,6 +110,7 @@ typedef struct SymbolVersion {
     struct symbolNode* symbol;
     int version;
 
+    struct astNode* type;
     int typeSize;
 
     struct IR* def;
@@ -95,13 +122,13 @@ typedef struct SymbolVersion {
 
     int isReg;
     union {
-        int reg;
+        reg reg;
         int offset;
     };
 } SymbolVersion;
 
 typedef struct IR {
-    ir_type type;
+    ir_type irType;
 
     SymbolVersion* dest;
     SymbolVersion* src1;
@@ -111,6 +138,10 @@ typedef struct IR {
         double doubleData;
         struct IR* branch;
         struct SymbolVersion* symbver;
+        struct {
+            struct astNode* fromType;
+            struct astNode* toType;
+        };
     };
 
     struct BasicBlock* inBlock;
@@ -126,7 +157,7 @@ typedef struct BasicBlock {
     struct BasicBlock* next; // Used by jump, and branch if condition is true
     struct BasicBlock* branch; // Used by branch if condition is false
     struct List* parameters; // These symbols are needed to be phi-noded. They are defined somewhere in this BB, and are used by children BB
-	struct List* arguments;
+    struct List* arguments;
     bool visited;
 } BasicBlock;
 
@@ -142,6 +173,8 @@ typedef struct CFG {
     List* symbolVersions;
     struct symbolNode* symbol; // Symbol table for function
     struct symbolNode* tempSymbol; // Temporary symbol (could be several different types!!!)
+    List* real32; // Set of all 32 bit real numbers
+    List* real64; // Set of all 64 bit real numbers
 } CFG;
 
 List* createCFG(struct symbolNode* functionSymbol);

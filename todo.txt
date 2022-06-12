@@ -364,36 +364,37 @@ x Rework the compiler to be better [ast-union-type]
 	x flatten sizeof to size
 	x if return, break, continue in block, remove all statements after IN BLOCK
 	x raise literals out of parenthesis
-	- eliminate assign to self
+	x eliminate assign to self
 	- eliminate bitwise or 0, logical or true, logical and false, lshift/rshift 0, mod of whatever
 	x always-true if statement evals to block
 	x always-false if statement evals to else block if exists, nothing if not
 	- validate that all cases mappings are unique, integer literals numbers
 	- validate that default function parameters and struct fields are constant expressions
 - IR and comptime execution
-	- pass main function symbol to generate call graph with
-		- each function has a control-flow graph with basic blocks as nodes
-		- each control-flow graph has an entry basic block, and some awareness of the versions of variables and temporaries used
-		- each basic block has a linked list of three-address-code nodes, that ends in a terminator (jump to another BB, or branch to a BB)
-		- use SSA IR instructions, so that every time a variable is assigned, a "version" of that variable is created and assigned
-			- whenever a symbol is being assigned, check if it has a version already
-			- if so, create a new version and assign that instead
-			- whenever a symbol is used, check the version and use the latest version
-		- only those functions reachable from the main function should be generated
-	- generate assembly from call graph
-	- DO ERROR UNIONS HERE
-	- local optimizations- done on a single basic block
-		- common subexpression optimization
-		- copy propagation optimization
-		- nop optimization, for example an assignment that isn't used
-	- peephole optimizations- scan a window of assembly code for patterns, replace
-		- mov r2 r1; mov r1 r2				->	mov r2 r1
-		- addiu r1, r1, i; addiu r1, r1, j	->	addiu r1, r1, i+j
-	- global optimizations-
-		- constant propagation, SSA really helps here!
-		- dead code elimination
-		- register allocation
-- generate assembly
+	x pass main function symbol to generate call graph with
+		x add implicit conversion node in AST between integers, real32, real64
+		x addition of floating point numbers
+		x comparison of floating point numbers
+		x sizeof collapses to integer ast node
+		- return paths
+		- break
+		- continue
+		- defers
+		- switches
+		- default initialization
+		- new
+		- free
+		- index & array literals & arrays & slices
+		- dots & struct literals & structs
+		- union literals
+		- and/or
+		- binops
+		- unops
+		- op-assign
+		- casts and type conversions
+		- calls
+		- union stuff
+		- error unions
 - generics
 	- you would need a function that 'returns' a type
 		- this would require a unification of type and value syntax
@@ -500,6 +501,7 @@ x Rework the compiler to be better [ast-union-type]
 	- some x : X, P		# one or more x in X satisfy P
 
 
+- &&= and ||= operator for &&= and ||=, do not make &= and |= polymorphic
 
 
 

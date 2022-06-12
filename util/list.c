@@ -10,6 +10,7 @@
 
 #include "list.h"
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdlib.h>
 
 /*  Creates a new list, with no new nodes. */
@@ -41,6 +42,24 @@ List* List_Concat(List* a, List* b)
     }
 }
 
+// Empty the list but do not free the data
+void List_Clear(List* list)
+{
+    ListElem* toFree = NULL;
+    forall(elem, list)
+    {
+        if (toFree) {
+            free(toFree);
+        }
+        toFree = elem;
+    }
+    if (toFree) {
+        free(toFree);
+    }
+    list->head.next = &list->tail;
+    list->tail.prev = &list->head;
+}
+
 /*  Gives the starting point of the list */
 struct listElem* List_Begin(struct list* list)
 {
@@ -62,7 +81,7 @@ struct listElem* List_End(struct list* list)
 
 /*
     Inserts a new list element before a given list element. */
-void List_Insert(List* list, ListElem* successor, void* data)
+void List_Insert(List* list, ListElem* successor, int64_t data)
 {
     ListElem* elem = (ListElem*)malloc(sizeof(struct listElem));
     elem->data = data;
@@ -72,12 +91,42 @@ void List_Insert(List* list, ListElem* successor, void* data)
     successor->prev = elem;
     list->size++;
 }
+/*
+    Inserts a new list element before a given list element. */
+void List_InsertDouble(List* list, ListElem* successor, double data)
+{
+    ListElem* elem = (ListElem*)malloc(sizeof(struct listElem));
+    elem->doubleData = data;
+    elem->prev = successor->prev;
+    elem->next = successor;
+    successor->prev->next = elem;
+    successor->prev = elem;
+    list->size++;
+}
 
 /*
     Appends data to the end of a given list */
-void List_Append(List* list, void* data)
+void List_Append(List* list, int64_t data)
 {
     List_Insert(list, &list->tail, data);
+}
+/*
+    Appends data to the end of a given list */
+void List_AppendDouble(List* list, double data)
+{
+    List_InsertDouble(list, &list->tail, data);
+}
+
+bool Set_Put(List* list, double data)
+{
+    forall(elem, list)
+    {
+        if (elem->doubleData == data) {
+            return false;
+        }
+    }
+    List_AppendDouble(list, data);
+    return true;
 }
 
 void List_Remove(ListElem* elem)
