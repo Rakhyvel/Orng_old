@@ -7,6 +7,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLabel, IR* continueLabel);
+
 char* IR_ToString(ir_type type)
 {
     switch (type) {
@@ -27,7 +29,7 @@ char* IR_ToString(ir_type type)
     case IR_DECLARE_LABEL:
         return "IR_DECLARE_LABEL";
     case IR_JUMP:
-        return "IR_JUMO";
+        return "IR_JUMP";
     case IR_BRANCH_IF_FALSE:
         return "IR_BRANCH_IF_FALSE";
     case IR_RET:
@@ -75,6 +77,25 @@ char* IR_ToString(ir_type type)
     }
 }
 
+void printInstructions(CFG* cfg)
+{
+    for (IR* ir = cfg->head; ir != NULL; ir = ir->next) {
+        if (ir->irType == IR_DECLARE_LABEL) {
+            printf("L%d:", ir->id);
+        } else {
+            printf("%d\t%s", ir->id, IR_ToString(ir->irType));
+            if (ir->branch) {
+                if (ir->irType == IR_BRANCH_IF_FALSE) {
+                    printf("\tL%d", ir->branch->id);
+                } else if (ir->irType == IR_JUMP) {
+                    printf("\t\t\tL%d", ir->branch->id);
+                }
+            }
+        }
+        printf("\n");
+    }
+}
+
 BasicBlock* createBasicBlock(CFG* cfg)
 {
     static int blockID = 0;
@@ -89,6 +110,7 @@ BasicBlock* createBasicBlock(CFG* cfg)
 
 IR* createIR(ir_type type, SymbolVersion* dest, IR* src1, IR* src2)
 {
+    static int id = 0;
     IR* retval = calloc(sizeof(IR), 1);
     if (!retval) {
         gen_error("out of memory");
@@ -97,6 +119,7 @@ IR* createIR(ir_type type, SymbolVersion* dest, IR* src1, IR* src2)
     retval->dest = dest;
     retval->src1 = src1;
     retval->src2 = src2;
+    retval->id = id++;
     return retval;
 }
 
@@ -240,11 +263,24 @@ void removeInstruction(BasicBlock* bb, IR* ir)
     }
 }
 
+// Whenever execution exits a block, run the defers in reverse order
+// If execution reaches end of block, run all defers
+// If continue, jump to defer needed to run, go to end of block
+// If break, jump to defer needed to run, go to break label
+// If return, jump to defer needed to run, go to return label
+void generateDefers(CFG* cfg, List* defers, List* deferLabels)
+{
+    for (int i = defers->size - 1; i >= 0; i--) {
+        appendInstruction(cfg, List_Get(deferLabels, i));
+        flattenAST(cfg, List_Get(defers, i), NULL, NULL, NULL);
+    }
+}
+
 // Adds IR instructions to a list of ir instructions, returns instructions that assign a term
 // When converting to SSA, the dest of each instruction will be set to a unique symbol version
 //                         each source will be filled with a pointer to the most recent symbol version
 // Just fill the dest with the current version now, temporary or not
-SymbolVersion* flattenAST(CFG* cfg, ASTNode* node)
+SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLabel, IR* continueLabel)
 {
     switch (node->astType) {
     case AST_IDENT: { // the symbol version for the ident needs to be unversioned, and not shared with any other IR
@@ -294,12 +330,57 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node)
         return temp;
     }
     case AST_BLOCK: {
+        SymbolNode* eval = NULL;
+        if (node->type->astType != AST_UNDEF) {
+            eval = Symbol_Create("$blockEval", SYMBOL_VARIABLE, NULL, (Position) { NULL, 0, 0, 0, 0 });
+        }
+
+        // Each defer has 3 labels, continue, break, return
+        // Start off with the given continue, break, return (-1)
+        // Every time a defer is encountered in the block, increase number by 1
+        // When passing continue, break, return, check the number and use those labels
+        List* continueLabels = List_Create();
+        List* breakLabels = List_Create();
+        List* returnLabels = List_Create();
+        forall(elem, node->block.symbol->defers)
+        {
+            List_Append(continueLabels, createIR_label());
+            List_Append(breakLabels, createIR_label());
+            List_Append(returnLabels, createIR_label());
+        }
+
+        IR* thisContinueLabel = continueLabel;
+        IR* thisBreakLabel = breakLabel;
+        IR* thisReturnLabel = returnLabel;
+        int deferLabelIndex = -1;
+
         SymbolVersion* var = NULL;
         for (ListElem* elem = List_Begin(node->block.children); elem != List_End(node->block.children); elem = elem->next) {
             ASTNode* child = elem->data;
-            var = flattenAST(cfg, child);
+            var = flattenAST(cfg, child, thisReturnLabel, thisBreakLabel, thisContinueLabel);
+            if (child->astType == AST_DEFER) {
+                deferLabelIndex++;
+                thisContinueLabel = List_Get(continueLabels, deferLabelIndex);
+                thisBreakLabel = List_Get(breakLabels, deferLabelIndex);
+                thisReturnLabel = List_Get(returnLabels, deferLabelIndex);
+            }
         }
-        return var;
+
+        SymbolVersion* evalSymbolVersion = NULL;
+        if (node->type->astType != AST_UNDEF && var) {
+            evalSymbolVersion = unversionedSymbolVersion(cfg, eval, node->type);
+            IR* ir = createIR(IR_COPY, evalSymbolVersion, var, NULL);
+            evalSymbolVersion->def = ir;
+            appendInstruction(cfg, ir);
+        }
+
+        generateDefers(cfg, node->block.symbol->defers, continueLabels);
+        appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, continueLabel));
+        generateDefers(cfg, node->block.symbol->defers, breakLabels);
+        appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, breakLabel));
+        generateDefers(cfg, node->block.symbol->defers, returnLabels);
+        appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, returnLabel));
+        return evalSymbolVersion;
     }
     case AST_IF: {
         SymbolVersion* var = NULL;
@@ -307,45 +388,65 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node)
             var = tempSymbolVersion(cfg, node->type);
             var->def = createIR(IR_PHONY, NULL, NULL, NULL);
         }
-        SymbolVersion* condition = flattenAST(cfg, node->_if.condition);
+        SymbolVersion* condition = flattenAST(cfg, node->_if.condition, returnLabel, breakLabel, continueLabel);
 
         IR* elseLabel = createIR_label();
         IR* endLabel = createIR_label();
 
         appendInstruction(cfg, createIR_branch(IR_BRANCH_IF_FALSE, NULL, condition, NULL, elseLabel));
-        SymbolVersion* bodySymbver = flattenAST(cfg, node->_if.bodyBlock);
-        appendInstruction(cfg, createIR(IR_COPY, var, bodySymbver, NULL));
+        SymbolVersion* bodySymbver = flattenAST(cfg, node->_if.bodyBlock, returnLabel, breakLabel, continueLabel);
+        if (var) {
+            appendInstruction(cfg, createIR(IR_COPY, var, bodySymbver, NULL));
+        }
         appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, endLabel));
         appendInstruction(cfg, elseLabel);
-        SymbolVersion* elseSymbver = flattenAST(cfg, node->_if.elseBlock);
-        appendInstruction(cfg, createIR(IR_COPY, var, elseSymbver, NULL));
+        SymbolVersion* elseSymbver = flattenAST(cfg, node->_if.elseBlock, returnLabel, breakLabel, continueLabel);
+        if (var) {
+            appendInstruction(cfg, createIR(IR_COPY, var, elseSymbver, NULL));
+        }
         appendInstruction(cfg, endLabel);
         return var;
     }
     case AST_FOR: {
         IR* beginLabel = createIR_label();
+        IR* thisContinueLabel = createIR_label();
         IR* endLabel = createIR_label();
 
-        flattenAST(cfg, node->_for.pre);
+        flattenAST(cfg, node->_for.pre, returnLabel, breakLabel, continueLabel);
         appendInstruction(cfg, beginLabel);
-        SymbolVersion* condition = flattenAST(cfg, node->_for.condition);
+        SymbolVersion* condition = flattenAST(cfg, node->_for.condition, returnLabel, endLabel, thisContinueLabel);
         appendInstruction(cfg, createIR_branch(IR_BRANCH_IF_FALSE, NULL, condition, NULL, endLabel));
-        flattenAST(cfg, node->_for.bodyBlock);
-        flattenAST(cfg, node->_for.post);
+        flattenAST(cfg, node->_for.bodyBlock, returnLabel, endLabel, thisContinueLabel);
+        appendInstruction(cfg, thisContinueLabel);
+        flattenAST(cfg, node->_for.post, returnLabel, endLabel, continueLabel);
         appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, beginLabel));
         appendInstruction(cfg, endLabel);
         return NULL;
     }
     case AST_RETURN: {
-        SymbolVersion* retval = flattenAST(cfg, node->unop.expr);
+        SymbolVersion* retval = flattenAST(cfg, node->unop.expr, returnLabel, breakLabel, continueLabel);
+        SymbolVersion* var = unversionedSymbolVersion(cfg, cfg->returnSymbol, cfg->symbol->type->function.codomainType);
 
-        appendInstruction(cfg, createIR(IR_RET, NULL, retval, NULL));
-        appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, NULL));
+        appendInstruction(cfg, createIR(IR_COPY, var, retval, NULL));
+        appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, returnLabel));
+        return NULL;
+    }
+    case AST_BREAK: {
+        IR* ir = createIR_branch(IR_JUMP, NULL, NULL, NULL, breakLabel);
+        appendInstruction(cfg, ir);
+        return NULL;
+    }
+    case AST_CONTINUE: {
+        IR* ir = createIR_branch(IR_JUMP, NULL, NULL, NULL, continueLabel);
+        appendInstruction(cfg, ir);
+        return NULL;
+    }
+    case AST_DEFER: {
         return NULL;
     }
     case AST_DEFINE: {
         SymbolVersion* var = unversionedSymbolVersion(cfg, node->define.symbol, node->define.symbol->type);
-        SymbolVersion* def = flattenAST(cfg, node->define.symbol->def);
+        SymbolVersion* def = flattenAST(cfg, node->define.symbol->def, returnLabel, breakLabel, continueLabel);
 
         IR* ir = createIR(IR_COPY, var, def, NULL);
         var->def = ir;
@@ -353,8 +454,8 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node)
         return var;
     }
     case AST_ADD: {
-        SymbolVersion* left = flattenAST(cfg, node->binop.left);
-        SymbolVersion* right = flattenAST(cfg, node->binop.right);
+        SymbolVersion* left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel);
+        SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel);
         SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
 
         IR* ir = createIR(IR_ADD, temp, left, right);
@@ -363,8 +464,8 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node)
         return temp;
     }
     case AST_LSR: {
-        SymbolVersion* left = flattenAST(cfg, node->binop.left);
-        SymbolVersion* right = flattenAST(cfg, node->binop.right);
+        SymbolVersion* left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel);
+        SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel);
         SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
 
         IR* ir = createIR(IR_LSR, temp, left, right);
@@ -380,7 +481,7 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node)
         } else {
             PANIC("not an l-value\n");
         }
-        SymbolVersion* right = flattenAST(cfg, node->binop.right);
+        SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel);
 
         IR* ir = createIR(IR_COPY, var, right, NULL);
         var->def = ir;
@@ -388,7 +489,7 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node)
         return var;
     }
     case AST_CAST: {
-        SymbolVersion* left = flattenAST(cfg, node->binop.left);
+        SymbolVersion* left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel);
         SymbolVersion* temp = tempSymbolVersion(cfg, node->binop.right);
 
         IR* ir = createIR_ast(IR_CONVERT, temp, left, NULL, node->binop.left->type, node->binop.right);
@@ -754,6 +855,7 @@ List* createCFG(SymbolNode* functionSymbol)
 
     cfg->symbol = functionSymbol;
     cfg->tempSymbol = Symbol_Create("$", SYMBOL_VARIABLE, functionSymbol, (Position) { NULL, 0, 0, 0, 0 });
+    cfg->returnSymbol = Symbol_Create("return", SYMBOL_VARIABLE, functionSymbol, (Position) { NULL, 0, 0, 0, 0 });
     cfg->head = NULL;
     cfg->tail = NULL;
     cfg->basicBlocks = List_Create();
@@ -762,7 +864,8 @@ List* createCFG(SymbolNode* functionSymbol)
     cfg->real64 = List_Create();
 
     // Convert function definition AST to quadruple list
-    flattenAST(cfg, functionSymbol->def);
+    cfg->expr = flattenAST(cfg, functionSymbol->def, NULL, NULL, NULL);
+    printInstructions(cfg);
 
     // Convert quadruple list to CFG of basic blocks, find versions!
     BasicBlock* returnBlock = createBasicBlock(cfg);

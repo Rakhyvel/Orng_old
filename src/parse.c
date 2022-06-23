@@ -666,7 +666,7 @@ static ASTNode* parseReturn(SymbolNode* scope)
 
 static ASTNode* parseDefer(SymbolNode* scope)
 {
-    ASTNode* deferStatement = parseStatement(scope);
+    ASTNode* deferStatement = parseExpr(scope);
     if (deferStatement == NULL) {
         error(prevToken->pos, "expected statement after defer");
     }
@@ -677,7 +677,6 @@ static ASTNode* parseDefer(SymbolNode* scope)
 
 static ASTNode* parseStatement(SymbolNode* scope)
 {
-    // TODO: Detect def by ident followed by newlines followed by : -[ ? or @
     if (nextIsDef()) {
         return parseDefine(scope, false);
     } else if (accept(TOKEN_FREE)) {

@@ -1669,6 +1669,9 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
             ASTNode* validChild = validateAST(elem->data, NULL);
             if (!deadCode) {
                 List_Append(validChildren, validChild);
+                node->containsBreak |= validChild->astType == AST_BREAK || validChild->containsBreak;
+                node->containsContinue |= validChild->astType == AST_CONTINUE || validChild->containsContinue;
+                node->containsReturn |= validChild->astType == AST_RETURN || validChild->containsReturn;
             }
             if (validChild->astType == AST_RETURN || validChild->astType == AST_BREAK || validChild->astType == AST_CONTINUE) {
                 deadCode = true;
@@ -3090,7 +3093,7 @@ Program Validator_Validate(SymbolNode* symbol)
         }
 
         // TODO: generate IR list from def AST
-        validateAST(symbol->def, symbol->type->function.codomainType);
+        symbol->def = validateAST(symbol->def, symbol->type->function.codomainType);
 
         // Calculate parameter size/offsets
         if (symbol->type) {

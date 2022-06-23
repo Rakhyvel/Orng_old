@@ -283,6 +283,7 @@ static void generateRetMov(FILE* out, SymbolVersion* src)
             fprintf(out, "\tmovzx rax, %s [rbp-%d]\n", getSize(src->typeSize), src->offset);
         }
     }
+    fprintf(out, "\tsub rsp, 128\n\tpop rbp\n\tret\n");
 }
 
 static void generateIR(FILE* out, CFG* cfg, IR* ir)
@@ -417,7 +418,7 @@ static void generateReals(FILE* out, CFG* cfg)
 
 static void generateBasicBlock(FILE* out, CFG* cfg, BasicBlock* bb)
 {
-    if (bb->visited) {
+    if (bb->visited || bb->id == 0) {
         return;
     }
     bb->visited = true;
@@ -430,16 +431,12 @@ static void generateBasicBlock(FILE* out, CFG* cfg, BasicBlock* bb)
         fprintf(out, "\t; branch\n");
         generateImmediate(out, "cmp", bb->condition, 0);
         fprintf(out, "\tje .L%d\n", (int)bb->branch->id);
-        if (bb->next->visited) { // will likely be generated now, chill!
-        }
         fprintf(out, "\tjmp .L%d\n", (int)bb->next->id);
         generateBasicBlock(out, cfg, bb->next);
         generateBasicBlock(out, cfg, bb->branch);
-    } else {
-        if (!bb->next->visited) { // will likely be generated now, chill!
-        }
+    } else if(bb->next) {
         fprintf(out, "\tjmp .L%d\n", (int)bb->next->id);
-        if (bb->next->id != 0) {
+        if (bb->next->id > 0) {
             generateBasicBlock(out, cfg, bb->next);
         }
     }
@@ -452,5 +449,8 @@ void Generator_Generate(FILE* out, CFG* cfg)
     fprintf(out, "\n\nsection .code\n_start:\n%s:\n", cfg->symbol->name);
     fprintf(out, "\tpush rbp\n\tmov rbp, rsp\n\tadd rsp, 128\n"); // Align stack to 128 byte intervals to be aligned with cache line (does that really matter??)
     generateBasicBlock(out, cfg, cfg->blockGraph);
-    fprintf(out, ".L0:\n\tsub rsp, 128\n\tpop rbp\n\tret\n");
+    fprintf(out, ".L0:\n");
+    if (cfg->expr) {
+        generateRetMov(out, cfg->expr);
+    }
 }

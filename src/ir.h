@@ -106,7 +106,7 @@ enum terminatorType {
     TERM_RET
 };
 
-typedef struct SymbolVersion {
+typedef struct symbolVersion {
     struct symbolNode* symbol;
     int version;
 
@@ -129,6 +129,7 @@ typedef struct SymbolVersion {
 
 typedef struct IR {
     ir_type irType;
+    int id;
 
     SymbolVersion* dest;
     SymbolVersion* src1;
@@ -153,7 +154,7 @@ typedef struct BasicBlock {
     struct IR* entry;
     bool hasBranch;
     int id;
-    struct SymbolVersion* condition; // Used for conditional jumps
+    struct symbolVersion* condition; // Used for conditional jumps
     struct BasicBlock* next; // Used by jump, and branch if condition is true
     struct BasicBlock* branch; // Used by branch if condition is false
     struct List* parameters; // These symbols are needed to be phi-noded. They are defined somewhere in this BB, and are used by children BB
@@ -170,9 +171,13 @@ typedef struct CFG {
     BasicBlock* blockGraph;
     List* basicBlocks; // flat list of all basic block
 
+	// Symbols
     List* symbolVersions;
     struct symbolNode* symbol; // Symbol table for function
     struct symbolNode* tempSymbol; // Temporary symbol (could be several different types!!!)
+    struct symbolNode* returnSymbol; // Used to store the return value in
+    struct symbolVersion* expr; // The last evaluated expression of the function will be put here
+
     List* real32; // Set of all 32 bit real numbers
     List* real64; // Set of all 64 bit real numbers
 } CFG;

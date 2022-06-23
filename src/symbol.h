@@ -57,6 +57,7 @@ typedef struct symbolNode {
 
     // Defer/block
     List* defers; // list of ast's, in order of declaration
+
     bool isLoop;
     int tempVars;
     int labels;

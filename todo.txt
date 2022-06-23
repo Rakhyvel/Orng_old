@@ -376,10 +376,12 @@ x Rework the compiler to be better [ast-union-type]
 		x addition of floating point numbers
 		x comparison of floating point numbers
 		x sizeof collapses to integer ast node
+		x implicit last-expr return for functions
+		x break
+		x continue
+		x defers
 		- return paths
-		- break
-		- continue
-		- defers
+		- fix optimizations again
 		- switches
 		- default initialization
 		- new
@@ -395,22 +397,39 @@ x Rework the compiler to be better [ast-union-type]
 		- calls
 		- union stuff
 		- error unions
+- &&= and ||= operator for &&= and ||=, do not make &= and |= polymorphic
+- 'default' keyword which takes in a type and gives its default value
+	if x == default Int64 {
+		std.system.println("x is 0")
+	}
+	- useful for generics and allocators
+	new::(T::Type, init::T=default T)->AllocationError!&T = {
+		malloc?::(size:Int64)->&Any
+		retval := malloc(sizeof T):&T
+		*retval = init
+		return retval
+	}
+	-- usage:
+	create::(alloc:&Allocator)->!&Whatever = {
+		retval := try alloc.new(Whatever, ("This is the default\n", 34, 535.5))
+		
+	}
 - generics
 	- you would need a function that 'returns' a type
 		- this would require a unification of type and value syntax
 		- can I find any instances where this leads to ambiguity that cannot be solved?
+			- addr-of type and addr-of value must be treated differently
+		- 'parameterized types', instead of a full blown function that returns a type
 	- if a function takes in all compile-time constant arguments and returns something compile-time constant, replace call with function definition
 		- can do this because:
 		- referential transparency- most function calls can simply be replaced with their definition
-			- return statements break this
-			- remove return statements?
-				- loops would still be a challenge, 
 		- all parameters are compile-time known, can simply replace references to the parameters with the arguments in the definition
 			- doesn't this imply we'd need to clone the def AST?
 	- rewrite util data structures to be generic
 	- typeof operator which gets the compiletime type tag of a type
 	- subtype operator which does compile time type checking
 - interfaces (traits in rust https://theburningmonk.com/2015/05/rust-memory-safety-without-gc/)
+	- are just structs with Any pointers to the base data structure, and function pointers
 	- add method calling for stack structs, just take the address in the call
 	- https://www.nmichaels.org/zig/interfaces.html interfaces in Zig
 		- compose an interface within each struct
@@ -501,7 +520,6 @@ x Rework the compiler to be better [ast-union-type]
 	- some x : X, P		# one or more x in X satisfy P
 
 
-- &&= and ||= operator for &&= and ||=, do not make &= and |= polymorphic
 
 
 
