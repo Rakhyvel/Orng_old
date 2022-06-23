@@ -380,8 +380,8 @@ x Rework the compiler to be better [ast-union-type]
 		x break
 		x continue
 		x defers
-		- return paths
-		- fix optimizations again
+		x fix optimizations again
+		x return paths
 		- switches
 		- default initialization
 		- new

@@ -352,14 +352,14 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
         IR* thisContinueLabel = continueLabel;
         IR* thisBreakLabel = breakLabel;
         IR* thisReturnLabel = returnLabel;
-        int deferLabelIndex = -1;
+        int deferLabelIndex = node->block.symbol->defers->size;
 
         SymbolVersion* var = NULL;
         for (ListElem* elem = List_Begin(node->block.children); elem != List_End(node->block.children); elem = elem->next) {
             ASTNode* child = elem->data;
             var = flattenAST(cfg, child, thisReturnLabel, thisBreakLabel, thisContinueLabel);
             if (child->astType == AST_DEFER) {
-                deferLabelIndex++;
+                deferLabelIndex--;
                 thisContinueLabel = List_Get(continueLabels, deferLabelIndex);
                 thisBreakLabel = List_Get(breakLabels, deferLabelIndex);
                 thisReturnLabel = List_Get(returnLabels, deferLabelIndex);
@@ -374,12 +374,19 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
             appendInstruction(cfg, ir);
         }
 
+        IR* end = createIR_label();
         generateDefers(cfg, node->block.symbol->defers, continueLabels);
-        appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, continueLabel));
+        if (!continueLabel) {
+            appendInstruction(cfg, createIR(IR_RET, NULL, evalSymbolVersion, NULL));
+            appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, returnLabel));
+        } else {
+            appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, end));
+        }
         generateDefers(cfg, node->block.symbol->defers, breakLabels);
         appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, breakLabel));
         generateDefers(cfg, node->block.symbol->defers, returnLabels);
         appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, returnLabel));
+        appendInstruction(cfg, end);
         return evalSymbolVersion;
     }
     case AST_IF: {
@@ -428,6 +435,7 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
         SymbolVersion* var = unversionedSymbolVersion(cfg, cfg->returnSymbol, cfg->symbol->type->function.codomainType);
 
         appendInstruction(cfg, createIR(IR_COPY, var, retval, NULL));
+        appendInstruction(cfg, createIR(IR_RET, NULL, retval, NULL));
         appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, returnLabel));
         return NULL;
     }
@@ -605,10 +613,6 @@ bool copyPropagation(CFG* cfg)
                 } else if (def->src1->def && def->src1->def->irType == IR_COPY) {
                     def->src1 = def->src1->def->src1;
                     retval = true;
-                } else if (def->src1->def && def->src1->def->irType == IR_ADD) {
-                    def->src1->def->dest = def->dest;
-                    removeInstruction(def->inBlock, def);
-                    retval = true;
                 }
                 break;
             case IR_ADD:
@@ -708,17 +712,19 @@ bool deadCode(CFG* cfg)
         }
     }
 
-    // Remove any symbols that aren't used
     forall(elem, cfg->basicBlocks)
     {
         BasicBlock* bb = elem->data;
+
+        // Remove any symbols that aren't used
         for (IR* def = bb->entry; def != NULL; def = def->next) {
-            if (def->dest && !def->dest->removed && !def->dest->used) {
+            if (def->dest && !def->dest->removed && !def->dest->used && strcmp(def->dest->symbol->name, "$blockEval")) {
                 removeInstruction(def->inBlock, def);
                 def->dest->removed = true;
                 retval = true;
             }
         }
+
         // Remove false branches
         if (bb->hasBranch && bb->condition->def && bb->condition->def->irType == IR_LOAD_INT) {
             bb->hasBranch = false;
@@ -732,6 +738,7 @@ bool deadCode(CFG* cfg)
             removeInstruction(bb, ir);
             retval = true;
         }
+
         // Remove jump chains
         if (bb->next && bb->next->entry && bb->next->entry->irType == IR_JUMP) {
             bb->next = bb->next->next;
@@ -872,7 +879,7 @@ List* createCFG(SymbolNode* functionSymbol)
     cfg->blockGraph = convertToBasicBlock(cfg, cfg->head, NULL);
 
     // Optimize
-    //while (copyPropagation(cfg) | deadCode(cfg)) { }
+    while (copyPropagation(cfg) | deadCode(cfg)) { }
 
     // Find all reals and strings
     collectReals(cfg);

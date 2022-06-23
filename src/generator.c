@@ -283,7 +283,6 @@ static void generateRetMov(FILE* out, SymbolVersion* src)
             fprintf(out, "\tmovzx rax, %s [rbp-%d]\n", getSize(src->typeSize), src->offset);
         }
     }
-    fprintf(out, "\tsub rsp, 128\n\tpop rbp\n\tret\n");
 }
 
 static void generateIR(FILE* out, CFG* cfg, IR* ir)
@@ -449,8 +448,5 @@ void Generator_Generate(FILE* out, CFG* cfg)
     fprintf(out, "\n\nsection .code\n_start:\n%s:\n", cfg->symbol->name);
     fprintf(out, "\tpush rbp\n\tmov rbp, rsp\n\tadd rsp, 128\n"); // Align stack to 128 byte intervals to be aligned with cache line (does that really matter??)
     generateBasicBlock(out, cfg, cfg->blockGraph);
-    fprintf(out, ".L0:\n");
-    if (cfg->expr) {
-        generateRetMov(out, cfg->expr);
-    }
+    fprintf(out, ".L0:\n\tsub rsp, 128\n\tpop rbp\n\tret\n");
 }
