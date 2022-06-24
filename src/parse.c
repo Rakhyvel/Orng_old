@@ -404,9 +404,13 @@ static ASTNode* parsePostfix(SymbolNode* scope)
     Token* token = NULL;
     while (true) {
         if (nextTokenMaybeNewline()->type != TOKEN_NEWLINE && (token = accept(TOKEN_LPAREN)) != NULL) {
+<<<<<<< HEAD
             ASTNode* arglist = parseArgList(scope);
             arglist->astType = AST_ARGLIST;
             child = AST_Create_call(child, arglist, scope, token->pos);
+=======
+            child = AST_Create_call(child, parseArgList(scope), scope, token->pos);
+>>>>>>> 0bae69cb1a78d4517198965acecb636c1758c38b
         } else if ((token = accept(TOKEN_LSQUARE)) != NULL) {
             // [ <expr>? :? <expr>? ]
             ASTNode* parent = NULL;
@@ -666,7 +670,11 @@ static ASTNode* parseReturn(SymbolNode* scope)
 
 static ASTNode* parseDefer(SymbolNode* scope)
 {
+<<<<<<< HEAD
     ASTNode* deferStatement = parseExpr(scope);
+=======
+    ASTNode* deferStatement = parseStatement(scope);
+>>>>>>> 0bae69cb1a78d4517198965acecb636c1758c38b
     if (deferStatement == NULL) {
         error(prevToken->pos, "expected statement after defer");
     }
@@ -677,6 +685,10 @@ static ASTNode* parseDefer(SymbolNode* scope)
 
 static ASTNode* parseStatement(SymbolNode* scope)
 {
+<<<<<<< HEAD
+=======
+    // TODO: Detect def by ident followed by newlines followed by : -[ ? or @
+>>>>>>> 0bae69cb1a78d4517198965acecb636c1758c38b
     if (nextIsDef()) {
         return parseDefine(scope, false);
     } else if (accept(TOKEN_FREE)) {

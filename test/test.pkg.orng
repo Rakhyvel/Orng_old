@@ -1,4 +1,10 @@
 -- This package is used to test the Orange programming language
 -- @author Joseph Shimel
--[std, util]
-test::Package = ()
+test -[std]::Package = (
+    includes ::= [
+        "<stdlib.h>"
+        "<stdio.h>"
+        "<stdint.h>"
+        "<stdbool.h>"
+    ]
+)

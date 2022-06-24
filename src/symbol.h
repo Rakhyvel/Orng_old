@@ -8,11 +8,10 @@ struct astNode;
 
 typedef enum symbolType {
     SYMBOL_PROGRAM,
-    SYMBOL_PACKAGE,
+	SYMBOL_PACKAGE,
     SYMBOL_MODULE,
     SYMBOL_FUNCTION,
     SYMBOL_TYPE, // typedef or struct def
-    SYMBOL_ENUM,
     SYMBOL_BLOCK,
     SYMBOL_VARIABLE
 } SymbolType;
@@ -36,7 +35,6 @@ typedef struct symbolNode {
     struct astNode* def; // SymbolDefine ASTNode where this symbol is defined
 	
 	bool isDeclared;
-    bool isPublic;
     bool isExtern;
     bool isRestricted;
     bool isVararg;
@@ -47,6 +45,9 @@ typedef struct symbolNode {
     Map* children; // name -> other symbolNodes
     List* restrictionExpr; // list of symbol_expr
     List* restrictions; // list of symbol*
+
+	// Union sets
+    char* activeFieldName;
 
 	// Defer/block
     List* defers; // list of ast's, in order of declaration

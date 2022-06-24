@@ -56,6 +56,8 @@ const char* Token_GetString(_TokenType type)
         return "TOKEN_DGTR_ASSIGN";
     case TOKEN_PLUS:
         return "TOKEN_PLUS";
+    case TOKEN_DPLUS:
+        return "TOKEN_DPLUS";
     case TOKEN_MINUS:
         return "TOKEN_MINUS";
     case TOKEN_STAR:
@@ -124,12 +126,10 @@ const char* Token_GetString(_TokenType type)
         return "TOKEN_BREAK";
     case TOKEN_CONTINUE:
         return "TOKEN_CONTINUE";
-    case TOKEN_SWITCH:
-        return "TOKEN_SWITCH";
     case TOKEN_CASE:
         return "TOKEN_CASE";
-    case TOKEN_NULL:
-        return "TOKEN_NULL";
+    case TOKEN_NOTHING:
+        return "TOKEN_NOTHING";
     case TOKEN_RETURN:
         return "TOKEN_RETURN";
     case TOKEN_NEW:
@@ -283,6 +283,8 @@ const char* Token_GetRepr(_TokenType type)
         return "]";
     case TOKEN_RESTRICT:
         return "-[";
+    case TOKEN_UNION:
+        return "(|";
     case TOKEN_IF:
         return "if";
     case TOKEN_ELSE:
@@ -293,12 +295,10 @@ const char* Token_GetRepr(_TokenType type)
         return "break";
     case TOKEN_CONTINUE:
         return "continue";
-    case TOKEN_SWITCH:
-        return "switch";
     case TOKEN_CASE:
         return "case";
-    case TOKEN_NULL:
-        return "null";
+    case TOKEN_NOTHING:
+        return "nothing";
     case TOKEN_RETURN:
         return "return";
     case TOKEN_NEW:
@@ -307,6 +307,10 @@ const char* Token_GetRepr(_TokenType type)
         return "free";
     case TOKEN_DEFER:
         return "defer";
+    case TOKEN_SIZEOF:
+        return "sizeof";
+    case TOKEN_ORELSE:
+        return "orelse";
     case TOKEN_ARROW:
         return "->";
     case TOKEN_BIG_ARROW:

@@ -42,8 +42,8 @@ enum astType {
     AST_INDEX,
     AST_SLICE,
     AST_ADDROF,
-    AST_ORELSE,
-    // Boolean
+	AST_ORELSE,
+ // Boolean
     AST_NOT,
     AST_OR,
     AST_AND,
@@ -78,9 +78,9 @@ enum astType {
     AST_IF,
     AST_FOR,
     AST_CASE,
-    AST_FIELD_CASE,
+	AST_FIELD_CASE,
     AST_MAPPING,
-    AST_FIELD_MAPPING,
+	AST_FIELD_MAPPING,
     AST_RETURN,
     AST_NEW, // Replace with allocator method
     AST_FREE, // Replace with allocator method

@@ -1,40 +1,31 @@
 /*
-To compile:
-- Get symbol tree from parser
-- Validate program root symbol
-- Calculate reachability
-- Add reachable symbols to the VPR
-- From the VPR, generate the output file
+PHILOSOPHY:
+- Stateless functional style between modules/packages for predictability
+- Stateful imperative style inside functions for speed
+- Everything, including packages, modules, functions, constants, AND types, is an expression
+- Every .orng file defines one symbol with the same name as the file
 
-To validate a symbol:
-- Evaluate symbol type
-- Evaluate symbol definition
-- Validate children symbols
 
-To evaluate an expression:
-- Evaluate children expressions
-- Validate the expression AST
-- Restructure the AST depending on the AST, potentially calling and running functions at compile-time
-
-To run a function at compiletime:
-- Setup a 'stackframe' structure that has a list of variables and children stackframes
-- Bind arguments of call to parameters of function
-- Variable definitions are AST trees
-- Step through AST of the function definition as if it were an interpreted program
-	- Validate AST before executing the code, validator will need to know about the stack frame and the function's variable bindings
-	- Recursive function calls? Can't modify the function in any way
-	- Make a distinction between procedures which can have side-effects and functions which cannot
-	- No global scope assignment (within scope is ok)
-	- No calling procedures
-	- No allocating/free-ing memory
-	- No dereferencing memory
-	- No referencing external symbols (all has to remain inside Orange)
-	- All this applies to all compile-time expressions
+1. read files in package
+2. tokenize
+3. parse into AST & symbol tree
+	- each file contains one definition of a constant type
+	- the entire program is represented by a symbol tree
+	- the symbol tree defined in each file is appended to the program symbol tree
+4. for each symbol definition, flatten AST into IR list
+	- types are NOT flattened and maintain tree structure for ease of comparing
+	- this includes paramlists for types, modules, packages, function domains
+	- types ASTs ARE expanded and validated to form their true structural type
+	- each symbol keeps a copy of their old type for error printing(?)
+5. perform semantic analysis on each IR instruction in list to turn it into a typed IR list
+6. take symbol tree with typed IR list definitions and generate to C code or doc
+	- flatten symbol tree to have a list of all globals, functions, structs, etc
 */
 
 #include "../util/debug.h"
 #include "./doc.h"
 #include "./generator.h"
+#include "./ir.h"
 #include "./lexer.h"
 #include "./parse.h"
 #include "./symbol.h"
@@ -45,8 +36,8 @@ To run a function at compiletime:
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <windows.h>
 #include <time.h>
+#include <windows.h>
 
 #include <io.h> // For access().
 #include <sys/stat.h> // For stat().
@@ -272,7 +263,7 @@ SymbolNode* readPackage(char* packagePath, SymbolNode* program)
 
     // Read in & parse package manifest file
     ASTNode* packageAST = readFile(manifestFilename, program);
-    SymbolNode* packageSymbol = packageAST->data;
+    SymbolNode* packageSymbol = packageAST->define.symbol;
 
     char* relPath = getRelPath(manifestFilename);
     char end = isSubStr(relPath, packageSymbol->name);
@@ -286,7 +277,7 @@ SymbolNode* readPackage(char* packagePath, SymbolNode* program)
         if (packageAST->astType != AST_IDENT) {
             error(packageAST->pos, "package restrict list must be identifiers only");
         }
-        char* packageName = packageAST->data;
+        char* packageName = packageAST->ident.data;
         SymbolNode* depenPackage;
         if ((depenPackage = Map_Get(program->children, packageName)) != NULL) {
             if (!depenPackage->visited) {
@@ -319,11 +310,11 @@ SymbolNode* readPackage(char* packagePath, SymbolNode* program)
         char* filename = wCharToChar(file.path);
         if (strstr(filename, ".orng") && !strstr(filename, ".pkg.orng")) {
             ASTNode* def = readFile(filename, packageSymbol);
-            SymbolNode* var = def->data;
+            SymbolNode* var = def->define.symbol;
             if (isSubStr(pathToFilename(filename), var->name) != '.') {
                 error(def->pos, "module symbol differs from module file name");
             }
-            List_Append(packageSymbol->def->children, def);
+            List_Append(packageSymbol->def->paramlist.defines, def);
         }
 
         if (tinydir_next(&dir) == -1) {
@@ -391,7 +382,7 @@ int main(int argc, char** argv)
         if (Map_Get(outPackage->children, "_outname")) {
             SymbolNode* outnameSymbol = Map_Get(outPackage->children, "_outname");
             ASTNode* outnameDef = outnameSymbol->def;
-            strcat_s(outFilename, 255, outnameDef->data);
+            strcat_s(outFilename, 255, outnameDef->string.data);
         } else {
             strcat_s(outFilename, 255, "out.c");
         }
@@ -403,15 +394,14 @@ int main(int argc, char** argv)
             exit(1);
         }
 
-        if (!errsExist) {
-            Generator_Generate(programStruct, out);
-        }
+        Generator_Generate(programStruct, out);
 
         if (fclose(out)) {
             perror(outFilename);
             exit(1);
         }
     }
+
     t = clock() - t;
     double time_taken = ((double)t) / CLOCKS_PER_SEC; // in seconds
     printf("%d ms\n", (int)(time_taken * 1000.0));

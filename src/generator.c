@@ -87,28 +87,28 @@ static void printType(FILE* out, ASTNode* type)
 {
     switch (type->astType) {
     case AST_IDENT:
-        if (!strcmp(type->data, "Int8") || !strcmp(type->data, "Char")) {
+        if (!strcmp(type->ident.data, "Int8") || !strcmp(type->ident.data, "Char")) {
             fprintf(out, "%s", "int8_t");
-        } else if (!strcmp(type->data, "Int16")) {
+        } else if (!strcmp(type->ident.data, "Int16")) {
             fprintf(out, "%s", "int16_t");
-        } else if (!strcmp(type->data, "Int32")) {
+        } else if (!strcmp(type->ident.data, "Int32")) {
             fprintf(out, "%s", "int32_t");
-        } else if (!strcmp(type->data, "Int64") || !strcmp(type->data, "Int")) {
+        } else if (!strcmp(type->ident.data, "Int64") || !strcmp(type->ident.data, "Int")) {
             fprintf(out, "%s", "int64_t");
-        } else if (!strcmp(type->data, "Bool")) {
+        } else if (!strcmp(type->ident.data, "Bool")) {
             fprintf(out, "%s", "bool");
-        } else if (!strcmp(type->data, "Real32") || !strcmp(type->data, "Real")) {
+        } else if (!strcmp(type->ident.data, "Real32") || !strcmp(type->ident.data, "Real")) {
             fprintf(out, "%s", "float");
-        } else if (!strcmp(type->data, "Real64")) {
+        } else if (!strcmp(type->ident.data, "Real64")) {
             fprintf(out, "%s", "double");
-        } else if (!strcmp(type->data, "String")) {
+        } else if (!strcmp(type->ident.data, "String")) {
             printType(out, STRING_TYPE);
         } else {
-            fprintf(out, "%s", type->data);
+            fprintf(out, "%s", type->ident.data);
         }
         break;
     case AST_DOT:
-        SymbolNode* var = type->data;
+        SymbolNode* var = type->dot.symbol;
         if (var->isExtern) {
             fprintf(out, "%s", var->externName);
         } else {
@@ -116,11 +116,12 @@ static void printType(FILE* out, ASTNode* type)
         }
         break;
     case AST_ADDR:
-        printType(out, List_Get(type->children, 0));
+        printType(out, type->unop.expr);
         fprintf(out, "*");
         break;
     case AST_ARRAY:
-    case AST_PARAMLIST: {
+    case AST_PARAMLIST:
+    case AST_UNIONSET: {
         fprintf(out, "struct ");
         printStructOrd(out, type);
     } break;
@@ -130,16 +131,11 @@ static void printType(FILE* out, ASTNode* type)
     }
     case AST_FUNCTION:
         // The second child in a function is the return type
-        ASTNode* ret = List_Get(type->children, 1);
+        ASTNode* ret = type->function.codomainType;
         printType(out, ret);
         break;
-
-    case AST_ENUM: {
-        fprintf(out, "unsigned int");
-        break;
-    }
     case AST_EXTERN: {
-        SymbolNode* var = type->data;
+        SymbolNode* var = type->_extern.symbol;
         fprintf(out, "%s", var->externName);
         break;
     }
@@ -156,21 +152,21 @@ static void generateDefaultValue(FILE* out, ASTNode* type)
         fprintf(out, "0");
         break;
     case AST_ARRAY: {
-        ASTNode* lengthDefine = List_Get(type->children, 0);
-        SymbolNode* lengthSymbol = lengthDefine->data;
+        ASTNode* lengthDefine = List_Get(type->paramlist.defines, 0);
+        SymbolNode* lengthSymbol = lengthDefine->define.symbol;
         ASTNode* lengthCode = lengthSymbol->def;
-        ASTNode* dataDefine = List_Get(type->children, 1);
-        SymbolNode* dataSymbol = dataDefine->data;
+        ASTNode* dataDefine = List_Get(type->paramlist.defines, 1);
+        SymbolNode* dataSymbol = dataDefine->define.symbol;
         ASTNode* dataType = dataSymbol->type;
         fprintf(out, "((");
         printType(out, type);
-        if (lengthCode->astType == AST_INT && lengthCode->data != 0) {
-            fprintf(out, "){%d, (", (int)lengthCode->data);
+        if (lengthCode->astType == AST_INT && lengthCode->_int.data != 0) {
+            fprintf(out, "){%d, (", (int)lengthCode->_int.data);
             printType(out, dataType);
             fprintf(out, "[]){");
-            for (int i = 0; i < (int)lengthCode->data; i++) {
+            for (int i = 0; i < (int)lengthCode->_int.data; i++) {
                 generateDefaultValue(out, dataType);
-                if (i + 1 < lengthCode->data) {
+                if (i + 1 < lengthCode->_int.data) {
                     fprintf(out, ", ");
                 }
             }
@@ -183,23 +179,37 @@ static void generateDefaultValue(FILE* out, ASTNode* type)
         fprintf(out, "((");
         printType(out, type);
         fprintf(out, "){");
-        for (ListElem* elem = List_Begin(type->children); elem != List_End(type->children); elem = elem->next) {
+        for (ListElem* elem = List_Begin(type->paramlist.defines); elem != List_End(type->paramlist.defines); elem = elem->next) {
             ASTNode* define = elem->data;
-            SymbolNode* var = define->data;
+            SymbolNode* var = define->define.symbol;
             if (var->def->astType == AST_UNDEF) {
                 generateDefaultValue(out, var->type);
-                if (elem->next != List_End(type->children)) {
+                if (elem->next != List_End(type->paramlist.defines)) {
                     fprintf(out, ", ");
                 }
             } else if (!(var->symbolType == SYMBOL_FUNCTION && var->type->isConst)) {
                 generateAST(out, var->def, true);
-                if (elem->next != List_End(type->children)) {
+                if (elem->next != List_End(type->paramlist.defines)) {
                     fprintf(out, ", ");
                 }
             }
         }
         fprintf(out, "})");
     } break;
+    case AST_UNIONSET: {
+        fprintf(out, "((");
+        printType(out, type);
+        fprintf(out, "){0");
+        ASTNode* firstDefine = List_Get(type->unionset.defines, 0);
+        SymbolNode* firstVar = firstDefine->define.symbol;
+        if (firstVar->type->astType == AST_VOID) {
+            fprintf(out, "})");
+        } else {
+            fprintf(out, ", ");
+            generateDefaultValue(out, firstVar->type);
+            fprintf(out, "})");
+        }
+    }
     }
 }
 
@@ -221,7 +231,7 @@ static void generateDefine(FILE* out, SymbolNode* var, bool param)
     printPath(out, var);
     if (functionPtr) {
         fprintf(out, ") (");
-        ASTNode* params = List_Get(var->type->children, 0);
+        ASTNode* params = var->type->function.domainType;
         generateParamList(out, params);
         fprintf(out, ")");
     }
@@ -233,7 +243,7 @@ static void generateDefine(FILE* out, SymbolNode* var, bool param)
             fprintf(out, " = _%d", defID);
         } else if (var->type->astType != AST_EXTERN) {
             fprintf(out, " = ");
-            if (var->type->astType == AST_IDENT && !strcmp(var->type->data, "Type")) {
+            if (var->type->astType == AST_IDENT && !strcmp(var->type->ident.data, "Type")) {
                 generateDefaultValue(out, var->def);
             } else {
                 generateDefaultValue(out, var->type);
@@ -245,14 +255,17 @@ static void generateDefine(FILE* out, SymbolNode* var, bool param)
 
 static void resetBlockName(ASTNode* node)
 {
+    /*
     if (node->astType == AST_BLOCK) {
-        SymbolNode* symbol = node->data;
-        strncpy(symbol->name, myItoa(blockUID++), 255);
+        SymbolNode* symbol = node->block.symbol;
+        strncpy(symbol->name, myItoa(blockUID++), 255); // TODO: better implementation of this so that defers don't collide
     }
+    // TODO: traverse AST
     for (ListElem* elem = List_Begin(node->children); elem != List_End(node->children); elem = elem->next) {
         ASTNode* child = elem->data;
         resetBlockName(child);
     }
+	*/
 }
 
 static void generateDefers(FILE* out, List* defers)
@@ -312,6 +325,7 @@ int printTempVarType(FILE* out, ASTNode* node, ASTNode* type)
         fprintf(out, " _%d = ", scope->tempVars);
         return scope->tempVars++;
     } else {
+        fprintf(out, "wtf scope was null\n");
         return -1;
     }
 }
@@ -354,7 +368,7 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
     switch (node->astType) {
     case AST_BLOCK: {
         List_Push(blockStack, node);
-        SymbolNode* symbolTree = node->data;
+        SymbolNode* symbolTree = node->block.symbol;
 
         for (int i = 0; i < symbolTree->defers->size; i++) {
             fprintf(out, "\tint defer_%d = 0;\n", i);
@@ -367,11 +381,13 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
         }
 
         // Print each child of the block
-        for (ListElem* elem = List_Begin(node->children); elem != List_End(node->children); elem = elem->next) {
+        for (ListElem* elem = List_Begin(node->block.children); elem != List_End(node->block.children); elem = elem->next) {
             ASTNode* statement = elem->data;
-            fprintf(out, "// %s\n", AST_GetString(statement->astType));
-            fprintf(out, "// %s:%d\n", getRelPath(statement->pos.filename), statement->pos.start_line);
-            lastID = generateAST(out, elem->data, false);
+            if (statement) {
+                fprintf(out, "// %s\n", AST_GetString(statement->astType));
+                fprintf(out, "// %s:%d\n", getRelPath(statement->pos.filename), statement->pos.start_line);
+                lastID = generateAST(out, elem->data, false);
+            }
         }
         List_Pop(blockStack);
 
@@ -381,7 +397,7 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
                 fprintf(out, "return_block_%s:;\n", symbolTree->name);
                 generateDefers(out, symbolTree->defers);
                 ASTNode* parentBlock = List_Peek(blockStack);
-                fprintf(out, "\tgoto return_block_%s;\n", ((SymbolNode*)parentBlock->data)->name);
+                fprintf(out, "\tgoto return_block_%s;\n", parentBlock->block.symbol->name);
             }
 
             if (node->containsBreak) {
@@ -398,20 +414,10 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
         return id;
     }
     case AST_IF: {
-        ASTNode* condition = List_Begin(node->children)->data;
-        ASTNode* body = List_Begin(node->children)->next->data;
-        SymbolNode* bodySymbol = body->data;
-        int conditionID = generateAST(out, condition, false);
-        fprintf(out, "\tif (!_%d) goto end_%s;\n", conditionID, bodySymbol->name);
-        generateAST(out, body, false);
-        fprintf(out, "end_%s:;\n", bodySymbol->name);
-        break;
-    }
-    case AST_IFELSE: {
-        ASTNode* condition = List_Begin(node->children)->data;
-        ASTNode* body = List_Begin(node->children)->next->data;
-        ASTNode* elseBody = List_Begin(node->children)->next->next->data;
-        SymbolNode* bodySymbol = body->data;
+        ASTNode* condition = node->_if.condition;
+        ASTNode* body = node->_if.bodyBlock;
+        ASTNode* elseBody = node->_if.elseBlock;
+        SymbolNode* bodySymbol = body->block.symbol;
         int id = -1;
         if (node->type->astType != AST_UNDEF) {
             id = printTempVarUndef(out, node);
@@ -431,11 +437,11 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
         return id;
     }
     case AST_FOR: {
-        ASTNode* pre = List_Get(node->children, 0);
-        ASTNode* condition = List_Get(node->children, 1);
-        ASTNode* post = List_Get(node->children, 2);
-        ASTNode* body = List_Get(node->children, 3);
-        SymbolNode* bodySymbol = body->data;
+        ASTNode* pre = node->_for.pre;
+        ASTNode* condition = node->_for.condition;
+        ASTNode* post = node->_for.post;
+        ASTNode* body = node->_for.bodyBlock;
+        SymbolNode* bodySymbol = body->block.symbol;
         int id = -1;
         if (node->type->astType != AST_UNDEF) {
             id = printTempVarUndef(out, node);
@@ -448,67 +454,91 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
         if (bodyID != -1 && id != -1) {
             fprintf(out, "\t_%d = _%d;\n", id, bodyID);
         }
+        fprintf(out, "\t// for post\n");
         generateAST(out, post, 0, false);
-        fprintf(out, "\tgoto begin_%s;\nend_%s:;\n", bodySymbol->name, bodySymbol->name);
+        fprintf(out, "\tgoto begin_%s;\n", bodySymbol->name);
         if (bodyID != -1 && id != -1) {
             fprintf(out, "\t_%d = _%d;\n", id, bodyID);
         }
+        fprintf(out, "end_%s:;\n", bodySymbol->name);
         return id;
     }
-    case AST_SWITCH: {
-        ASTNode* expr = List_Begin(node->children)->data;
-        ASTNode* body = List_Get(node->children, 1);
+    case AST_CASE: {
+        ASTNode* expr = node->_case.expr;
         int id = -1;
         if (node->type->astType != AST_UNDEF) {
             id = printTempVarUndef(out, node);
         }
-        fprintf(out, "\tswitch (");
-        generateAST(out, expr, true);
-        fprintf(out, ")\n");
-        fprintf(out, "\t{");
-        ListElem* elem = List_Begin(node->children)->next;
-        for (; elem != List_End(node->children); elem = elem->next) {
+        int exprID = generateAST(out, expr, false);
+        fprintf(out, "\tswitch (_%d) {", exprID);
+        ListElem* elem = List_Begin(node->_case.mappings);
+        for (; elem != List_End(node->_case.mappings); elem = elem->next) {
             ASTNode* child = elem->data;
-            if (child->children->size == 1) {
-                fprintf(out, "\n");
-                fprintf(out, "\tdefault:\n\t{\n");
-                ASTNode* body = List_Get(child->children, 0);
-                SymbolNode* blockSymbol = body->data;
+            if (child->mapping.exprs->size == 0) {
+                fprintf(out, "\n\tdefault:\n\t{\n");
+                ASTNode* body = child->mapping.expr;
                 int bodyID = generateAST(out, body, false);
                 if (bodyID != -1 && id != -1) {
                     fprintf(out, "\t_%d = _%d;\n", id, bodyID);
                 }
-                fprintf(out, "end_%s:;\n\tbreak;\n\t}", blockSymbol->name);
+                fprintf(out, "\tbreak;\n\t} // end default");
             } else {
-                ListElem* elem = List_Begin(child->children);
-                ASTNode* block = List_Get(child->children, child->children->size - 1);
-                SymbolNode* blockSymbol = block->data;
-                for (; elem != List_End(child->children)->prev; elem = elem->next) {
-                    fprintf(out, "\n");
-                    fprintf(out, "\tcase ");
-                    generateAST(out, elem->data, true);
-                    fprintf(out, ":");
+                ListElem* elem = List_Begin(child->mapping.exprs);
+                for (; elem != List_End(child->mapping.exprs); elem = elem->next) {
+                    ASTNode* intExpr = elem->data;
+                    fprintf(out, "\n\tcase %d:", (int)intExpr->_int.data);
                 }
                 fprintf(out, "\n\t{\n");
-                int bodyID = generateAST(out, elem->data, false);
+                int bodyID = generateAST(out, child->mapping.expr, false);
                 if (bodyID != -1 && id != -1) {
                     fprintf(out, "\t_%d = _%d;\n", id, bodyID);
                 }
-                fprintf(out, "end_%s:;\n\tbreak;\n\t}", blockSymbol->name);
+                fprintf(out, "\tbreak;\n\t} // end case");
             }
         }
-        fprintf(out, "\n\t}\n");
+        fprintf(out, "\n\t} // end switch\n");
+        return id;
+    }
+    case AST_FIELD_CASE: {
+        ASTNode* expr = node->_case.expr;
+        int id = -1;
+        if (node->type->astType != AST_UNDEF) {
+            id = printTempVarUndef(out, node);
+        }
+        int exprID = generateAST(out, expr, false);
+        fprintf(out, "\tswitch (_%d.tag) {", exprID);
+        ListElem* elem = List_Begin(node->_case.mappings);
+        for (; elem != List_End(node->_case.mappings); elem = elem->next) {
+            ASTNode* child = elem->data;
+            if (child->mapping.exprs->size == 0) {
+                fprintf(out, "\n\tdefault:\n\t{\n");
+                ASTNode* body = child->mapping.expr;
+                int bodyID = generateAST(out, body, false);
+                if (bodyID != -1 && id != -1) {
+                    fprintf(out, "\t_%d = _%d;\n", id, bodyID);
+                }
+                fprintf(out, "\tbreak;\n\t} // end default");
+            } else {
+                fprintf(out, "\n\tcase %d:\n\t{\n", child->fieldMapping.tag);
+                int bodyID = generateAST(out, child->mapping.expr, false);
+                if (bodyID != -1 && id != -1) {
+                    fprintf(out, "\t_%d = _%d;\n", id, bodyID);
+                }
+                fprintf(out, "\tbreak;\n\t} // end case");
+            }
+        }
+        fprintf(out, "\n\t} // end switch\n");
         return id;
     }
     case AST_RETURN: {
-        ASTNode* expr = List_Get(node->children, 0);
+        ASTNode* expr = node->unop.expr;
         int retID = -1;
         if (expr->astType != AST_UNDEF && expr->astType != AST_VOID) {
             retID = generateAST(out, expr, false);
             fprintf(out, "\tretval = _%d;\n", retID);
         }
         ASTNode* parentBlock = List_Peek(blockStack);
-        SymbolNode* parentSymbol = parentBlock->data;
+        SymbolNode* parentSymbol = parentBlock->block.symbol;
         while (parentSymbol->defers->size == 0 && parentSymbol->parent->symbolType == SYMBOL_BLOCK) {
             parentSymbol = parentSymbol->parent;
         }
@@ -517,7 +547,7 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
     }
     case AST_BREAK: {
         ASTNode* parentBlock = List_Peek(blockStack);
-        SymbolNode* parentSymbol = parentBlock->data;
+        SymbolNode* parentSymbol = parentBlock->block.symbol;
         while (parentSymbol->defers->size == 0 && parentSymbol->parent->symbolType == SYMBOL_BLOCK && !parentSymbol->isLoop) {
             parentSymbol = parentSymbol->parent;
         }
@@ -526,40 +556,42 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
         } else {
             fprintf(out, "\tgoto break_defer_%s;\n", parentSymbol->name);
         }
-    } break;
+        return -1;
+    } 
     case AST_CONTINUE: {
         ASTNode* parentBlock = List_Peek(blockStack);
-        SymbolNode* parentSymbol = parentBlock->data;
+        SymbolNode* parentSymbol = parentBlock->block.symbol;
         while (parentSymbol->parent->symbolType == SYMBOL_BLOCK && !parentSymbol->isLoop) {
             parentSymbol = parentSymbol->parent;
         }
         fprintf(out, "\tgoto continue_%s;\n", parentSymbol->name);
-    } break;
+        return -1;
+    }
     case AST_DEFER: {
-        fprintf(out, "\tdefer_%d = 1;\n", (int)node->data);
+        fprintf(out, "\tdefer_%d = 1;\n", node->defer.deferID);
         return -1;
     }
     case AST_DEFINE:
-        SymbolNode* var = node->data;
+        SymbolNode* var = node->define.symbol;
         if (!(var->symbolType == SYMBOL_FUNCTION && var->type->isConst)) {
             generateDefine(out, var, false);
         }
-        break;
+        return -1;
     case AST_NEW: {
-        ASTNode* type = List_Get(node->children, 0);
-        ASTNode* init = List_Get(node->children, 1);
+        ASTNode* type = node->binop.left;
+        ASTNode* init = node->binop.right;
         int id = -1;
         int initID = -1;
         if (init->astType != AST_UNDEF) {
             initID = generateAST(out, init, false);
         }
         if (type->astType == AST_ARRAY) {
-            ASTNode* lengthDefine = List_Get(type->children, 0);
-            SymbolNode* lengthSymbol = lengthDefine->data;
+            ASTNode* lengthDefine = List_Get(type->paramlist.defines, 0);
+            SymbolNode* lengthSymbol = lengthDefine->define.symbol;
             ASTNode* lengthCode = lengthSymbol->def;
-            ASTNode* dataDefine = List_Get(type->children, 1);
-            SymbolNode* dataSymbol = dataDefine->data;
-            ASTNode* dataType = List_Get(dataSymbol->type->children, 0);
+            ASTNode* dataDefine = List_Get(type->paramlist.defines, 1);
+            SymbolNode* dataSymbol = dataDefine->define.symbol;
+            ASTNode* dataType = dataSymbol->type->unop.expr;
             int lengthID = generateAST(out, lengthCode, false);
             id = printTempVar(out, node);
             fprintf(out, "{_%d, malloc(sizeof(", lengthID);
@@ -571,7 +603,7 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
                 generateDefaultValue(out, dataType);
             } else {
                 fprintf(out, "_%d.data[i]", initID);
-			}
+            }
             fprintf(out, ";}\n");
         } else if (type->astType == AST_PARAMLIST) {
             id = printTempVar(out, node);
@@ -583,7 +615,7 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
                 generateDefaultValue(out, type);
             } else {
                 fprintf(out, "_%d", initID);
-			}
+            }
             fprintf(out, ";\n");
         } else {
             id = printTempVar(out, node);
@@ -594,7 +626,7 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
         return id;
     }
     case AST_FREE: {
-        ASTNode* child = List_Get(node->children, 0);
+        ASTNode* child = node->unop.expr;
         int leftID = generateAST(out, child, false);
         ASTNode* type = child->type;
         int id = -1;
@@ -606,7 +638,7 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
         return -1;
     }
     case AST_IDENT: {
-        SymbolNode* var = Symbol_Find(node->data, node->scope);
+        SymbolNode* var = Symbol_Find(node->ident.data, node->scope);
         int id = -1;
         if (!isLValue) {
             id = printTempVar(out, node);
@@ -626,15 +658,27 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
         }
         return id;
     }
-    case AST_NULL:
-    case AST_TRUE:
-    case AST_FALSE:
+    case AST_TRUE: {
+        int id = printTempVar(out, node);
+        fprintf(out, "1;\n");
+        return id;
+    }
+    case AST_FALSE: {
+        int id = printTempVar(out, node);
+        fprintf(out, "0;\n");
+        return id;
+    }
+    case AST_NOTHING: {
+        int id = printTempVarType(out, node, INT64_TYPE);
+        fprintf(out, "0;\n");
+        return id;
+    }
     case AST_INT: {
         int id = -1;
         if (!isLValue) {
             id = printTempVar(out, node);
         }
-        fprintf(out, "%d", (int)node->data);
+        fprintf(out, "%d", (int)node->_int.data);
         if (!isLValue) {
             fprintf(out, ";\n");
         }
@@ -645,7 +689,7 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
         if (!isLValue) {
             id = printTempVar(out, node);
         }
-        fprintf(out, "%f", (float)((int)node->data));
+        fprintf(out, "%f", node->real.data);
         if (!isLValue) {
             fprintf(out, ";\n");
         }
@@ -656,7 +700,7 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
         if (!isLValue) {
             id = printTempVar(out, node);
         }
-        fprintf(out, "string_%d", node->pos.start_line);
+        fprintf(out, "string_%d", node->string.stringID);
         if (!isLValue) {
             fprintf(out, ";\n");
         }
@@ -667,7 +711,7 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
         if (!isLValue) {
             id = printTempVar(out, node);
         }
-        fprintf(out, "'%s'", node->data);
+        fprintf(out, "'%s'", node->_char.data);
         if (!isLValue) {
             fprintf(out, ";\n");
         }
@@ -675,15 +719,15 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
     }
     case AST_ARRAY_LITERAL: {
         List* ids = List_Create();
-        for (ListElem* elem = List_Begin(node->children); elem != List_End(node->children); elem = elem->next) {
+        for (ListElem* elem = List_Begin(node->arrayLiteral.members); elem != List_End(node->arrayLiteral.members); elem = elem->next) {
             int* ptr = malloc(sizeof(int));
             int elemID = generateAST(out, elem->data, false);
             *ptr = elemID;
             List_Append(ids, ptr);
         }
         int id = printTempVar(out, node);
-        fprintf(out, "{%d, (", node->children->size);
-        printType(out, ((ASTNode*)List_Begin(node->children)->data)->type);
+        fprintf(out, "{%d, (", node->arrayLiteral.members->size);
+        printType(out, ((ASTNode*)List_Begin(node->arrayLiteral.members)->data)->type);
         fprintf(out, "[]){");
         for (ListElem* elem = List_Begin(ids); elem != List_End(ids); elem = elem->next) {
             int* elemID = elem->data;
@@ -696,9 +740,34 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
         List_Destroy(ids);
         return id;
     }
+    case AST_UNION_LITERAL: {
+        int id = -1;
+        if (node->unionLiteral.expr) {
+            int exprID = generateAST(out, node->unionLiteral.expr, false);
+            id = printTempVarUndef(out, node);
+            ASTNode* memberDefine = List_Get(node->type->unionset.defines, node->unionLiteral.tag);
+            SymbolNode* symbol = memberDefine->define.symbol;
+            fprintf(out, "\t_%d.tag = %d;\n", id, node->unionLiteral.tag);
+            if (symbol->type->astType != AST_VOID) {
+                fprintf(out, "\t_%d.%s = _%d;\n", id, symbol->name, exprID);
+            }
+        } else {
+            id = printTempVarUndef(out, node);
+            ASTNode* memberDefine = List_Get(node->type->unionset.defines, node->unionLiteral.tag);
+            SymbolNode* symbol = memberDefine->define.symbol;
+            fprintf(out, "\t_%d.tag = %d;\n", id, node->unionLiteral.tag);
+            if (symbol->type->astType != AST_VOID) {
+                fprintf(out, "\t_%d.%s = ", id, symbol->name);
+                generateDefaultValue(out, symbol->type);
+                fprintf(out, ";\n");
+            }
+        }
+
+        return id;
+    }
     case AST_INDEX: {
-        ASTNode* left = List_Begin(node->children)->data;
-        ASTNode* right = List_Begin(node->children)->next->data;
+        ASTNode* left = node->binop.left;
+        ASTNode* right = node->binop.right;
         ASTNode* leftType = left->type;
 
         int indexID = generateAST(out, right, false);
@@ -723,7 +792,7 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
                 generateAST(out, left, true);
                 fprintf(out, ".data");
             }
-        } else if (leftType->astType == AST_ADDR && ((ASTNode*)List_Get(leftType->children, 0))->astType == AST_ARRAY) {
+        } else if (leftType->astType == AST_ADDR && leftType->unop.expr->astType == AST_ARRAY) {
             if (arrID != -1) {
                 if (printTab) {
                     fprintf(out, "\t");
@@ -748,22 +817,22 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
 		int64_t _1 = 2;
 		_172_subArr = {_0 - _1, arr.data + _1};
 		*/
-        ASTNode* arr = List_Get(node->children, 0);
-        ASTNode* lowerBound = List_Get(node->children, 1);
-        ASTNode* upperBound = List_Get(node->children, 2);
+        ASTNode* arr = node->slice.arrayExpr;
+        ASTNode* lowerBound = node->slice.lowerBound;
+        ASTNode* upperBound = node->slice.upperBound;
         int arrID = generateAST(out, arr, false);
         int lowerBoundID = -1;
         int upperBoundID = -1;
         if (lowerBound->astType != AST_UNDEF) {
             lowerBoundID = generateAST(out, lowerBound, false);
         } else {
-            lowerBoundID = printTempVarType(out, lowerBound, INT64_TYPE);
+            lowerBoundID = printTempVarType(out, node, INT64_TYPE);
             fprintf(out, "0;\n");
         }
         if (upperBound->astType != AST_UNDEF) {
             upperBoundID = generateAST(out, upperBound, false);
         } else {
-            upperBoundID = printTempVarType(out, upperBound, INT64_TYPE);
+            upperBoundID = printTempVarType(out, node, INT64_TYPE);
             fprintf(out, "_%d.length;\n", arrID);
         }
         int id = printTempVar(out, node);
@@ -772,7 +841,7 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
     }
     case AST_SIZEOF: {
         int id = -1;
-        ASTNode* type = List_Get(node->children, 0);
+        ASTNode* type = node->unop.expr;
         if (!isLValue) {
             id = printTempVar(out, node);
             fprintf(out, "sizeof(");
@@ -792,7 +861,7 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
     case AST_PAREN: {
         int id = -1;
         if (!isLValue) {
-            int leftID = generateAST(out, node->children->head.next->data, false);
+            int leftID = generateAST(out, node->arglist.args->head.next->data, false);
             id = printTempVar(out, node);
             fprintf(out, "_%d;\n", leftID);
         } else {
@@ -800,13 +869,13 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
                 fprintf(out, "\t");
                 printTab = false;
             }
-            generateAST(out, node->children->head.next->data, true);
+            generateAST(out, node->arglist.args->head.next->data, true);
         }
         return id;
     }
     case AST_ARGLIST: {
         List* ids = List_Create();
-        for (ListElem* elem = List_Begin(node->children); elem != List_End(node->children); elem = elem->next) {
+        for (ListElem* elem = List_Begin(node->arglist.args); elem != List_End(node->arglist.args); elem = elem->next) {
             int* ptr = malloc(sizeof(int));
             int elemID = generateAST(out, elem->data, false);
             *ptr = elemID;
@@ -827,7 +896,7 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
     }
     case AST_DOT: {
         int id = -1;
-        SymbolNode* dotSymbol = node->data;
+        SymbolNode* dotSymbol = node->dot.symbol;
         if (dotSymbol && dotSymbol->isExtern) {
             if (!isLValue) {
                 id = printTempVar(out, node);
@@ -837,10 +906,10 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
             }
             fprintf(out, "%s", dotSymbol->externName);
         } else {
-            ASTNode* left = List_Begin(node->children)->data;
-            ASTNode* right = List_Begin(node->children)->next->data;
+            ASTNode* left = node->dot.left;
+            ASTNode* right = node->dot.right;
             ASTNode* leftType = left->type;
-            if (dotSymbol && leftType->astType == AST_IDENT && (!strcmp(leftType->data, "Module") || !strcmp(leftType->data, "Package") || !strcmp(leftType->data, "Enum"))) {
+            if (dotSymbol && leftType->astType == AST_IDENT && (!strcmp(leftType->ident.data, "Module") || !strcmp(leftType->ident.data, "Package"))) {
                 if (!isLValue) {
                     id = printTempVar(out, node);
                 } else if (printTab) {
@@ -860,27 +929,27 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
                 if (!isLValue) {
                     int leftID = generateAST(out, left, false);
                     id = printTempVar(out, node);
-                    fprintf(out, "_%d->%s", leftID, right->data);
+                    fprintf(out, "_%d->%s", leftID, right->ident.data);
                 } else {
                     if (printTab) {
                         fprintf(out, "\t");
                         printTab = false;
                     }
                     generateAST(out, left, true);
-                    fprintf(out, "->%s", right->data);
+                    fprintf(out, "->%s", right->ident.data);
                 }
             } else {
                 if (!isLValue) {
                     int leftID = generateAST(out, left, false);
                     id = printTempVar(out, node);
-                    fprintf(out, "_%d.%s", leftID, right->data);
+                    fprintf(out, "_%d.%s", leftID, right->ident.data);
                 } else {
                     if (printTab) {
                         fprintf(out, "\t");
                         printTab = false;
                     }
                     generateAST(out, left, true);
-                    fprintf(out, ".%s", right->data);
+                    fprintf(out, ".%s", right->ident.data);
                 }
             }
         }
@@ -889,9 +958,29 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
         }
         return id;
     }
+    case AST_ORELSE: {
+        ASTNode* left = node->binop.left;
+        ASTNode* right = node->binop.right;
+
+        int id = printTempVarUndef(out, node);
+        int leftID = generateAST(out, left, false);
+        int elseLabel = newLabel(node);
+        int endLabel = newLabel(node);
+
+        fprintf(out, "\tif (_%d.tag == 0) goto else_%d;\n", leftID, elseLabel);
+        fprintf(out, "\t_%d = _%d.something;\n", id, leftID);
+        fprintf(out, "\tgoto end_%d;\nelse_%d:;\n", endLabel, elseLabel);
+        int rightID = generateAST(out, right, false);
+        if (rightID != -1 && id != -1) {
+            fprintf(out, "\t_%d = _%d;\n", id, rightID);
+        }
+        fprintf(out, "end_%d:;\n", endLabel);
+        return id;
+        return id;
+    }
     case AST_AND: {
-        ASTNode* left = List_Begin(node->children)->data;
-        ASTNode* right = List_Begin(node->children)->next->data;
+        ASTNode* left = node->binop.left;
+        ASTNode* right = node->binop.right;
 
         int overLabel = newLabel(node);
 
@@ -906,8 +995,8 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
         return id;
     }
     case AST_OR: {
-        ASTNode* left = List_Begin(node->children)->data;
-        ASTNode* right = List_Begin(node->children)->next->data;
+        ASTNode* left = node->binop.left;
+        ASTNode* right = node->binop.right;
 
         int overLabel = newLabel(node);
 
@@ -921,70 +1010,292 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
         fprintf(out, "over_%d:;\n", overLabel);
         return id;
     }
-    case AST_BIT_OR:
-    case AST_BIT_XOR:
-    case AST_BIT_AND:
-    case AST_LSHIFT:
-    case AST_RSHIFT:
-    case AST_EQ:
-    case AST_NEQ:
-    case AST_GTR:
-    case AST_LSR:
-    case AST_GTE:
-    case AST_LTE:
-    case AST_ADD:
-    case AST_SUBTRACT:
-    case AST_MULTIPLY:
-    case AST_DIVIDE:
-    case AST_MODULUS: {
-        int leftID = generateAST(out, node->children->head.next->data, false);
-        int rightID = generateAST(out, node->children->head.next->next->data, false);
+    case AST_BIT_OR: {
+        int leftID = generateAST(out, node->binop.left, false);
+        int rightID = generateAST(out, node->binop.right, false);
         int id = printTempVar(out, node);
-        fprintf(out, "_%d %s _%d;\n", leftID, node->data, rightID);
+        fprintf(out, "_%d | _%d;\n", leftID, rightID);
         return id;
     }
-    case AST_ASSIGN:
-    case AST_ADD_ASSIGN:
-    case AST_SUB_ASSIGN:
-    case AST_MULT_ASSIGN:
-    case AST_DIV_ASSIGN:
-    case AST_MOD_ASSIGN:
-    case AST_AND_ASSIGN:
-    case AST_OR_ASSIGN:
-    case AST_XOR_ASSIGN:
-    case AST_LSHIFT_ASSIGN:
-    case AST_RSHIFT_ASSIGN: {
-        int rightID = generateAST(out, node->children->head.next->next->data, false);
+    case AST_BIT_XOR: {
+        int leftID = generateAST(out, node->binop.left, false);
+        int rightID = generateAST(out, node->binop.right, false);
+        int id = printTempVar(out, node);
+        fprintf(out, "_%d ^ _%d;\n", leftID, rightID);
+        return id;
+    }
+    case AST_BIT_AND: {
+        int leftID = generateAST(out, node->binop.left, false);
+        int rightID = generateAST(out, node->binop.right, false);
+        int id = printTempVar(out, node);
+        fprintf(out, "_%d & _%d;\n", leftID, rightID);
+        return id;
+    }
+    case AST_LSHIFT: {
+        int leftID = generateAST(out, node->binop.left, false);
+        int rightID = generateAST(out, node->binop.right, false);
+        int id = printTempVar(out, node);
+        fprintf(out, "_%d << _%d;\n", leftID, rightID);
+        return id;
+    }
+    case AST_RSHIFT: {
+        int leftID = generateAST(out, node->binop.left, false);
+        int rightID = generateAST(out, node->binop.right, false);
+        int id = printTempVar(out, node);
+        fprintf(out, "_%d >> _%d;\n", leftID, rightID);
+        return id;
+    }
+    case AST_EQ: {
+        int leftID = generateAST(out, node->binop.left, false);
+        int id = -1;
+        if (node->binop.right->astType != AST_NOTHING) {
+            int rightID = generateAST(out, node->binop.right, false);
+            id = printTempVar(out, node);
+            fprintf(out, "_%d == _%d;\n", leftID, rightID);
+        } else {
+            id = printTempVar(out, node);
+            fprintf(out, "_%d.tag == 0;\n", leftID);
+        }
+        return id;
+    }
+    case AST_NEQ: {
+        int leftID = generateAST(out, node->binop.left, false);
+        int id = -1;
+        if (node->binop.right->astType != AST_NOTHING) {
+            int rightID = generateAST(out, node->binop.right, false);
+            id = printTempVar(out, node);
+            fprintf(out, "_%d != _%d;\n", leftID, rightID);
+        } else {
+            id = printTempVar(out, node);
+            fprintf(out, "_%d.tag != 0;\n", leftID);
+        }
+        return id;
+    }
+    case AST_GTR: {
+        int leftID = generateAST(out, node->binop.left, false);
+        int rightID = generateAST(out, node->binop.right, false);
+        int id = printTempVar(out, node);
+        fprintf(out, "_%d > _%d;\n", leftID, rightID);
+        return id;
+    }
+    case AST_LSR: {
+        int leftID = generateAST(out, node->binop.left, false);
+        int rightID = generateAST(out, node->binop.right, false);
+        int id = printTempVar(out, node);
+        fprintf(out, "_%d < _%d;\n", leftID, rightID);
+        return id;
+    }
+    case AST_GTE: {
+        int leftID = generateAST(out, node->binop.left, false);
+        int rightID = generateAST(out, node->binop.right, false);
+        int id = printTempVar(out, node);
+        fprintf(out, "_%d >= _%d;\n", leftID, rightID);
+        return id;
+    }
+    case AST_LTE: {
+        int leftID = generateAST(out, node->binop.left, false);
+        int rightID = generateAST(out, node->binop.right, false);
+        int id = printTempVar(out, node);
+        fprintf(out, "_%d <= _%d;\n", leftID, rightID);
+        return id;
+    }
+    case AST_ADD: {
+        int leftID = generateAST(out, node->binop.left, false);
+        int rightID = generateAST(out, node->binop.right, false);
+        int id = printTempVar(out, node);
+        fprintf(out, "_%d + _%d;\n", leftID, rightID);
+        return id;
+    }
+    case AST_SUBTRACT: {
+        int leftID = generateAST(out, node->binop.left, false);
+        int rightID = generateAST(out, node->binop.right, false);
+        int id = printTempVar(out, node);
+        fprintf(out, "_%d - _%d;\n", leftID, rightID);
+        return id;
+    }
+    case AST_MULTIPLY: {
+        int leftID = generateAST(out, node->binop.left, false);
+        int rightID = generateAST(out, node->binop.right, false);
+        int id = printTempVar(out, node);
+        fprintf(out, "_%d * _%d;\n", leftID, rightID);
+        return id;
+    }
+    case AST_DIVIDE: {
+        int leftID = generateAST(out, node->binop.left, false);
+        int rightID = generateAST(out, node->binop.right, false);
+        int id = printTempVar(out, node);
+        fprintf(out, "_%d / _%d;\n", leftID, rightID);
+        return id;
+    }
+    case AST_MODULUS: {
+        int leftID = generateAST(out, node->binop.left, false);
+        int rightID = generateAST(out, node->binop.right, false);
+        int id = printTempVar(out, node);
+        fprintf(out, "_%d %% _%d;\n", leftID, rightID);
+        return id;
+    }
+    case AST_ASSIGN: {
+        int rightID = generateAST(out, node->binop.right, false);
         printTab = true;
-        generateAST(out, node->children->head.next->data, true);
-        fprintf(out, " %s _%d;\n", node->data, rightID);
+        generateAST(out, node->binop.left, true);
+        fprintf(out, " = _%d;\n", rightID);
         return rightID;
     }
-    case AST_NEG:
-    case AST_BIT_NOT:
-    case AST_NOT:
-    case AST_ADDROF:
-    case AST_DEREF: {
+    case AST_ADD_ASSIGN: {
+        int rightID = generateAST(out, node->binop.right, false);
+        printTab = true;
+        generateAST(out, node->binop.left, true);
+        fprintf(out, " += _%d;\n", rightID);
+        return rightID;
+    }
+    case AST_SUB_ASSIGN: {
+        int rightID = generateAST(out, node->binop.right, false);
+        printTab = true;
+        generateAST(out, node->binop.left, true);
+        fprintf(out, " -= _%d;\n", rightID);
+        return rightID;
+    }
+    case AST_MULT_ASSIGN: {
+        int rightID = generateAST(out, node->binop.right, false);
+        printTab = true;
+        generateAST(out, node->binop.left, true);
+        fprintf(out, " *= _%d;\n", rightID);
+        return rightID;
+    }
+    case AST_DIV_ASSIGN: {
+        int rightID = generateAST(out, node->binop.right, false);
+        printTab = true;
+        generateAST(out, node->binop.left, true);
+        fprintf(out, " /= _%d;\n", rightID);
+        return rightID;
+    }
+    case AST_MOD_ASSIGN: {
+        int rightID = generateAST(out, node->binop.right, false);
+        printTab = true;
+        generateAST(out, node->binop.left, true);
+        fprintf(out, " %= _%d;\n", rightID);
+        return rightID;
+    }
+    case AST_AND_ASSIGN: {
+        int rightID = generateAST(out, node->binop.right, false);
+        printTab = true;
+        generateAST(out, node->binop.left, true);
+        fprintf(out, " &= _%d;\n", rightID);
+        return rightID;
+    }
+    case AST_OR_ASSIGN: {
+        int rightID = generateAST(out, node->binop.right, false);
+        printTab = true;
+        generateAST(out, node->binop.left, true);
+        fprintf(out, " |= _%d;\n", rightID);
+        return rightID;
+    }
+    case AST_XOR_ASSIGN: {
+        int rightID = generateAST(out, node->binop.right, false);
+        printTab = true;
+        generateAST(out, node->binop.left, true);
+        fprintf(out, " ^= _%d;\n", rightID);
+        return rightID;
+    }
+    case AST_LSHIFT_ASSIGN: {
+        int rightID = generateAST(out, node->binop.right, false);
+        printTab = true;
+        generateAST(out, node->binop.left, true);
+        fprintf(out, " <<= _%d;\n", rightID);
+        return rightID;
+    }
+    case AST_RSHIFT_ASSIGN: {
+        int rightID = generateAST(out, node->binop.right, false);
+        printTab = true;
+        generateAST(out, node->binop.left, true);
+        fprintf(out, " >>= _%d;\n", rightID);
+        return rightID;
+    }
+    case AST_NEG: {
         int id = -1;
         if (!isLValue) {
-            int leftID = generateAST(out, node->children->head.next->data, false);
+            int leftID = generateAST(out, node->unop.expr, false);
             id = printTempVar(out, node);
-            fprintf(out, "%s_%d;\n", node->data, leftID);
+            fprintf(out, "-_%d;\n", leftID);
         } else {
             if (printTab) {
                 fprintf(out, "\t");
                 printTab = false;
             }
-            fprintf(out, "%s", node->data);
-            generateAST(out, node->children->head.next->data, true);
+            fprintf(out, "-");
+            generateAST(out, node->unop.expr, true);
+        }
+        return id;
+    }
+    case AST_BIT_NOT: {
+        int id = -1;
+        if (!isLValue) {
+            int leftID = generateAST(out, node->unop.expr, false);
+            id = printTempVar(out, node);
+            fprintf(out, "~_%d;\n", leftID);
+        } else {
+            if (printTab) {
+                fprintf(out, "\t");
+                printTab = false;
+            }
+            fprintf(out, "~");
+            generateAST(out, node->unop.expr, true);
+        }
+        return id;
+    }
+    case AST_NOT: {
+        int id = -1;
+        if (!isLValue) {
+            int leftID = generateAST(out, node->unop.expr, false);
+            id = printTempVar(out, node);
+            fprintf(out, "!_%d;\n", leftID);
+        } else {
+            if (printTab) {
+                fprintf(out, "\t");
+                printTab = false;
+            }
+            fprintf(out, "!");
+            generateAST(out, node->unop.expr, true);
+        }
+        return id;
+    }
+    case AST_ADDROF: {
+        int id = -1;
+        if (!isLValue) {
+            int leftID = generateAST(out, node->unop.expr, false);
+            id = printTempVar(out, node);
+            fprintf(out, "&_%d;\n", leftID);
+        } else {
+            if (printTab) {
+                fprintf(out, "\t");
+                printTab = false;
+            }
+            fprintf(out, "&");
+            generateAST(out, node->unop.expr, true);
+        }
+        return id;
+    }
+    case AST_DEREF: {
+        int id = -1;
+        if (!isLValue) {
+            int leftID = generateAST(out, node->unop.expr, false);
+            id = printTempVar(out, node);
+            fprintf(out, "*_%d;\n", leftID);
+        } else {
+            if (printTab) {
+                fprintf(out, "\t");
+                printTab = false;
+            }
+            fprintf(out, "*");
+            generateAST(out, node->unop.expr, true);
         }
         return id;
     }
     case AST_CAST: {
         int id = -1;
         if (!isLValue) {
-            int leftID = generateAST(out, List_Get(node->children, 0), false);
-            ASTNode* innerType = List_Get(node->children, 1);
+            int leftID = generateAST(out, node->binop.left, false);
+            ASTNode* innerType = node->binop.right;
             if (innerType->astType != AST_PARAMLIST && innerType->astType != AST_ARRAY) {
                 id = printTempVar(out, node);
                 fprintf(out, "(");
@@ -1000,19 +1311,20 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
                 printTab = false;
             }
             fprintf(out, "(");
-            printType(out, List_Get(node->children, 1));
+            printType(out, node->binop.right);
             fprintf(out, ")");
-            generateAST(out, List_Get(node->children, 0), true);
+            generateAST(out, node->binop.left, true);
         }
         return id;
     }
     case AST_CALL: {
-        ASTNode* arglist = List_Get(node->children, 1);
+        ASTNode* arglist = node->call.right;
         List* ids = List_Create();
-        for (ListElem* elem = List_Begin(arglist->children); elem != List_End(arglist->children); elem = elem->next) {
+        for (ListElem* elem = List_Begin(arglist->arglist.args); elem != List_End(arglist->arglist.args); elem = elem->next) {
             int* ptr = malloc(sizeof(int));
             ASTNode* child = elem->data;
             if (child->astType != AST_IDENT) {
+                child->scope = node->scope;
                 int elemID = generateAST(out, child, false);
                 *ptr = elemID;
             } else {
@@ -1022,14 +1334,14 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
         }
 
         int id = -1;
-        if (node->type->astType != AST_VOID) {
+        if (node->call.fnType->function.codomainType->astType != AST_VOID) {
             id = printTempVar(out, node);
         } else {
             fprintf(out, "\t");
         }
-        generateAST(out, List_Begin(node->children)->data, true);
+        generateAST(out, node->call.left, true);
         fprintf(out, "(");
-        ListElem* elem2 = List_Begin(arglist->children);
+        ListElem* elem2 = List_Begin(arglist->arglist.args);
         for (ListElem* elem = List_Begin(ids); elem != List_End(ids); elem = elem->next, elem2 = elem2->next) {
             int* elemID = elem->data;
             if (*elemID != -1) {
@@ -1054,13 +1366,13 @@ Prints out the parameter list for a procedure
 */
 static void generateParamList(FILE* out, ASTNode* parameters)
 {
-    ListElem* paramElem = List_Begin(parameters->children);
+    ListElem* paramElem = List_Begin(parameters->paramlist.defines);
     // For each parameter in the procedure's parameter list, print it out
-    for (; paramElem != List_End(parameters->children); paramElem = paramElem->next) {
+    for (; paramElem != List_End(parameters->paramlist.defines); paramElem = paramElem->next) {
         ASTNode* define = paramElem->data;
-        SymbolNode* var = define->data;
+        SymbolNode* var = define->define.symbol;
         generateDefine(out, var, true);
-        if (paramElem != List_End(parameters->children)->prev) {
+        if (paramElem != List_End(parameters->paramlist.defines)->prev) {
             fprintf(out, ", ");
         }
     }
@@ -1068,7 +1380,7 @@ static void generateParamList(FILE* out, ASTNode* parameters)
 
 static void generateIncludes(FILE* out, Map* includes)
 {
-    fprintf(out, "/* Includes used by the program */\n");
+    fprintf(out, "/* Includes used by the program */\n#define _CRT_SECURE_NO_WARNINGS\n");
     List* keys = includes->keyList;
     ListElem* e = List_Begin(keys);
     for (; e != List_End(keys); e = e->next) {
@@ -1082,6 +1394,8 @@ static void generateIncludes(FILE* out, Map* includes)
     fprintf(out, "\n");
 }
 
+void generateUnion(FILE* out, DGraph* graphNode);
+
 static void generateStruct(FILE* out, DGraph* graphNode)
 {
     if (graphNode->visited) {
@@ -1094,18 +1408,22 @@ static void generateStruct(FILE* out, DGraph* graphNode)
     ListElem* elem = List_Begin(graphNode->dependencies);
     for (; elem != List_End(graphNode->dependencies); elem = elem->next) {
         DGraph* child = elem->data;
-        generateStruct(out, child);
+        if (child->structDef->astType == AST_UNIONSET) {
+            generateUnion(out, child);
+        } else {
+            generateStruct(out, child);
+        }
     }
 
     ASTNode* _struct = graphNode->structDef;
     char* structOrdStr = myItoa(graphNode->ordinal + 1);
     fprintf(out, "struct struct_%s {\n", structOrdStr);
 
-    ListElem* paramElem = List_Begin(_struct->children);
+    ListElem* paramElem = List_Begin(_struct->paramlist.defines);
     // For each parameter in the procedure's parameter list, print it out
-    for (; paramElem != List_End(_struct->children); paramElem = paramElem->next) {
+    for (; paramElem != List_End(_struct->paramlist.defines); paramElem = paramElem->next) {
         ASTNode* define = paramElem->data;
-        SymbolNode* var = define->data;
+        SymbolNode* var = define->define.symbol;
         if (!(var->symbolType == SYMBOL_FUNCTION && var->type->isConst)) {
             fprintf(out, "\t");
             generateDefine(out, var, true);
@@ -1115,13 +1433,70 @@ static void generateStruct(FILE* out, DGraph* graphNode)
     fprintf(out, "};\n\n");
 }
 
+void generateUnion(FILE* out, DGraph* graphNode)
+{
+    if (graphNode->visited) {
+        return;
+    } else {
+        graphNode->visited = true;
+    }
+
+    // Print out all dependencies
+    ListElem* elem = List_Begin(graphNode->dependencies);
+    for (; elem != List_End(graphNode->dependencies); elem = elem->next) {
+        DGraph* child = elem->data;
+        if (child->structDef->astType == AST_UNIONSET) {
+            generateUnion(out, child);
+        } else {
+            generateStruct(out, child);
+        }
+    }
+
+    ASTNode* _union = graphNode->structDef;
+    char* structOrdStr = myItoa(graphNode->ordinal + 1);
+    fprintf(out, "struct struct_%s {\n\tint64_t tag;\n", structOrdStr);
+
+    int numOfNonVoidMembers = 0;
+    ListElem* paramElem = List_Begin(_union->unionset.defines);
+    for (; paramElem != List_End(_union->unionset.defines); paramElem = paramElem->next) {
+        ASTNode* define = paramElem->data;
+        SymbolNode* var = define->define.symbol;
+        if (var->type->astType != AST_VOID) {
+            numOfNonVoidMembers = 1;
+            break;
+        }
+    }
+
+    if (numOfNonVoidMembers > 0) {
+        fprintf(out, "\tunion {\n");
+
+        paramElem = List_Begin(_union->unionset.defines);
+        // For each parameter in the procedure's parameter list, print it out
+        for (; paramElem != List_End(_union->unionset.defines); paramElem = paramElem->next) {
+            ASTNode* define = paramElem->data;
+            SymbolNode* var = define->define.symbol;
+            if (!(var->symbolType == SYMBOL_FUNCTION && var->type->isConst) && var->type->astType != AST_VOID) {
+                fprintf(out, "\t\t");
+                generateDefine(out, var, true);
+                fprintf(out, ";\n");
+            }
+        }
+        fprintf(out, "\t};\n");
+    }
+    fprintf(out, "};\n\n");
+}
+
 void generateStructDefinitions(FILE* out, List* depenGraph)
 {
     fprintf(out, "/* Struct definitions */\n");
     ListElem* elem = List_Begin(depenGraph);
     for (; elem != List_End(depenGraph); elem = elem->next) {
-        struct graph* graphNode = elem->data;
-        generateStruct(out, graphNode);
+        DGraph* graphNode = elem->data;
+        if (graphNode->structDef->astType == AST_UNIONSET) {
+            generateUnion(out, graphNode);
+        } else {
+            generateStruct(out, graphNode);
+        }
     }
 }
 
@@ -1151,6 +1526,8 @@ void generateString(FILE* out, char* string)
             fprintf(out, "'%c", c);
             j++;
             fprintf(out, "%c', ", string[j]);
+        } else if (c == '\'') {
+            fprintf(out, "'\\'', ");
         } else {
             fprintf(out, "'%c', ", c);
         }
@@ -1188,7 +1565,7 @@ void generateStrings(FILE* out, List* strings)
         }
         printType(out, STRING_TYPE);
         fprintf(out, " string_%d = ", i);
-        generateString(out, node->data);
+        generateString(out, node->string.data);
     }
     fprintf(out, "\n");
 }
@@ -1203,9 +1580,9 @@ void generateForwardFunctions(FILE* out, List* functions)
         }
 
         ASTNode* functionType = symbol->type;
-        ASTNode* params = List_Get(functionType->children, 0);
-        ASTNode* returns = List_Get(functionType->children, 1);
-        if (returns->children->size <= 1) {
+        ASTNode* params = functionType->function.domainType;
+        ASTNode* returns = functionType->function.codomainType;
+        if (returns->astType != AST_PARAMLIST) {
             printType(out, functionType);
         } else {
             printType(out, returns);
@@ -1236,39 +1613,6 @@ void generateForwardGlobals(FILE* out, List* globals)
     fprintf(out, "\n");
 }
 
-void generateEnums(FILE* out, List* enums)
-{
-    fprintf(out, "/* Enums */\n");
-    for (ListElem* elem = List_Begin(enums); elem != List_End(enums); elem = elem->next) {
-        SymbolNode* symbol = elem->data;
-        if (!symbol->isReachable) {
-            continue;
-        }
-
-        int i = 0;
-        ASTNode* root = symbol->def;
-        for (ListElem* elem = List_Begin(root->children); elem != List_End(root->children); elem = elem->next) {
-            ASTNode* define = elem->data;
-            SymbolNode* var = define->data;
-            fprintf(out, "#define ");
-            printPath(out, symbol);
-            fprintf(out, "_%s %d", var->name, i);
-            i++;
-            fprintf(out, "\n");
-        }
-
-        printType(out, STRING_TYPE);
-        fprintf(out, " ");
-        printPath(out, symbol);
-        fprintf(out, "_toString(int x);\n");
-
-        fprintf(out, "int ");
-        printPath(out, symbol);
-        fprintf(out, "_length;\n");
-    }
-    fprintf(out, "\n");
-}
-
 static int getPathLength(SymbolNode* symbol)
 {
     if (symbol->parent->parent != NULL && !symbol->isExtern) {
@@ -1280,51 +1624,6 @@ static int getPathLength(SymbolNode* symbol)
     } else {
         return strlen(symbol->name);
     }
-}
-
-void generateEnumFunctions(FILE* out, List* enums)
-{
-    fprintf(out, "/* Enum definitions */\n");
-    ASTNode* stringRawType = List_Get(STRING_TYPE->children, 0);
-    for (ListElem* elem = List_Begin(enums); elem != List_End(enums); elem = elem->next) {
-        SymbolNode* symbol = elem->data;
-        if (!symbol->isReachable) {
-            continue;
-        }
-
-        ASTNode* root = symbol->def;
-        for (ListElem* elem = List_Begin(root->children); elem != List_End(root->children); elem = elem->next) {
-            ASTNode* define = elem->data;
-            SymbolNode* var = define->data;
-            printType(out, stringRawType);
-            fprintf(out, " ");
-            printPath(out, var);
-            fprintf(out, "_str = ");
-            char nameBuffer[255];
-            sprintPath(nameBuffer, var);
-            generateString(out, nameBuffer);
-        }
-
-        printType(out, STRING_TYPE);
-        fprintf(out, " ");
-        printPath(out, symbol);
-        fprintf(out, "_toString(unsigned int x)\n{\n\tswitch(x)\n\t{\n");
-        for (ListElem* elem = List_Begin(root->children); elem != List_End(root->children); elem = elem->next) {
-            ASTNode* define = elem->data;
-            SymbolNode* var = define->data;
-            fprintf(out, "\tcase ");
-            printPath(out, var);
-            fprintf(out, ":\n\t\treturn &");
-            printPath(out, var);
-            fprintf(out, "_str;\n");
-        }
-        fprintf(out, "\t}\n}\n");
-
-        fprintf(out, "unsigned int ");
-        printPath(out, symbol);
-        fprintf(out, "_length = %d;\n", root->children->size);
-    }
-    fprintf(out, "\n");
 }
 
 void generateGlobalDefinitions(FILE* out, List* globals)
@@ -1352,9 +1651,9 @@ void generateFunctionDefinitions(FILE* out, List* functions)
         }
 
         ASTNode* functionType = symbol->type;
-        ASTNode* params = List_Get(functionType->children, 0);
-        ASTNode* returns = List_Get(functionType->children, 1);
-        if (returns->children->size <= 1) {
+        ASTNode* params = functionType->function.domainType;
+        ASTNode* returns = functionType->function.codomainType;
+        if (returns->astType != AST_PARAMLIST) {
             printType(out, functionType);
         } else {
             printType(out, returns);
@@ -1421,7 +1720,7 @@ void generateMainFunction(FILE* out, SymbolNode* mainFunction)
 
     fprintf(out, "\tfree(args.data);\n");
 
-    fprintf(out, "\treturn retval;\n");
+    fprintf(out, "\tsystem(\"pause\");\n\treturn retval;\n");
 
     fprintf(out, "}\n");
 }
@@ -1441,12 +1740,10 @@ void Generator_Generate(Program _program, FILE* out)
     generateStructDefinitions(out, program.dependencyGraph);
     generateVerbatims(out, program.verbatims);
     generateForwardStrings(out, program.strings);
-    generateEnums(out, program.enums);
     generateForwardGlobals(out, program.globalVars);
     generateForwardFunctions(out, program.functions);
     fprintf(out, "#ifndef ORANGE_PROGRAM_%s\n#define ORANGE_PROGRAM_%s\n\n", myItoa(randID), myItoa(randID));
     generateStrings(out, program.strings);
-    generateEnumFunctions(out, program.enums);
     generateFunctionDefinitions(out, program.functions);
     generateMainFunction(out, program.mainFunction);
     fprintf(out, "#endif\n");
