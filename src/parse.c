@@ -16,86 +16,100 @@ symbol tree that points to many abstract syntax trees
 
 // File handle for the input file
 static FILE* in;
-// Pointer to the previous token for taking a look at the span
-static Token* prevToken;
-// Pointer to the token that is at the front of the token queue
-static Token* nextToken;
-// Pointer to the token that is just after the front of the token queue
-static Token* nextNextToken;
+Token* prevToken;
+static List* tokens;
 // The next unique identifier used for indexing blocks
-int blockUID = 1;
 static int arrayUID = 1;
 
-/*
-Takes in a token type. If that type matches the token type of the token at the
-front of the token queue, pops the token from the stack and returns it. Otherwise,
-returns null
-*/
 static Token* accept(_TokenType type)
 {
-    if (nextToken->type == type) {
-        Token* temp = nextToken;
-        prevToken = nextToken;
-        nextToken = nextNextToken;
-        nextNextToken = Lexer_GetNextToken(in);
-        return temp;
-    } else {
-        return NULL;
+    Token* token;
+    int i = 0;
+    while (true) {
+        if (List_IsEmpty(tokens) || i >= tokens->size) {
+            List_Append(tokens, Lexer_GetNextToken(in));
+        }
+        token = List_Get(tokens, i);
+        if (token->type == type) {
+            break;
+        } else if (token->type != TOKEN_NEWLINE) {
+            return NULL;
+        }
+        i++;
     }
+    for (; i >= 0; i--) {
+        List_Pop(tokens);
+    }
+    prevToken = token;
+    return token;
 }
 
-static Token* accept2(_TokenType type, _TokenType type2)
+static bool nextIsDef()
 {
-    if (nextToken->type == type && nextNextToken->type == type2) {
-        Token* temp = nextToken;
-        prevToken = nextToken;
-        nextNextToken = Lexer_GetNextToken(in);
-        nextToken = Lexer_GetNextToken(in);
-        return temp;
-    } else {
-        return NULL;
+    int i = 0;
+    while (true) {
+        if (List_IsEmpty(tokens) || i >= tokens->size) {
+            List_Append(tokens, Lexer_GetNextToken(in));
+        }
+        Token* token = List_Get(tokens, i);
+        i++;
+        if (token->type == TOKEN_NEWLINE) {
+            continue;
+        } else if (token->type == TOKEN_IDENT) {
+            break;
+        } else {
+            return false;
+        }
+    }
+    while (true) {
+        if (List_IsEmpty(tokens) || i >= tokens->size) {
+            List_Append(tokens, Lexer_GetNextToken(in));
+        }
+        Token* token = List_Get(tokens, i);
+        i++;
+        if (token->type == TOKEN_NEWLINE) {
+            continue;
+        } else if (token->type == TOKEN_COLON) {
+            return true;
+        } else {
+            return false;
+        }
     }
 }
 
-/*
-Takes in a token type. If that type matches the token type of the token at the
-front of the token queue, pops the token off the stack and returns it. Otherwise,
-crashes program with a syntax error.
-*/
+static Token* nextToken()
+{
+    int i = 0;
+    while (true) {
+        if (List_IsEmpty(tokens) || i >= tokens->size) {
+            List_Append(tokens, Lexer_GetNextToken(in));
+        }
+        Token* token = List_Get(tokens, i);
+        i++;
+        if (token->type == TOKEN_NEWLINE) {
+            continue;
+        } else {
+            return token;
+        }
+    }
+}
+
+static Token* nextTokenMaybeNewline()
+{
+    if (List_IsEmpty(tokens)) {
+        List_Append(tokens, Lexer_GetNextToken(in));
+    }
+    return List_Peek(tokens);
+}
+
 static Token* expect(_TokenType type)
 {
     Token* token;
     if ((token = accept(type)) != NULL) {
         return token;
     } else {
-        error(prevToken->pos, "expected '%s', got '%s'", Token_GetErrorMsgRepr(type), Token_GetErrorMsgRepr(nextToken->type));
+        error(nextToken()->pos, "expected '%s', got '%s'", Token_GetErrorMsgRepr(type), Token_GetErrorMsgRepr(nextToken()->type));
         return NULL;
-    }
-}
-
-static Token* expect2(_TokenType type, _TokenType type2)
-{
-    Token* token;
-    if ((token = accept2(type, type2)) != NULL) {
-        return token;
-    } else {
-        error(prevToken->pos, "expected '%s', got '%s'", Token_GetErrorMsgRepr(type), Token_GetErrorMsgRepr(nextToken->type));
-        return NULL;
-    }
-}
-
-void rebaseScope(ASTNode* node, SymbolNode* newScope)
-{
-    node->scope = newScope;
-    if (node->astType == AST_DEFINE) {
-        SymbolNode* def = node->data;
-        def->parent = newScope;
-        Map_Put(newScope->children, def->name, def);
-    }
-
-    ListElem* elem = List_Begin(node->children);
-    for (; elem != List_End(node->children); elem = elem->next) {
-        rebaseScope(elem->data, newScope);
     }
 }
 
@@ -111,131 +125,275 @@ char* myItoa(int val)
     return &buf[i + 1];
 }
 
-void appendAndMerge(ASTNode* node, ASTNode* child)
-{
-    List_Append(node->children, child);
-    node->pos = merge(node->pos, child->pos);
-}
-
 ASTNode* parseType(SymbolNode* scope);
 ASTNode* parseTypeAtom(SymbolNode* scope);
 ASTNode* parseStatement(SymbolNode* scope);
-ASTNode* parseDefine(SymbolNode* scope, bool isPublic);
+ASTNode* parseDefine(SymbolNode* scope);
 ASTNode* parseExpr(SymbolNode* scope);
 
 static ASTNode* parseArgList(SymbolNode* scope)
 {
-    ASTNode* arglist = AST_Create(AST_PAREN, 0, scope, prevToken->pos, false);
-    while (accept(TOKEN_NEWLINE))
-        ;
+    ASTNode* arglist = AST_Create_arglist(scope, prevToken->pos);
     while (!accept(TOKEN_RPAREN)) {
-        while (accept(TOKEN_NEWLINE))
-            ;
-        // accept dot? perhaps
-        appendAndMerge(arglist, parseExpr(scope));
-        if (!accept(TOKEN_NEWLINE)) {
-            if (!accept(TOKEN_COMMA)) {
-                while (accept(TOKEN_NEWLINE))
-                    ;
-                arglist->pos = merge(arglist->pos, expect(TOKEN_RPAREN)->pos);
-                break;
-            }
-        } else {
-            while (accept(TOKEN_NEWLINE))
-                ;
-        }
+        List_Append(arglist->arglist.args, parseExpr(scope));
+        accept(TOKEN_COMMA);
     }
-    if (arglist->children->size != 1) {
+    if (arglist->arglist.args->size == 1) {
+        arglist->astType = AST_PAREN;
+    } else if (arglist->arglist.args->size > 1) {
         arglist->astType = AST_ARGLIST;
     }
     return arglist;
 }
 
-// Returns the first factor (identifier, literals), or null if none can be found
+static int blockUID = 1;
+ASTNode* parseBlock(SymbolNode* scope)
+{
+    SymbolNode* blockScope = Symbol_Create(myItoa(blockUID++), SYMBOL_BLOCK, scope, prevToken->pos);
+    ASTNode* block = AST_Create_block(blockScope, scope, prevToken->pos);
+    blockScope->def = block;
+    while (!accept(TOKEN_RBRACE)) {
+        ASTNode* child = parseStatement(blockScope);
+        if (child != NULL) {
+            List_Append(block->block.children, child);
+            if (accept(TOKEN_RBRACE)) {
+                break;
+            } else if (accept(TOKEN_SEMICOLON)) {
+                if (nextTokenMaybeNewline()->type == TOKEN_NEWLINE) {
+                    error(nextTokenMaybeNewline()->pos, "unexpected newline");
+                }
+            } else {
+                expect(TOKEN_NEWLINE);
+            }
+        }
+    }
+    return block;
+}
+
+// Parses out the first if-statement from the token queue
+static ASTNode* parseIf(SymbolNode* scope)
+{
+    ASTNode* condition = parseExpr(scope);
+    expect(TOKEN_LBRACE);
+    ASTNode* body = parseBlock(scope);
+    ASTNode* elseBlock = NULL;
+
+    if (accept(TOKEN_ELSE)) {
+        if (accept(TOKEN_IF)) {
+            elseBlock = parseIf(scope);
+        } else {
+            expect(TOKEN_LBRACE);
+            elseBlock = parseBlock(scope);
+        }
+    } else {
+        elseBlock = AST_Create_undef(scope, prevToken->pos);
+    }
+    return AST_Create_if(condition, body, elseBlock, scope, prevToken->pos);
+}
+
+static ASTNode* parseFor(SymbolNode* scope)
+{
+    // Create a new scope so that pre is visible
+    SymbolNode* blockScope = Symbol_Create(myItoa(blockUID++), SYMBOL_BLOCK, scope, prevToken->pos);
+    ASTNode* block = AST_Create_block(blockScope, scope, prevToken->pos);
+    blockScope->def = block;
+
+    ASTNode* pre = NULL;
+    if (!accept(TOKEN_SEMICOLON)) {
+        pre = parseStatement(blockScope);
+    }
+    ASTNode* condition = NULL;
+    ASTNode* post = NULL;
+    ASTNode* body = NULL;
+    ASTNode* elseBlock = NULL;
+
+    if (pre && accept(TOKEN_LBRACE)) {
+        body = parseBlock(blockScope);
+        body->block.symbol->isLoop = true;
+        condition = pre;
+        pre = NULL;
+    } else {
+        if (pre) {
+            expect(TOKEN_SEMICOLON);
+        }
+        if (!accept(TOKEN_SEMICOLON)) {
+            condition = parseStatement(blockScope);
+            expect(TOKEN_SEMICOLON);
+        }
+        post = NULL;
+        if (!accept(TOKEN_LBRACE)) {
+            post = parseStatement(blockScope);
+            expect(TOKEN_LBRACE);
+        }
+
+        body = parseBlock(blockScope);
+        body->block.symbol->isLoop = true;
+    }
+
+    if (!pre) {
+        pre = AST_Create_undef(scope, prevToken->pos);
+    }
+    if (!condition) {
+        condition = AST_Create_undef(scope, prevToken->pos);
+    }
+    if (!post) {
+        post = AST_Create_undef(scope, prevToken->pos);
+    }
+
+    if (accept(TOKEN_ELSE)) {
+        expect(TOKEN_LBRACE);
+        elseBlock = parseBlock(blockScope);
+    } else {
+        elseBlock = AST_Create_undef(scope, prevToken->pos);
+    }
+
+    return AST_Create_for(pre, condition, post, body, elseBlock, scope, prevToken->pos, false);
+}
+
+static ASTNode* parseMapping(SymbolNode* scope)
+{
+    List* exprs = List_Create();
+    Token* token = NULL;
+    if (accept(TOKEN_ELSE)) {
+        expect(TOKEN_ARROW);
+    } else {
+        List_Append(exprs, parseExpr(scope));
+        while (accept(TOKEN_COMMA)) {
+            List_Append(exprs, parseExpr(scope));
+        }
+        expect(TOKEN_ARROW);
+    }
+    ASTNode* expr = parseExpr(scope);
+    return AST_Create_mapping(expr, exprs, scope, prevToken->pos);
+}
+
+static ASTNode* parseFieldMapping(SymbolNode* scope)
+{
+    List* exprs = List_Create();
+    Token* token = NULL;
+    if (accept(TOKEN_ELSE)) {
+        expect(TOKEN_ARROW);
+    } else {
+        expect(TOKEN_DOT);
+        char* text = malloc(sizeof(char) * 255);
+        if (token = accept(TOKEN_IDENT)) {
+            strncpy_s(text, 255, token->data, 254);
+        } else {
+            token = expect(TOKEN_NOTHING);
+            strncpy_s(text, 255, "nothing", 254);
+        }
+        List_Append(exprs, AST_Create_ident(text, scope, token->pos));
+        expect(TOKEN_ARROW);
+    }
+    ASTNode* expr = parseExpr(scope);
+
+    ASTNode* retval = AST_Create_fieldMapping(expr, exprs, scope, prevToken->pos);
+    retval->astType = AST_FIELD_MAPPING;
+    return retval;
+}
+
+static ASTNode* parseCase(SymbolNode* scope)
+{
+    ASTNode* caseNode = AST_Create_case(parseExpr(scope), scope, prevToken->pos);
+
+    expect(TOKEN_LBRACE);
+    Token* token = NULL;
+    if (nextToken()->type == TOKEN_DOT) {
+        caseNode->astType = AST_FIELD_CASE;
+        while (!accept(TOKEN_RBRACE)) {
+            ASTNode* mapping = parseFieldMapping(scope);
+            List_Append(caseNode->_case.mappings, mapping);
+            if (accept(TOKEN_RBRACE)) {
+                break;
+            } else if (!accept(TOKEN_SEMICOLON)) {
+                expect(TOKEN_NEWLINE);
+            }
+        }
+    } else {
+        while (!accept(TOKEN_RBRACE)) {
+            List_Append(caseNode->_case.mappings, parseMapping(scope));
+            if (accept(TOKEN_RBRACE)) {
+                break;
+            } else if (!accept(TOKEN_SEMICOLON)) {
+                expect(TOKEN_NEWLINE);
+            }
+        }
+    }
+    return caseNode;
+}
+
 static ASTNode* parseFactor(SymbolNode* scope)
 {
-    while (accept(TOKEN_NEWLINE))
-        ;
     ASTNode* child = NULL;
     Token* token = NULL;
     if ((token = accept(TOKEN_IDENT)) != NULL) {
         char* text = malloc(sizeof(char) * 255);
         strncpy_s(text, 255, token->data, 254);
-        child = AST_Create(AST_IDENT, text, scope, token->pos, false);
+        child = AST_Create_ident(text, scope, token->pos);
     } else if ((token = accept(TOKEN_INT)) != NULL) {
         int data = strtol(token->data, NULL, 10);
-        child = AST_Create(AST_INT, data, scope, token->pos, false);
+        child = AST_Create_int(data, scope, token->pos);
     } else if ((token = accept(TOKEN_HEX)) != NULL) {
         int data = strtol(token->data + 2, NULL, 16);
-        child = AST_Create(AST_INT, data, scope, token->pos, false);
+        child = AST_Create_int(data, scope, token->pos);
     } else if ((token = accept(TOKEN_BIN)) != NULL) {
         int data = strtol(token->data + 2, NULL, 2);
-        child = AST_Create(AST_INT, data, scope, token->pos, false);
-    } else if ((token = accept(TOKEN_NULL)) != NULL) {
-        child = AST_Create(AST_NULL, 0, scope, token->pos, false);
+        child = AST_Create_int(data, scope, token->pos);
+    } else if ((token = accept(TOKEN_NOTHING)) != NULL) {
+        child = AST_Create_nothing(scope, token->pos);
     } else if ((token = accept(TOKEN_REAL)) != NULL) {
         float data = atof(token->data);
-        child = AST_Create(AST_REAL, data, scope, token->pos, false);
+        child = AST_Create_real(data, scope, token->pos);
     } else if ((token = accept(TOKEN_STR)) != NULL) {
-        child = AST_Create(AST_STRING, token->data, scope, token->pos, false);
+        child = AST_Create_string(token->data, scope, token->pos);
         while (accept(TOKEN_DPLUS)) {
-            while (accept(TOKEN_NEWLINE))
-                ;
             token = expect(TOKEN_STR);
-            strcat(child->data, token->data);
+            strcat(child->string.data, token->data);
         }
     } else if ((token = accept(TOKEN_CHAR)) != NULL) {
-        child = AST_Create(AST_CHAR, token->data, scope, token->pos, false);
+        child = AST_Create_char(token->data, scope, token->pos);
     } else if ((token = accept(TOKEN_LPAREN)) != NULL) {
         child = parseArgList(scope);
     } else if ((token = accept(TOKEN_LSQUARE)) != NULL) {
-        child = AST_Create(AST_ARRAY_LITERAL, 0, scope, token->pos, false);
+        child = AST_Create_arrayLiteral(scope, token->pos);
         while (!(token = accept(TOKEN_RSQUARE))) {
-            while (accept(TOKEN_NEWLINE))
-                ;
-            appendAndMerge(child, parseExpr(scope));
-            if (!accept(TOKEN_NEWLINE)) {
-                if (!accept(TOKEN_COMMA)) {
-                    while (accept(TOKEN_NEWLINE))
-                        ;
-                    token = expect(TOKEN_RSQUARE);
-                    child->pos = merge(child->pos, token->pos);
-                    break;
-                }
-            } else {
-                while (accept(TOKEN_NEWLINE))
-                    ;
-            }
+            List_Append(child->arrayLiteral.members, parseExpr(scope));
+            accept(TOKEN_COMMA);
         }
         child->pos = merge(child->pos, token->pos);
     } else if ((token = accept(TOKEN_TRUE)) != NULL) {
-        child = AST_Create(AST_TRUE, 1, scope, token->pos, false);
+        child = AST_Create_true(scope, token->pos);
     } else if ((token = accept(TOKEN_FALSE)) != NULL) {
-        child = AST_Create(AST_FALSE, 0, scope, token->pos, false);
+        child = AST_Create_false(scope, token->pos);
     } else if ((token = accept(TOKEN_NEW)) != NULL) {
-        child = AST_Create(AST_NEW, NULL, scope, token->pos, false);
         char* str = calloc(255, 1);
         strcat_s(str, 255, myItoa(arrayUID++));
         strcat_s(str, 255, "arr");
-        SymbolNode* dumbyScope = Symbol_Create(str, SYMBOL_VARIABLE, scope, child->pos);
-        appendAndMerge(child, parseType(dumbyScope, false));
-        if (nextToken->type == TOKEN_LSQUARE || nextToken->type == TOKEN_LPAREN) {
-            appendAndMerge(child, parseFactor(scope));
+        SymbolNode* dumbyScope = Symbol_Create(str, SYMBOL_VARIABLE, scope, token->pos);
+        ASTNode* type = parseType(dumbyScope, false);
+        ASTNode* init = NULL;
+        if (nextToken()->type == TOKEN_LSQUARE || nextToken()->type == TOKEN_LPAREN) {
+            init = parseFactor(scope);
         } else {
-            appendAndMerge(child, AST_Create(AST_UNDEF, NULL, scope, child->pos, false));
+            init = AST_Create_undef(scope, nextToken()->pos);
         }
-    } else if ((token = accept(TOKEN_FREE)) != NULL) {
-        child = AST_Create(AST_FREE, NULL, scope, prevToken->pos, false);
-        appendAndMerge(child, parseExpr(scope));
+        child = AST_Create_new(type, init, scope, token->pos);
     } else if ((token = accept(TOKEN_DOT)) != NULL) {
         Token* ident = expect(TOKEN_IDENT);
         expect(TOKEN_ASSIGN);
         char* text = malloc(sizeof(char) * 255);
         strncpy_s(text, 255, ident->data, 254);
-        child = AST_Create(AST_NAMED_ARG, text, scope, token->pos, false);
-        appendAndMerge(child, parseExpr(scope));
+        child = AST_Create_namedArg(text, parseExpr(scope), scope, token->pos);
+    } else if (accept(TOKEN_LBRACE)) {
+        return parseBlock(scope);
+    } else if (accept(TOKEN_IF)) {
+        return parseIf(scope);
+    } else if (accept(TOKEN_FOR)) {
+        return parseFor(scope);
+    } else if (accept(TOKEN_CASE)) {
+        return parseCase(scope);
     } else {
-        error(prevToken->pos, "expected expression, got '%s'", Token_GetErrorMsgRepr(nextToken->type));
+        error(prevToken->pos, "expected expression, got '%s'", Token_GetErrorMsgRepr(nextToken()->type));
     }
     return child;
 }
@@ -245,57 +403,56 @@ static ASTNode* parsePostfix(SymbolNode* scope)
     ASTNode* child = parseFactor(scope);
     Token* token = NULL;
     while (true) {
-        if ((token = accept(TOKEN_LPAREN)) != NULL) {
-            ASTNode* parent = AST_Create(AST_CALL, 0, scope, token->pos, false);
-            appendAndMerge(parent, child);
-            appendAndMerge(parent, parseArgList(scope));
-            child = parent;
+        if (nextTokenMaybeNewline()->type != TOKEN_NEWLINE && (token = accept(TOKEN_LPAREN)) != NULL) {
+            ASTNode* arglist = parseArgList(scope);
+            arglist->astType = AST_ARGLIST;
+            child = AST_Create_call(child, arglist, scope, token->pos);
         } else if ((token = accept(TOKEN_LSQUARE)) != NULL) {
             // [ <expr>? :? <expr>? ]
-            ASTNode* parent = AST_Create(AST_INDEX, 0, scope, token->pos, false);
-            appendAndMerge(parent, child); // arr
+            ASTNode* parent = NULL;
+            ASTNode* arrayExpr = child;
+            ASTNode* subscriptOrLowerBound = NULL;
+            ASTNode* upperBound = NULL;
+            bool isSlice = false;
             if (accept(TOKEN_SEMICOLON)) { // no lower bound
-                List_Append(parent->children, AST_Create(AST_UNDEF, NULL, scope, parent->pos, false)); // lowerbound
-                parent->astType = AST_SLICE;
+                subscriptOrLowerBound = AST_Create_undef(scope, token->pos); // lowerbound
+                isSlice = true;
                 if (!accept(TOKEN_RSQUARE)) { // upper bound
-                    appendAndMerge(parent, parseExpr(scope));
+                    upperBound = parseExpr(scope);
                     token = expect(TOKEN_RSQUARE);
                 } else {
-                    List_Append(parent->children, AST_Create(AST_UNDEF, NULL, scope, parent->pos, false));
+                    upperBound = AST_Create_undef(scope, token->pos); // upperbound
                 }
             } else { // a lowerbound or subscript
-                appendAndMerge(parent, parseExpr(scope)); // either lowerbound or subscript
+                subscriptOrLowerBound = parseExpr(scope); // either lowerbound or subscript
                 if (!accept(TOKEN_RSQUARE)) { // there is an upper bound
-                    parent->astType = AST_SLICE;
+                    isSlice = true;
                     expect(TOKEN_SEMICOLON);
-                    if ((token = accept(TOKEN_RSQUARE)) == NULL) {
-                        appendAndMerge(parent, parseExpr(scope)); // Append the upper bound
+                    if (!accept(TOKEN_RSQUARE)) { // upper bound
+                        upperBound = parseExpr(scope);
                         token = expect(TOKEN_RSQUARE);
-                    } else { // No upper bound
-                        List_Append(parent->children, AST_Create(AST_UNDEF, NULL, scope, parent->pos, false)); // undef upper bound
+                    } else {
+                        upperBound = AST_Create_undef(scope, token->pos); // upperbound
                     }
                 }
+            }
+            if (isSlice) {
+                parent = AST_Create_slice(arrayExpr, subscriptOrLowerBound, upperBound, scope, token->pos);
+            } else {
+                parent = AST_Create_index(arrayExpr, subscriptOrLowerBound, scope, token->pos);
             }
             parent->pos = merge(parent->pos, token->pos);
             child = parent;
         } else if ((token = accept(TOKEN_COLON)) != NULL) {
-            ASTNode* parent = AST_Create(AST_CAST, 0, scope, token->pos, false);
-            appendAndMerge(parent, child);
-            while (accept(TOKEN_NEWLINE))
-                ;
-            appendAndMerge(parent, parseType(scope, false));
-            child = parent;
+            child = AST_Create_cast(child, parseType(scope, false), scope, token->pos);
         } else if ((token = accept(TOKEN_DOT)) != NULL) {
-            ASTNode* parent = AST_Create(AST_DOT, NULL, scope, token->pos, false);
-            appendAndMerge(parent, child);
-            while (accept(TOKEN_NEWLINE))
-                ;
             token = expect(TOKEN_IDENT);
             char* text = malloc(sizeof(char) * 255);
             strncpy_s(text, 255, token->data, 254);
-            child = AST_Create(AST_IDENT, text, scope, token->pos, false);
-            appendAndMerge(parent, child);
-            child = parent;
+            ASTNode* ident = AST_Create_ident(text, scope, token->pos);
+            child = AST_Create_dot(child, ident, scope, token->pos, false);
+        } else if ((token = accept(TOKEN_ORELSE)) != NULL) {
+            child = AST_Create_orelse(child, parseStatement(scope), scope, token->pos);
         } else {
             break;
         }
@@ -303,103 +460,54 @@ static ASTNode* parsePostfix(SymbolNode* scope)
     return child;
 }
 
-// Returns the first prefix, or the first factor if none can be found
 static ASTNode* parsePrefix(SymbolNode* scope)
 {
     Token* token = NULL;
     ASTNode* prefix = NULL;
     if ((token = accept(TOKEN_EMARK)) != NULL) {
-        prefix = AST_Create(AST_NOT, "!", scope, token->pos, false);
-        while (accept(TOKEN_NEWLINE))
-            ;
-        appendAndMerge(prefix, parsePrefix(scope));
+        prefix = AST_Create_not(parsePrefix(scope), scope, token->pos);
     } else if ((token = accept(TOKEN_AMPERSAND)) != NULL) {
-        prefix = AST_Create(AST_ADDROF, "&", scope, token->pos, false);
-        while (accept(TOKEN_NEWLINE))
-            ;
-        appendAndMerge(prefix, parsePrefix(scope));
+        prefix = AST_Create_addrOf(parsePrefix(scope), scope, token->pos);
     } else if ((token = accept(TOKEN_STAR)) != NULL) {
-        prefix = AST_Create(AST_DEREF, "*", scope, token->pos, false);
-        while (accept(TOKEN_NEWLINE))
-            ;
-        appendAndMerge(prefix, parsePrefix(scope));
+        prefix = AST_Create_deref(parsePrefix(scope), scope, token->pos);
     } else if ((token = accept(TOKEN_MINUS)) != NULL) {
-        prefix = AST_Create(AST_NEG, "-", scope, token->pos, false);
-        while (accept(TOKEN_NEWLINE))
-            ;
-        appendAndMerge(prefix, parsePrefix(scope));
+        prefix = AST_Create_neg(parsePrefix(scope), scope, token->pos);
     } else if ((token = accept(TOKEN_TILDE)) != NULL) {
-        prefix = AST_Create(AST_BIT_NOT, "~", scope, token->pos, false);
-        while (accept(TOKEN_NEWLINE))
-            ;
-        appendAndMerge(prefix, parsePrefix(scope));
-    } else if ((token = accept(TOKEN_BAR)) != NULL) {
-        prefix = AST_Create(AST_SIZEOF, NULL, scope, token->pos, false);
-        while (accept(TOKEN_NEWLINE))
-            ;
-        appendAndMerge(prefix, parseType(scope, false));
-        while (accept(TOKEN_NEWLINE))
-            ;
-        expect(TOKEN_BAR);
+        prefix = AST_Create_bitNot(parsePrefix(scope), scope, token->pos);
+    } else if ((token = accept(TOKEN_SIZEOF)) != NULL) {
+        prefix = AST_Create_sizeof(parseType(scope, false), scope, token->pos);
     } else {
         prefix = parsePostfix(scope);
     }
     return prefix;
 }
 
-// Returns the first term, or the first term if none can be found
 static ASTNode* parseTerm(SymbolNode* scope)
 {
     ASTNode* term = parsePrefix(scope);
     Token* token = NULL;
     while (true) {
         if ((token = accept(TOKEN_STAR)) != NULL) {
-            ASTNode* multiply = AST_Create(AST_MULTIPLY, "*", scope, token->pos, false);
-            appendAndMerge(multiply, term);
-            while (accept(TOKEN_NEWLINE))
-                ;
-            appendAndMerge(multiply, parsePrefix(scope));
-            term = multiply;
+            term = AST_Create_multiply(term, parsePrefix(scope), scope, token->pos);
         } else if ((token = accept(TOKEN_SLASH)) != NULL) {
-            ASTNode* divide = AST_Create(AST_DIVIDE, "/", scope, token->pos, false);
-            appendAndMerge(divide, term);
-            while (accept(TOKEN_NEWLINE))
-                ;
-            appendAndMerge(divide, parsePrefix(scope));
-            term = divide;
+            term = AST_Create_divide(term, parsePrefix(scope), scope, token->pos);
         } else if ((token = accept(TOKEN_PERCENT)) != NULL) {
-            ASTNode* modulus = AST_Create(AST_MODULUS, "%", scope, token->pos, false);
-            appendAndMerge(modulus, term);
-            while (accept(TOKEN_NEWLINE))
-                ;
-            appendAndMerge(modulus, parsePrefix(scope));
-            term = modulus;
+            term = AST_Create_modulus(term, parsePrefix(scope), scope, token->pos);
         } else {
             return term;
         }
     }
 }
 
-// Returns the first integer expression, or the first term if none can be found
 static ASTNode* parseIntExpr(SymbolNode* scope)
 {
     Token* token = NULL;
     ASTNode* child = parseTerm(scope);
     while (true) {
         if ((token = accept(TOKEN_PLUS)) != NULL) {
-            ASTNode* parent = AST_Create(AST_ADD, "+", scope, token->pos, false);
-            appendAndMerge(parent, child);
-            while (accept(TOKEN_NEWLINE))
-                ;
-            appendAndMerge(parent, parseTerm(scope));
-            child = parent;
+            child = AST_Create_add(child, parseTerm(scope), scope, token->pos);
         } else if ((token = accept(TOKEN_MINUS)) != NULL) {
-            ASTNode* parent = AST_Create(AST_SUBTRACT, "-", scope, token->pos, false);
-            appendAndMerge(parent, child);
-            while (accept(TOKEN_NEWLINE))
-                ;
-            appendAndMerge(parent, parseTerm(scope));
-            child = parent;
+            child = AST_Create_subtract(child, parseTerm(scope), scope, token->pos);
         } else {
             return child;
         }
@@ -412,19 +520,9 @@ static ASTNode* parseShiftExpr(SymbolNode* scope)
     ASTNode* child = parseIntExpr(scope);
     while (true) {
         if ((token = accept(TOKEN_DLSR)) != NULL) {
-            ASTNode* parent = AST_Create(AST_LSHIFT, "<<", scope, token->pos, false);
-            appendAndMerge(parent, child);
-            while (accept(TOKEN_NEWLINE))
-                ;
-            appendAndMerge(parent, parseIntExpr(scope));
-            child = parent;
+            child = AST_Create_lshift(child, parseIntExpr(scope), scope, token->pos);
         } else if ((token = accept(TOKEN_DGTR)) != NULL) {
-            ASTNode* parent = AST_Create(AST_RSHIFT, ">>", scope, token->pos, false);
-            appendAndMerge(parent, child);
-            while (accept(TOKEN_NEWLINE))
-                ;
-            appendAndMerge(parent, parseIntExpr(scope));
-            child = parent;
+            child = AST_Create_rshift(child, parseIntExpr(scope), scope, token->pos);
         } else {
             return child;
         }
@@ -438,76 +536,39 @@ static ASTNode* parseConditional(SymbolNode* scope)
     ASTNode* child = parseShiftExpr(scope);
     Token* token = NULL;
     if ((token = accept(TOKEN_DEQ)) != NULL) {
-        ASTNode* parent = AST_Create(AST_EQ, "==", scope, token->pos, false);
-        appendAndMerge(parent, child);
-        while (accept(TOKEN_NEWLINE))
-            ;
-        appendAndMerge(parent, parseConditional(scope));
-        return parent;
+        return AST_Create_eq(child, parseShiftExpr(scope), scope, token->pos);
     } else if ((token = accept(TOKEN_GTR)) != NULL) {
-        ASTNode* parent = AST_Create(AST_GTR, ">", scope, token->pos, false);
-        appendAndMerge(parent, child);
-        while (accept(TOKEN_NEWLINE))
-            ;
-        appendAndMerge(parent, parseShiftExpr(scope));
-        return parent;
+        return AST_Create_gtr(child, parseShiftExpr(scope), scope, token->pos);
     } else if ((token = accept(TOKEN_LSR)) != NULL) {
-        ASTNode* parent = AST_Create(AST_LSR, "<", scope, token->pos, false);
-        appendAndMerge(parent, child);
-        while (accept(TOKEN_NEWLINE))
-            ;
-        appendAndMerge(parent, parseShiftExpr(scope));
-        return parent;
+        return AST_Create_lsr(child, parseShiftExpr(scope), scope, token->pos);
     } else if ((token = accept(TOKEN_GTE)) != NULL) {
-        ASTNode* parent = AST_Create(AST_GTE, ">=", scope, token->pos, false);
-        appendAndMerge(parent, child);
-        while (accept(TOKEN_NEWLINE))
-            ;
-        appendAndMerge(parent, parseShiftExpr(scope));
-        return parent;
+        return AST_Create_gte(child, parseShiftExpr(scope), scope, token->pos);
     } else if ((token = accept(TOKEN_LTE)) != NULL) {
-        ASTNode* parent = AST_Create(AST_LTE, "<=", scope, token->pos, false);
-        appendAndMerge(parent, child);
-        while (accept(TOKEN_NEWLINE))
-            ;
-        appendAndMerge(parent, parseShiftExpr(scope));
-        return parent;
+        return AST_Create_lte(child, parseShiftExpr(scope), scope, token->pos);
     } else {
         return child;
     }
 }
 
 // Returns the first equal-sign expression, or the next conditional if none can be found
-static ASTNode* parseEqExpr(SymbolNode* scope)
+static ASTNode* parseNeqExpr(SymbolNode* scope)
 {
     ASTNode* child = parseConditional(scope);
     Token* token = NULL;
-    while (true) {
-        if ((token = accept(TOKEN_NEQ)) != NULL) {
-            ASTNode* parent = AST_Create(AST_NEQ, "!=", scope, token->pos, false);
-            appendAndMerge(parent, child);
-            while (accept(TOKEN_NEWLINE))
-                ;
-            appendAndMerge(parent, parseConditional(scope));
-            return parent;
-        } else {
-            return child;
-        }
+    if ((token = accept(TOKEN_NEQ)) != NULL) {
+        return AST_Create_neq(child, parseConditional(scope), scope, token->pos);
+    } else {
+        return child;
     }
 }
 
 static ASTNode* parseBitAndExpr(SymbolNode* scope)
 {
-    ASTNode* child = parseEqExpr(scope);
+    ASTNode* child = parseNeqExpr(scope);
     Token* token = NULL;
     while (true) {
         if ((token = accept(TOKEN_AMPERSAND)) != NULL) {
-            ASTNode* parent = AST_Create(AST_BIT_AND, "&", scope, token->pos, false);
-            appendAndMerge(parent, child);
-            while (accept(TOKEN_NEWLINE))
-                ;
-            appendAndMerge(parent, parseEqExpr(scope));
-            child = parent;
+            child = AST_Create_bitAnd(child, parseNeqExpr(scope), scope, token->pos);
         } else {
             return child;
         }
@@ -520,12 +581,7 @@ static ASTNode* parseBitXorExpr(SymbolNode* scope)
     Token* token = NULL;
     while (true) {
         if ((token = accept(TOKEN_CARET)) != NULL) {
-            ASTNode* parent = AST_Create(AST_BIT_XOR, "^", scope, token->pos, false);
-            appendAndMerge(parent, child);
-            while (accept(TOKEN_NEWLINE))
-                ;
-            appendAndMerge(parent, parseBitAndExpr(scope));
-            child = parent;
+            child = AST_Create_bitXor(child, parseBitAndExpr(scope), scope, token->pos);
         } else {
             return child;
         }
@@ -538,12 +594,7 @@ static ASTNode* parseBitOrExpr(SymbolNode* scope)
     Token* token = NULL;
     while (true) {
         if ((token = accept(TOKEN_BAR)) != NULL) {
-            ASTNode* parent = AST_Create(AST_BIT_OR, "|", scope, token->pos, false);
-            appendAndMerge(parent, child);
-            while (accept(TOKEN_NEWLINE))
-                ;
-            appendAndMerge(parent, parseBitXorExpr(scope));
-            child = parent;
+            child = AST_Create_bitOr(child, parseBitXorExpr(scope), scope, token->pos);
         } else {
             return child;
         }
@@ -557,12 +608,7 @@ static ASTNode* parseAndExpr(SymbolNode* scope)
     Token* token = NULL;
     while (true) {
         if ((token = accept(TOKEN_DAMPERSAND)) != NULL) {
-            ASTNode* parent = AST_Create(AST_AND, "&&", scope, token->pos, false);
-            appendAndMerge(parent, child);
-            while (accept(TOKEN_NEWLINE))
-                ;
-            appendAndMerge(parent, parseBitOrExpr(scope));
-            child = parent;
+            child = AST_Create_and(child, parseBitOrExpr(scope), scope, token->pos);
         } else {
             return child;
         }
@@ -576,420 +622,110 @@ ASTNode* parseOrExpr(SymbolNode* scope)
     Token* token = NULL;
     while (true) {
         if ((token = accept(TOKEN_DBAR)) != NULL) {
-            ASTNode* parent = AST_Create(AST_OR, "||", scope, token->pos, false);
-            appendAndMerge(parent, child);
-            while (accept(TOKEN_NEWLINE))
-                ;
-            appendAndMerge(parent, parseAndExpr(scope));
-            child = parent;
+            child = AST_Create_or(child, parseAndExpr(scope), scope, token->pos);
         } else {
             return child;
         }
-    }
-}
-ASTNode* parseBlock(SymbolNode* scope)
-{
-    SymbolNode* blockScope = Symbol_Create(myItoa(blockUID++), SYMBOL_BLOCK, scope, prevToken->pos);
-    ASTNode* block = AST_Create(AST_BLOCK, blockScope, scope, prevToken->pos, false);
-    blockScope->def = block;
-
-    while (!accept(TOKEN_RBRACE)) {
-        ASTNode* child = parseStatement(blockScope);
-        if (child != NULL) {
-            appendAndMerge(block, child);
-            if (accept(TOKEN_RBRACE)) {
-                break;
-            } else if (!accept(TOKEN_SEMICOLON)) {
-                expect(TOKEN_NEWLINE);
-            }
-        }
-    }
-    return block;
-}
-
-// Parses out the first if-statement from the token queue
-static ASTNode* parseIf(SymbolNode* scope)
-{
-    ASTNode* ifNode = AST_Create(AST_IF, 0, scope, prevToken->pos, false);
-
-    ASTNode* condition = parseExpr(scope);
-    expect(TOKEN_LBRACE);
-    ASTNode* body = parseBlock(scope);
-
-    appendAndMerge(ifNode, condition);
-    appendAndMerge(ifNode, body);
-
-    if (accept(TOKEN_ELSE)) {
-        ifNode->astType = AST_IFELSE;
-        if (accept(TOKEN_IF)) {
-            appendAndMerge(ifNode, parseIf(scope));
-        } else {
-            expect(TOKEN_LBRACE);
-            appendAndMerge(ifNode, parseBlock(scope));
-        }
-    }
-
-    return ifNode;
-}
-
-static ASTNode* parseFor(SymbolNode* scope)
-{
-    ASTNode* forNode = AST_Create(AST_FOR, 0, scope, prevToken->pos, false);
-
-    while (accept(TOKEN_NEWLINE))
-        ;
-    ASTNode* pre = parseStatement(NULL);
-    if (pre && !accept(TOKEN_NEWLINE)) {
-        if (accept(TOKEN_LBRACE)) {
-            ASTNode* body = parseBlock(scope);
-            SymbolNode* blockSymbol = body->data;
-            blockSymbol->isLoop = true;
-
-            rebaseScope(pre, blockSymbol);
-            appendAndMerge(forNode, AST_Create(AST_UNDEF, NULL, scope, pre->pos, false));
-            appendAndMerge(forNode, pre);
-            appendAndMerge(forNode, AST_Create(AST_UNDEF, NULL, scope, pre->pos, false));
-            appendAndMerge(forNode, body);
-            return forNode;
-        } else {
-            expect(TOKEN_SEMICOLON);
-        }
-    }
-    while (accept(TOKEN_NEWLINE))
-        ;
-    ASTNode* condition = parseStatement(NULL);
-    if (condition && !accept(TOKEN_NEWLINE)) {
-        expect(TOKEN_SEMICOLON);
-    }
-    while (accept(TOKEN_NEWLINE))
-        ;
-    ASTNode* loopExpr = NULL;
-    if (!accept(TOKEN_LBRACE)) {
-        loopExpr = parseStatement(NULL);
-        while (accept(TOKEN_NEWLINE))
-            ;
-        expect(TOKEN_LBRACE);
-    }
-
-    ASTNode* body = parseBlock(scope);
-    SymbolNode* bodySymbol = body->data;
-    bodySymbol->isLoop = true;
-
-    if (pre) {
-        rebaseScope(pre, bodySymbol);
-        appendAndMerge(forNode, pre);
-    } else {
-        appendAndMerge(forNode, AST_Create(AST_UNDEF, NULL, scope, forNode->pos, false));
-    }
-    if (condition) {
-        rebaseScope(condition, bodySymbol);
-        appendAndMerge(forNode, condition);
-    } else {
-        appendAndMerge(forNode, AST_Create(AST_UNDEF, NULL, scope, forNode->pos, false));
-    }
-    if (loopExpr) {
-        rebaseScope(loopExpr, bodySymbol);
-        appendAndMerge(forNode, loopExpr);
-    } else {
-        appendAndMerge(forNode, AST_Create(AST_UNDEF, NULL, scope, forNode->pos, false));
-    }
-    appendAndMerge(forNode, body);
-
-    return forNode;
-}
-
-static ASTNode* parseCase(SymbolNode* scope)
-{
-    ASTNode* caseNode = AST_Create(AST_CASE, 0, scope, prevToken->pos, false);
-    Token* token = NULL;
-    if (!accept(TOKEN_LBRACE)) {
-        while (accept(TOKEN_NEWLINE))
-            ;
-        appendAndMerge(caseNode, parseExpr(scope));
-        while (accept(TOKEN_COMMA)) {
-            while (accept(TOKEN_NEWLINE))
-                ;
-            appendAndMerge(caseNode, parseExpr(scope));
-        }
-        expect(TOKEN_LBRACE);
-    }
-    ASTNode* block = parseBlock(scope);
-    SymbolNode* blockSymbol = block->data;
-    blockSymbol->isLoop = true;
-    appendAndMerge(caseNode, block);
-    return caseNode;
-}
-
-static ASTNode* parseSwitch(SymbolNode* scope)
-{
-    ASTNode* switchNode = AST_Create(AST_SWITCH, 0, scope, prevToken->pos, false);
-
-    ASTNode* expr = parseExpr(scope);
-    appendAndMerge(switchNode, expr);
-    expect(TOKEN_LBRACE);
-    Token* token = NULL;
-    while (!accept(TOKEN_RBRACE)) {
-        while (accept(TOKEN_NEWLINE))
-            ;
-        if (((token = accept(TOKEN_CASE)) != NULL) || ((token = accept(TOKEN_ELSE)) != NULL)) {
-            appendAndMerge(switchNode, parseCase(scope));
-        } else {
-            break;
-        }
-        while (accept(TOKEN_NEWLINE))
-            ;
-    }
-    return switchNode;
-}
-
-static ASTNode* parseRestrict(SymbolNode* scope)
-{
-    Map* restrictionExpr = Map_Create();
-    while (accept(TOKEN_NEWLINE))
-        ;
-    restrictionExpr = List_Create();
-    while (accept(TOKEN_NEWLINE))
-        ;
-    while (!accept(TOKEN_RSQUARE)) {
-        while (accept(TOKEN_NEWLINE))
-            ;
-        ASTNode* expr = parseExpr(scope);
-        List_Append(restrictionExpr, expr);
-        if (!accept(TOKEN_NEWLINE)) {
-            if (!accept(TOKEN_COMMA)) {
-                while (accept(TOKEN_NEWLINE))
-                    ;
-                expect(TOKEN_RSQUARE);
-                break;
-            }
-        } else {
-            while (accept(TOKEN_NEWLINE))
-                ;
-        }
-    }
-    while (accept(TOKEN_NEWLINE))
-        ;
-
-    expect(TOKEN_LBRACE);
-    ASTNode* block = parseBlock(scope);
-    SymbolNode* blockSymbol = block->data;
-    blockSymbol->restrictionExpr = restrictionExpr;
-    blockSymbol->isRestricted = true;
-    return block;
-}
-
-// For statements that blur the line between statement and expression
-static ASTNode* parseStatementExpr(SymbolNode* scope)
-{
-    if (accept(TOKEN_LBRACE)) { // Evaluates to last evaluated expression in the block
-        return parseBlock(scope);
-    } else if (accept(TOKEN_IF)) { // Evaluates to to block evaluated
-        return parseIf(scope);
-    } else if (accept(TOKEN_FOR)) { // Evaluates to to block evaluated
-        return parseFor(scope);
-    } else if (accept(TOKEN_SWITCH)) { // Evaluates to to block evaluated
-        return parseSwitch(scope);
-    } else if (accept(TOKEN_RESTRICT)) { // Evaluates to to block evaluated
-        return parseRestrict(scope);
-    } else {
-        return parseOrExpr(scope); // plain expression, evals to itself
     }
 }
 
 static ASTNode* parseExpr(SymbolNode* scope)
 {
     Token* token = NULL;
-    ASTNode* child = parseStatementExpr(scope);
+    ASTNode* child = parseOrExpr(scope);
     if ((token = accept(TOKEN_ASSIGN)) != NULL) {
-        ASTNode* parent = AST_Create(AST_ASSIGN, "=", scope, token->pos, false);
-        appendAndMerge(parent, child);
-        while (accept(TOKEN_NEWLINE))
-            ;
-        appendAndMerge(parent, parseStatementExpr(scope));
-        child = parent;
+        child = AST_Create_assign(child, parseOrExpr(scope), scope, token->pos);
     } else if ((token = accept(TOKEN_PLUS_ASSIGN)) != NULL) {
-        ASTNode* parent = AST_Create(AST_ADD_ASSIGN, "+=", scope, token->pos, false);
-        appendAndMerge(parent, child);
-        while (accept(TOKEN_NEWLINE))
-            ;
-        appendAndMerge(parent, parseStatementExpr(scope));
-        child = parent;
+        child = AST_Create_addAssign(child, parseOrExpr(scope), scope, token->pos);
     } else if ((token = accept(TOKEN_MINUS_ASSIGN)) != NULL) {
-        ASTNode* parent = AST_Create(AST_SUB_ASSIGN, "-=", scope, token->pos, false);
-        appendAndMerge(parent, child);
-        while (accept(TOKEN_NEWLINE))
-            ;
-        appendAndMerge(parent, parseStatementExpr(scope));
-        child = parent;
+        child = AST_Create_subAssign(child, parseOrExpr(scope), scope, token->pos);
     } else if ((token = accept(TOKEN_STAR_ASSIGN)) != NULL) {
-        ASTNode* parent = AST_Create(AST_MULT_ASSIGN, "*=", scope, token->pos, false);
-        appendAndMerge(parent, child);
-        while (accept(TOKEN_NEWLINE))
-            ;
-        appendAndMerge(parent, parseStatementExpr(scope));
-        child = parent;
+        child = AST_Create_multAssign(child, parseOrExpr(scope), scope, token->pos);
     } else if ((token = accept(TOKEN_SLASH_ASSIGN)) != NULL) {
-        ASTNode* parent = AST_Create(AST_DIV_ASSIGN, "/=", scope, token->pos, false);
-        appendAndMerge(parent, child);
-        while (accept(TOKEN_NEWLINE))
-            ;
-        appendAndMerge(parent, parseStatementExpr(scope));
-        child = parent;
+        child = AST_Create_divAssign(child, parseOrExpr(scope), scope, token->pos);
     } else if ((token = accept(TOKEN_PERCENT_ASSIGN)) != NULL) {
-        ASTNode* parent = AST_Create(AST_MOD_ASSIGN, "%=", scope, token->pos, false);
-        appendAndMerge(parent, child);
-        while (accept(TOKEN_NEWLINE))
-            ;
-        appendAndMerge(parent, parseStatementExpr(scope));
-        child = parent;
+        child = AST_Create_modAssign(child, parseOrExpr(scope), scope, token->pos);
     } else if ((token = accept(TOKEN_AMPERSAND_ASSIGN)) != NULL) {
-        ASTNode* parent = AST_Create(AST_AND_ASSIGN, "&=", scope, token->pos, false);
-        appendAndMerge(parent, child);
-        while (accept(TOKEN_NEWLINE))
-            ;
-        appendAndMerge(parent, parseStatementExpr(scope));
-        child = parent;
+        child = AST_Create_andAssign(child, parseOrExpr(scope), scope, token->pos);
     } else if ((token = accept(TOKEN_BAR_ASSIGN)) != NULL) {
-        ASTNode* parent = AST_Create(AST_OR_ASSIGN, "|=", scope, token->pos, false);
-        appendAndMerge(parent, child);
-        while (accept(TOKEN_NEWLINE))
-            ;
-        appendAndMerge(parent, parseStatementExpr(scope));
-        child = parent;
+        child = AST_Create_orAssign(child, parseOrExpr(scope), scope, token->pos);
     } else if ((token = accept(TOKEN_CARET_ASSIGN)) != NULL) {
-        ASTNode* parent = AST_Create(AST_XOR_ASSIGN, "^=", scope, token->pos, false);
-        appendAndMerge(parent, child);
-        while (accept(TOKEN_NEWLINE))
-            ;
-        appendAndMerge(parent, parseStatementExpr(scope));
-        child = parent;
+        child = AST_Create_xorAssign(child, parseOrExpr(scope), scope, token->pos);
     } else if ((token = accept(TOKEN_DLSR_ASSIGN)) != NULL) {
-        ASTNode* parent = AST_Create(AST_LSHIFT_ASSIGN, "<<=", scope, token->pos, false);
-        appendAndMerge(parent, child);
-        while (accept(TOKEN_NEWLINE))
-            ;
-        appendAndMerge(parent, parseStatementExpr(scope));
-        child = parent;
+        child = AST_Create_lshiftAssign(child, parseOrExpr(scope), scope, token->pos);
     } else if ((token = accept(TOKEN_DGTR_ASSIGN)) != NULL) {
-        ASTNode* parent = AST_Create(AST_RSHIFT_ASSIGN, ">>=", scope, token->pos, false);
-        appendAndMerge(parent, child);
-        while (accept(TOKEN_NEWLINE))
-            ;
-        appendAndMerge(parent, parseStatementExpr(scope));
-        child = parent;
+        child = AST_Create_rshiftAssign(child, parseOrExpr(scope), scope, token->pos);
     }
     return child;
 }
 
 static ASTNode* parseReturn(SymbolNode* scope)
 {
-    ASTNode* returnNode = AST_Create(AST_RETURN, NULL, scope, prevToken->pos, false);
-
-    if (!accept(TOKEN_NEWLINE)) {
-        appendAndMerge(returnNode, parseExpr(scope));
-    } else {
-        appendAndMerge(returnNode, AST_Create(AST_VOID, NULL, scope, prevToken->pos, false));
-    }
-    return returnNode;
+    return AST_Create_return(parseExpr(scope), scope, prevToken->pos);
 }
 
 static ASTNode* parseDefer(SymbolNode* scope)
 {
-    ASTNode* defer = AST_Create(AST_DEFER, scope->defers->size, scope, prevToken->pos, false);
-    ASTNode* deferStatement = parseStatement(scope);
+    ASTNode* deferStatement = parseExpr(scope);
     if (deferStatement == NULL) {
-        error(defer->pos, "expected statement after defer");
+        error(prevToken->pos, "expected statement after defer");
     }
+    ASTNode* retval = AST_Create_defer(deferStatement, scope, prevToken->pos);
     List_Append(scope->defers, deferStatement);
-    appendAndMerge(defer, deferStatement);
-    return defer;
+    return retval;
 }
 
 static ASTNode* parseStatement(SymbolNode* scope)
 {
-    if (accept(TOKEN_CONTINUE)) { // not expr
-        return AST_Create(AST_CONTINUE, "continue", scope, prevToken->pos, false);
-    } else if (accept(TOKEN_BREAK)) { // not expr
-        return AST_Create(AST_BREAK, "break", scope, prevToken->pos, false);
-    } else if (accept(TOKEN_RETURN)) { // not expr
-        return parseReturn(scope);
-    } else if (accept(TOKEN_NEWLINE) || accept(TOKEN_SEMICOLON)) { // not expr
-        return NULL;
-    } else if ((nextToken->type == TOKEN_IDENT && nextNextToken->type == TOKEN_COLON) || (nextToken->type == TOKEN_IDENT && nextNextToken->type == TOKEN_RESTRICT)) { // not expr
+    if (nextIsDef()) {
         return parseDefine(scope, false);
-    } else if (accept(TOKEN_DEFER)) { // not expr
+    } else if (accept(TOKEN_FREE)) {
+        return AST_Create_free(parseExpr(scope), scope, prevToken->pos);
+    } else if (accept(TOKEN_RETURN)) {
+        return parseReturn(scope);
+    } else if (accept(TOKEN_DEFER)) {
         return parseDefer(scope);
+    } else if (accept(TOKEN_CONTINUE)) {
+        return AST_Create_continue(scope, prevToken->pos);
+    } else if (accept(TOKEN_BREAK)) {
+        return AST_Create_break(scope, prevToken->pos);
     } else {
         return parseExpr(scope);
     }
 }
 
-ASTNode* parseEnum(SymbolNode* scope)
-{
-    Token* token = expect(TOKEN_LPAREN);
-    ASTNode* enumNode = AST_Create(AST_PARAMLIST, 0, scope, token->pos, false);
-
-    SymbolNode* lengthSymbol = Symbol_Create("length", SYMBOL_VARIABLE, scope, token->pos);
-    ASTNode* lengthDefine = AST_Create(AST_DEFINE, lengthSymbol, scope, token->pos, false);
-    lengthSymbol->type = AST_Create(AST_IDENT, "Int", lengthSymbol, token->pos, false);
-    lengthSymbol->isPublic = true;
-    lengthSymbol->type->isConst = true;
-
-    int i = 0;
-    while (accept(TOKEN_NEWLINE))
-        ;
-    while (!accept(TOKEN_RPAREN)) {
-        while (accept(TOKEN_NEWLINE))
-            ;
-        Token* name = expect(TOKEN_IDENT);
-        SymbolNode* symbol = Symbol_Create(name->data, SYMBOL_ENUM, scope, name->pos);
-        ASTNode* define = AST_Create(AST_DEFINE, symbol, scope, name->pos, false);
-        symbol->def = AST_Create(AST_INT, i, symbol, name->pos, false);
-        symbol->type = AST_Create(AST_ENUM, symbol, symbol, name->pos, false);
-        symbol->isPublic = true;
-        symbol->type->isConst = true;
-        i++;
-        appendAndMerge(enumNode, define);
-        if (!accept(TOKEN_NEWLINE)) {
-            if (!accept(TOKEN_COMMA)) {
-                while (accept(TOKEN_NEWLINE))
-                    ;
-                expect(TOKEN_RPAREN);
-                break;
-            }
-        } else {
-            while (accept(TOKEN_NEWLINE))
-                ;
-        }
-    }
-    lengthSymbol->def = AST_Create(AST_INT, i, lengthSymbol, token->pos, false);
-    return enumNode;
-}
-
 // isPublic is passed in as true to make parameters and return types always public
-ASTNode* parseDefine(SymbolNode* scope, bool isPublic)
+ASTNode* parseDefine(SymbolNode* scope)
 {
     Token* doc = NULL;
     Token* temp = NULL;
-    Token* firstToken = NULL;
-    bool isExtern = false;
-    bool isRestricted = false;
     bool hasDesc = false;
-    List* restrictionExpr = NULL;
 
     if (doc = accept(TOKEN_DOC)) {
         hasDesc = true;
     }
-    while (accept(TOKEN_NEWLINE))
-        ;
-    if (temp = accept(TOKEN_RESTRICT)) {
-        if (!firstToken) {
-            firstToken = temp;
+
+    Token* name = expect(TOKEN_IDENT);
+    SymbolNode* symbol = Symbol_Create(name->data, SYMBOL_VARIABLE, scope, name->pos);
+    ASTNode* define = AST_Create_define(symbol, scope, prevToken->pos);
+
+    if (temp = accept(TOKEN_QMARK)) {
+        symbol->isExtern = true;
+        if (accept(TOKEN_LSQUARE)) {
+            Token* externName = expect(TOKEN_IDENT);
+            strcpy_s(symbol->externName, 255, externName->data);
+            expect(TOKEN_RSQUARE);
+        } else {
+            strcpy_s(symbol->externName, 255, symbol->name);
         }
-        restrictionExpr = List_Create();
-        isRestricted = true;
-        while (accept(TOKEN_NEWLINE))
-            ;
+    } else {
+        strcpy_s(symbol->externName, 255, symbol->name);
+    }
+
+    if (temp = accept(TOKEN_RESTRICT)) {
+        List* restrictionExpr = List_Create();
+        symbol->isRestricted = true;
+        symbol->restrictionExpr = restrictionExpr;
         while (!accept(TOKEN_RSQUARE)) {
             while (accept(TOKEN_NEWLINE))
                 ;
@@ -1008,77 +744,27 @@ ASTNode* parseDefine(SymbolNode* scope, bool isPublic)
             }
         }
     }
-    while (accept(TOKEN_NEWLINE))
-        ;
 
-    Token* externNameToken = NULL;
-    if (temp = accept(TOKEN_QMARK)) {
-        if (!firstToken) {
-            firstToken = temp;
-        }
-        isExtern = true;
-        if (accept(TOKEN_LSQUARE)) {
-            externNameToken = expect(TOKEN_IDENT);
-            expect(TOKEN_RSQUARE);
-        }
-    }
-    while (accept(TOKEN_NEWLINE))
-        ;
-
-    if (temp = accept(TOKEN_PLUS)) {
-        if (!firstToken) {
-            firstToken = temp;
-        }
-        isPublic = true;
-    }
-    while (accept(TOKEN_NEWLINE))
-        ;
-
-    Token* name = expect(TOKEN_IDENT);
-    while (accept(TOKEN_NEWLINE))
-        ;
-    if (!firstToken) {
-        firstToken = name;
-    }
-    SymbolNode* symbol = Symbol_Create(name->data, SYMBOL_VARIABLE, scope, merge(firstToken->pos, name->pos));
-    ASTNode* define = AST_Create(AST_DEFINE, symbol, scope, prevToken->pos, false);
-    if (isExtern) {
-        if (externNameToken == NULL) {
-            strcpy_s(symbol->externName, 255, name->data);
-        } else {
-            strcpy_s(symbol->externName, 255, externNameToken->data);
-        }
-    }
-    if (isRestricted) {
-        symbol->isRestricted = true;
-        symbol->restrictionExpr = restrictionExpr;
-    }
     if (hasDesc) {
         strncpy_s(symbol->desc, 255, doc->data, 255);
     }
 
     expect(TOKEN_COLON);
     bool isConst = accept(TOKEN_COLON) != NULL;
-    while (accept(TOKEN_NEWLINE))
-        ;
 
     ASTNode* type = NULL;
     ASTNode* def = NULL;
     bool inferType = accept(TOKEN_ASSIGN);
-    while (accept(TOKEN_NEWLINE))
-        ;
 
     if (!inferType) {
         type = parseType(symbol, false);
         type->isConst |= isConst;
-        if (type->astType == AST_IDENT && !strcmp(type->data, "Package")) {
+        if (type->astType == AST_IDENT && !strcmp(type->ident.data, "Package")) {
             symbol->symbolType = SYMBOL_PACKAGE;
-        } else if (type->astType == AST_IDENT && !strcmp(type->data, "Module")) {
+        } else if (type->astType == AST_IDENT && !strcmp(type->ident.data, "Module")) {
             symbol->symbolType = SYMBOL_MODULE;
-        } else if (type->astType == AST_IDENT && !strcmp(type->data, "Type")) {
+        } else if (type->astType == AST_IDENT && !strcmp(type->ident.data, "Type")) {
             symbol->symbolType = SYMBOL_TYPE;
-        } else if (type->astType == AST_IDENT && !strcmp(type->data, "Enum")) {
-            symbol->symbolType = SYMBOL_ENUM;
         } else if (type->astType == AST_FUNCTION && type->isConst) {
             symbol->symbolType = SYMBOL_FUNCTION;
         } else {
@@ -1089,7 +775,8 @@ ASTNode* parseDefine(SymbolNode* scope, bool isPublic)
         }
         symbol->pos = merge(symbol->pos, type->pos);
     } else {
-        type = AST_Create(AST_UNDEF, 0, scope, prevToken->pos, isConst);
+        type = AST_Create_undef(scope, prevToken->pos);
+        type->isConst |= isConst;
     }
 
     if (symbol->symbolType == SYMBOL_TYPE && symbol->name[0] >= 'a' && symbol->name[0] <= 'z') {
@@ -1097,76 +784,105 @@ ASTNode* parseDefine(SymbolNode* scope, bool isPublic)
     }
 
     if (inferType || accept(TOKEN_ASSIGN)) {
-        while (accept(TOKEN_NEWLINE))
-            ;
         if (symbol->symbolType == SYMBOL_MODULE || symbol->symbolType == SYMBOL_PACKAGE) {
+            def = parseType(symbol, false);
+        } else if (symbol->symbolType == SYMBOL_MODULE) {
             def = parseType(symbol, false);
         } else if (symbol->symbolType == SYMBOL_TYPE) {
             def = parseType(symbol, true);
-        } else if (symbol->symbolType == SYMBOL_ENUM) {
-            def = parseEnum(symbol);
         } else {
             def = parseExpr(symbol);
         }
     } else {
-        def = AST_Create(AST_UNDEF, 0, scope, prevToken->pos, false);
+        def = AST_Create_undef(scope, prevToken->pos);
     }
 
     symbol->def = def;
     symbol->type = type;
-    symbol->isPublic = isPublic;
-    symbol->isExtern = isExtern;
     return define;
 }
 
-ASTNode* parseTypeAtom(SymbolNode* scope, bool isPublic)
+ASTNode* parseUnionDefine(SymbolNode* scope)
+{
+    Token* name = expect(TOKEN_IDENT);
+    SymbolNode* symbol = Symbol_Create(name->data, SYMBOL_VARIABLE, scope, name->pos);
+    ASTNode* define = AST_Create_define(symbol, scope, prevToken->pos);
+    strcpy_s(symbol->externName, 255, symbol->name);
+
+    if (accept(TOKEN_COLON)) {
+        ASTNode* type = NULL;
+        type = parseType(symbol, false);
+        if (type->astType == AST_IDENT && !strcmp(type->ident.data, "Package")) {
+            symbol->symbolType = SYMBOL_PACKAGE;
+        } else if (type->astType == AST_IDENT && !strcmp(type->ident.data, "Module")) {
+            symbol->symbolType = SYMBOL_MODULE;
+        } else if (type->astType == AST_IDENT && !strcmp(type->ident.data, "Type")) {
+            symbol->symbolType = SYMBOL_TYPE;
+        } else if (type->astType == AST_FUNCTION && type->isConst) {
+            symbol->symbolType = SYMBOL_FUNCTION;
+        } else {
+            symbol->symbolType = SYMBOL_VARIABLE;
+        }
+        if (accept(TOKEN_ELLIPSES)) {
+            symbol->isVararg = true;
+        }
+        symbol->pos = merge(symbol->pos, type->pos);
+        symbol->type = type;
+    } else {
+        symbol->type = AST_Create_void(scope, symbol->pos);
+    }
+    return define;
+}
+
+ASTNode* parseTypeAtom(SymbolNode* scope)
 {
     Token* token = NULL;
     ASTNode* child = NULL;
     if ((token = accept(TOKEN_IDENT)) != NULL) {
         char* text = malloc(sizeof(char) * 255);
         strncpy_s(text, 255, token->data, 254);
-        child = AST_Create(AST_IDENT, text, scope, token->pos, false);
+        child = AST_Create_ident(text, scope, token->pos);
     } else if ((token = accept(TOKEN_LPAREN)) != NULL) {
-        child = AST_Create(AST_PARAMLIST, 0, scope, token->pos, false);
-        while (accept(TOKEN_NEWLINE))
-            ;
+        child = AST_Create_paramlist(scope, token->pos);
         while (!accept(TOKEN_RPAREN)) {
-            while (accept(TOKEN_NEWLINE))
-                ;
-            appendAndMerge(child, parseDefine(scope, isPublic));
-            if (!accept(TOKEN_NEWLINE)) {
-                if (!accept(TOKEN_COMMA)) {
-                    while (accept(TOKEN_NEWLINE))
-                        ;
-                    expect(TOKEN_RPAREN);
-                    break;
+            List_Append(child->paramlist.defines, parseDefine(scope));
+            if (accept(TOKEN_COMMA)) {
+                if (nextTokenMaybeNewline()->type == TOKEN_NEWLINE) {
+                    error(nextTokenMaybeNewline()->pos, "unexpected newline");
                 }
-            } else {
-                while (accept(TOKEN_NEWLINE))
-                    ;
             }
         }
         child->pos = merge(child->pos, token->pos);
-        if (child->children->size == 0) {
+        if (child->paramlist.defines->size == 0) {
             child->astType = AST_VOID;
         }
+    } else if ((token = accept(TOKEN_UNION)) != NULL) {
+        child = AST_Create_unionset(scope, token->pos);
+        while (!accept(TOKEN_RPAREN)) {
+            List_Append(child->unionset.defines, parseUnionDefine(scope));
+            if (accept(TOKEN_COMMA)) {
+                if (nextTokenMaybeNewline()->type == TOKEN_NEWLINE) {
+                    error(nextTokenMaybeNewline()->pos, "unexpected newline");
+                }
+            }
+        }
+        child->pos = merge(child->pos, token->pos);
+        if (child->unionset.defines->size == 0) {
+            error(token->pos, "empty union set");
+        }
     } else {
-        error(prevToken->pos, "expected type, got '%s'", Token_GetErrorMsgRepr(nextToken->type));
+        error(prevToken->pos, "expected type, got '%s'", Token_GetErrorMsgRepr(nextToken()->type));
     }
     return child;
 }
 
-static ASTNode* parseTypeDot(SymbolNode* scope, bool isPublic)
+static ASTNode* parseTypeDot(SymbolNode* scope)
 {
-    ASTNode* factor = parseTypeAtom(scope, isPublic);
+    ASTNode* factor = parseTypeAtom(scope);
     Token* token = NULL;
     while (true) {
         if ((token = accept(TOKEN_DOT)) != NULL) {
-            ASTNode* dot = AST_Create(AST_DOT, ".", scope, token->pos, false);
-            appendAndMerge(dot, factor);
-            appendAndMerge(dot, parseTypeAtom(scope, isPublic));
-            factor = dot;
+            factor = AST_Create_dot(factor, parseTypeAtom(scope), scope, token->pos);
         } else {
             break;
         }
@@ -1174,22 +890,18 @@ static ASTNode* parseTypeDot(SymbolNode* scope, bool isPublic)
     return factor;
 }
 
-ASTNode* parseTypeFunction(SymbolNode* scope, bool isPublic)
+ASTNode* parseTypeFunction(SymbolNode* scope)
 {
-    ASTNode* child = parseTypeDot(scope, isPublic);
+    ASTNode* child = parseTypeDot(scope);
     Token* token = NULL;
     while (true) {
         if ((token = accept(TOKEN_ARROW)) != NULL) {
-            while (accept(TOKEN_NEWLINE))
-                ;
             if (child->astType != AST_FUNCTION && child->astType != AST_PARAMLIST && child->astType != AST_VOID) {
                 error(child->pos, "expected parameter list or function");
             }
-            ASTNode* parent = AST_Create(AST_FUNCTION, 0, scope, token->pos, false);
-            SymbolNode* hiddenSymbol = Symbol_Create("", SYMBOL_BLOCK, scope, parent->pos); // So that paramlist members are not visible in function
-            ASTNode* right = parseType(hiddenSymbol, isPublic);
-            appendAndMerge(parent, child);
-            appendAndMerge(parent, right);
+            SymbolNode* hiddenSymbol = Symbol_Create("", SYMBOL_BLOCK, scope, child->pos); // So that paramlist members are not visible in function
+            ASTNode* right = parseType(hiddenSymbol);
+            ASTNode* parent = AST_Create_function(child, right, scope, token->pos);
             child = parent;
         } else {
             return child;
@@ -1197,68 +909,74 @@ ASTNode* parseTypeFunction(SymbolNode* scope, bool isPublic)
     }
 }
 
-ASTNode* parseTypeNonConst(SymbolNode* scope, bool isPublic)
+ASTNode* parseTypeNonConst(SymbolNode* scope)
 {
     //ASTNode* child = parseTypeFunction(scope, isPublic);
     Token* token = NULL;
     if ((token = accept(TOKEN_AMPERSAND)) != NULL) {
-        ASTNode* type = AST_Create(AST_ADDR, 0, scope, token->pos, false);
-        appendAndMerge(type, parseType(scope, isPublic));
-        return type;
+        return AST_Create_addr(parseType(scope), scope, token->pos);
     } else if ((token = accept(TOKEN_DAMPERSAND)) != NULL) {
-        ASTNode* type1 = AST_Create(AST_ADDR, 0, scope, token->pos, false);
-        ASTNode* type2 = AST_Create(AST_ADDR, 0, scope, token->pos, false);
-        appendAndMerge(type1, type2);
-        appendAndMerge(type2, parseType(scope, isPublic));
-        return type1;
+        ASTNode* type = AST_Create_addr(parseType(scope), scope, token->pos);
+        return AST_Create_addr(type, scope, token->pos);
+    } else if ((token = accept(TOKEN_QMARK)) != NULL) {
+        ASTNode* maybeUnion = AST_Create_unionset(scope, token->pos);
+
+        SymbolNode* nothingSymbol = Symbol_Create("nothing", SYMBOL_VARIABLE, NULL, maybeUnion->pos);
+        ASTNode* nothingDefine = AST_Create_define(nothingSymbol, scope, token->pos);
+        ASTNode* nothingType = AST_Create_void(scope, token->pos);
+        nothingSymbol->type = nothingType;
+
+        SymbolNode* somethingSymbol = Symbol_Create("something", SYMBOL_VARIABLE, NULL, maybeUnion->pos);
+        ASTNode* somethingDefine = AST_Create_define(somethingSymbol, scope, token->pos);
+        ASTNode* somethingType = parseType(scope);
+        somethingSymbol->type = somethingType;
+
+        List_Append(maybeUnion->unionset.defines, nothingDefine);
+        List_Append(maybeUnion->unionset.defines, somethingDefine);
+        return maybeUnion;
     } else if ((token = accept(TOKEN_LSQUARE)) != NULL) {
-        ASTNode* arrStruct = AST_Create(AST_ARRAY, 0, scope, token->pos, false);
+        ASTNode* arrStruct = AST_Create_array(scope, token->pos);
 
         SymbolNode* lengthSymbol = Symbol_Create("length", SYMBOL_VARIABLE, NULL, arrStruct->pos);
-        ASTNode* lengthDefine = AST_Create(AST_DEFINE, lengthSymbol, scope, token->pos, false);
-        ASTNode* lengthType = AST_Create(AST_IDENT, "Int", scope, token->pos, false);
+        ASTNode* lengthDefine = AST_Create_define(lengthSymbol, scope, token->pos);
+        ASTNode* lengthType = AST_Create_ident("Int", scope, token->pos);
         ASTNode* lengthCode;
         if (!(token = accept(TOKEN_RSQUARE))) {
             lengthCode = parseExpr(scope);
             token = expect(TOKEN_RSQUARE);
         } else {
-            lengthCode = AST_Create(AST_UNDEF, 0, scope, token->pos, false);
+            lengthCode = AST_Create_undef(scope, token->pos);
         }
         arrStruct->pos = merge(arrStruct->pos, token->pos);
         lengthSymbol->def = lengthCode;
         lengthSymbol->type = lengthType;
-        lengthSymbol->isPublic = true;
         lengthSymbol->type->isConst = true;
 
         SymbolNode* dataSymbol = Symbol_Create("data", SYMBOL_VARIABLE, NULL, arrStruct->pos);
-        ASTNode* dataDefine = AST_Create(AST_DEFINE, dataSymbol, scope, token->pos, false);
-        ASTNode* dataType = AST_Create(AST_ADDR, NULL, scope, token->pos, false);
-        appendAndMerge(dataType, parseType(scope, isPublic));
+        ASTNode* dataDefine = AST_Create_define(dataSymbol, scope, token->pos);
+        ASTNode* dataType = AST_Create_addr(parseType(scope), scope, token->pos);
         arrStruct->pos = merge(arrStruct->pos, dataType->pos);
-
-        ASTNode* dataCode = AST_Create(AST_UNDEF, 0, scope, token->pos, false);
+        ASTNode* dataCode = AST_Create_undef(scope, token->pos);
         dataSymbol->def = dataCode;
         dataSymbol->type = dataType;
-        dataSymbol->isPublic = true;
 
-        appendAndMerge(arrStruct, lengthDefine);
-        appendAndMerge(arrStruct, dataDefine);
-
+        List_Append(arrStruct->paramlist.defines, lengthDefine);
+        List_Append(arrStruct->paramlist.defines, dataDefine);
         return arrStruct;
     } else {
-        return parseTypeFunction(scope, isPublic);
+        return parseTypeFunction(scope);
     }
 }
 
-ASTNode* parseType(SymbolNode* scope, bool isPublic)
+ASTNode* parseType(SymbolNode* scope)
 {
     Token* token;
     if ((token = accept(TOKEN_COLON)) != NULL) {
-        ASTNode* type = parseTypeNonConst(scope, isPublic);
+        ASTNode* type = parseTypeNonConst(scope);
         type->isConst = true;
         return type;
     } else {
-        return parseTypeNonConst(scope, isPublic);
+        return parseTypeNonConst(scope);
     }
 }
 
@@ -1266,16 +984,11 @@ ASTNode* parseType(SymbolNode* scope, bool isPublic)
 ASTNode* Parser_Parse(FILE* _in, SymbolNode* program)
 {
     in = _in;
-    nextToken = Lexer_GetNextToken(in);
-    nextNextToken = Lexer_GetNextToken(in);
+    tokens = List_Create();
 
-    while (accept(TOKEN_NEWLINE))
-        ;
     ASTNode* module = parseDefine(program, true);
-    while (accept(TOKEN_NEWLINE))
-        ;
     expect(TOKEN_EOF);
-    //AST_Print(module, "", "");
+    List_Destroy(tokens);
 
     return module;
 }
