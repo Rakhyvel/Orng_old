@@ -1,13 +1,13 @@
 testModule::Module = (
 	main::(args:[]String)->Int = {
-		x := 0
-		defer x = 5
-		for i := 0; i < 10; i = i + 1 {
-			x = 1 + x
-			if 8 < i {
-				return 16
+		x:Bool
+		for i := 0; i < 9; i = i + 1 {
+			if x {
+				x = false
+			} else {
+				x = true
 			}
 		}
-		x
+		if x {4} else {5}
 	}
 )

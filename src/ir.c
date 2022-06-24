@@ -84,12 +84,12 @@ void printInstructions(CFG* cfg)
             printf("L%d:", ir->id);
         } else {
             printf("%d\t%s", ir->id, IR_ToString(ir->irType));
-            if (ir->branch) {
-                if (ir->irType == IR_BRANCH_IF_FALSE) {
-                    printf("\tL%d", ir->branch->id);
-                } else if (ir->irType == IR_JUMP) {
-                    printf("\t\t\tL%d", ir->branch->id);
-                }
+            if (ir->irType == IR_BRANCH_IF_FALSE && ir->branch) {
+                printf("\tL%d", ir->branch->id);
+            } else if (ir->irType == IR_JUMP && ir->branch) {
+                printf("\t\t\tL%d", ir->branch->id);
+            } else if (ir->irType == IR_COPY) {
+                printf("\t\t%d", ir->src1->def->id);
             }
         }
         printf("\n");
@@ -114,6 +114,9 @@ IR* createIR(ir_type type, SymbolVersion* dest, IR* src1, IR* src2)
     IR* retval = calloc(sizeof(IR), 1);
     if (!retval) {
         gen_error("out of memory");
+    }
+    if (type == IR_COPY && !src1) {
+        printf("hehe\n");
     }
     retval->irType = type;
     retval->dest = dest;
@@ -402,13 +405,13 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
 
         appendInstruction(cfg, createIR_branch(IR_BRANCH_IF_FALSE, NULL, condition, NULL, elseLabel));
         SymbolVersion* bodySymbver = flattenAST(cfg, node->_if.bodyBlock, returnLabel, breakLabel, continueLabel);
-        if (var) {
+        if (var && bodySymbver) {
             appendInstruction(cfg, createIR(IR_COPY, var, bodySymbver, NULL));
         }
         appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, endLabel));
         appendInstruction(cfg, elseLabel);
         SymbolVersion* elseSymbver = flattenAST(cfg, node->_if.elseBlock, returnLabel, breakLabel, continueLabel);
-        if (var) {
+        if (var && bodySymbver) {
             appendInstruction(cfg, createIR(IR_COPY, var, elseSymbver, NULL));
         }
         appendInstruction(cfg, endLabel);
@@ -494,7 +497,7 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
         IR* ir = createIR(IR_COPY, var, right, NULL);
         var->def = ir;
         appendInstruction(cfg, ir);
-        return var;
+        return NULL;
     }
     case AST_CAST: {
         SymbolVersion* left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel);

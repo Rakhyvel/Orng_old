@@ -374,7 +374,7 @@ int main(int argc, char** argv)
         SymbolNode* package = Symbol_Find(packageName, program);
         Doc_Generate(package, argv[1]);
     } else {
-        Program programStruct = Validator_Validate(program);
+        SymbolNode* mainFunction = Validator_Validate(program);
 
         memset(outFilename, 0, 255);
         strcat_s(outFilename, 255, argv[1]);
@@ -387,7 +387,7 @@ int main(int argc, char** argv)
             strcat_s(outFilename, 255, "out.asm");
         }
 
-        CFG* cfg = createCFG(programStruct.mainFunction);
+        CFG* cfg = createCFG(mainFunction);
 
         FILE* out;
         fopen_s(&out, outFilename, "w");

@@ -382,19 +382,30 @@ x Rework the compiler to be better [ast-union-type]
 		x defers
 		x fix optimizations again
 		x return paths
-		- switches
-		- default initialization
+		x scalar default initialization
+		x remove type collecting
+		- arrays
+			- change array type to be different from paramlist
+				- ast for init size, may be undef
+				- element data type
+			- array literals, default array literals
+			- indexing
+			- slices
+			- treat each element as a scalar
+		- dots & struct literals & structs & default arglist literals
+			- treat each field as a scalar
+		- union literals & default union literals
+		- unops
+			- 
 		- new
 		- free
-		- index & array literals & arrays & slices
-		- dots & struct literals & structs
-		- union literals
 		- and/or
 		- binops
-		- unops
 		- op-assign
 		- casts and type conversions
 		- calls
+			- fast call calling convention
+		- switches
 		- union stuff
 		- error unions
 - &&= and ||= operator for &&= and ||=, do not make &= and |= polymorphic

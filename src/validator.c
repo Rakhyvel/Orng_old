@@ -7,24 +7,17 @@
 #include <stdlib.h>
 #include <string.h>
 
-static const List* functions = NULL;
-static const List* globalVars = NULL;
-static const List* enums = NULL;
-static const List* depenGraph = NULL;
-static const List* strings = NULL;
-static const List* verbatims = NULL;
-static const Map* includes = NULL;
 static const SymbolNode* mainFunction = NULL;
 
 bool permissiveTypeEquiv = false;
 
-static ASTNode* mainFunctionType;
+static ASTNode* mainFunctionType = NULL;
 bool typesAreEquivalent(ASTNode* a, ASTNode* b);
 static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning);
 static ASTNode* expandTypeIdent(ASTNode* type, bool reassigning);
-ASTNode* validateAST(ASTNode* node);
+ASTNode* validateAST(ASTNode* node, ASTNode* coerceType);
 void inferTypes(SymbolNode* var);
-Program Validator_Validate(SymbolNode* symbol);
+SymbolNode* Validator_Validate(SymbolNode* symbol);
 
 static void typeMismatchError(struct position pos, ASTNode* expectedType, ASTNode* actualType)
 {
@@ -1049,43 +1042,6 @@ bool identIsPrimitive(char* data)
         !strcmp(data, "Real64");
 }
 
-static void validateNoLoops(DGraph* graphNode)
-{
-    graphNode->visited = true;
-    ListElem* elem = List_Begin(graphNode->dependencies);
-    for (; elem != List_End(graphNode->dependencies); elem = elem->next) {
-        DGraph* child = elem->data;
-        if (child->visited) {
-            error(child->structDef->pos, "loop detected");
-        }
-        validateNoLoops(child);
-    }
-    graphNode->visited = false;
-}
-
-static struct graph* addGraphNode(List* depenGraph, ASTNode* structType)
-{
-    // Check list to see if any graph node has paramlist type
-    // If does, return that graph node
-    // If not, create new grpahnode, append to list of dependencies, return new graph node
-    ListElem* elem = List_Begin(depenGraph);
-    for (; elem != List_End(depenGraph); elem = elem->next) {
-        DGraph* graphNode = elem->data;
-        if (typesAreEquivalent(graphNode->structDef, structType)) {
-            return graphNode;
-        }
-    }
-
-    DGraph* graphNode = calloc(1, sizeof(DGraph));
-    graphNode->structDef = structType;
-    graphNode->visited = false;
-    graphNode->ordinal = depenGraph->size;
-    graphNode->dependencies = List_Create();
-    List_Append(depenGraph, graphNode);
-
-    return graphNode;
-}
-
 void validateType(ASTNode* node, bool collectThisType)
 {
     ASSERT(node != NULL);
@@ -1197,25 +1153,6 @@ void validateType(ASTNode* node, bool collectThisType)
         error(node->pos, "not a type");
     }
     }
-
-    // Collect structs
-    if (collectThisType && (node->astType == AST_PARAMLIST || node->astType == AST_ARRAY || node->astType == AST_UNIONSET) && node->paramlist.defines->size > 0) {
-        DGraph* graphNode = addGraphNode(depenGraph, node);
-
-        // go through fields, if field is a parameter list, add to dependencies
-        ListElem* paramElem = List_Begin(node->paramlist.defines);
-        for (; paramElem != List_End(node->paramlist.defines); paramElem = paramElem->next) {
-            ASTNode* fieldDefine = paramElem->data;
-            SymbolNode* fieldVar = fieldDefine->define.symbol;
-            ASTNode* fieldType = expandTypeIdent(fieldVar->type, true);
-            if (fieldType->astType == AST_PARAMLIST || fieldType->astType == AST_ARRAY || fieldType->astType == AST_UNIONSET) {
-                DGraph* dependency = addGraphNode(depenGraph, fieldType);
-                List_Append(graphNode->dependencies, dependency);
-            }
-        }
-
-        validateNoLoops(graphNode);
-    }
 }
 
 bool typeIsMaybe(ASTNode* type)
@@ -1261,6 +1198,55 @@ ASTNode* tryCoerceToUnion(ASTNode* unionType, ASTNode* member)
         }
         return NULL;
     }
+}
+
+ASTNode* defaultValue(ASTNode* type)
+{
+    switch (type->astType) {
+    case AST_IDENT: {
+        if (!strcmp(type->ident.data, "Int")) {
+            return AST_Create_int(0, NULL, (Position) { NULL, 0, 0, 0, 0 });
+        } else if (!strcmp(type->ident.data, "Int64")) {
+            return AST_Create_int(0, NULL, (Position) { NULL, 0, 0, 0, 0 });
+        } else if (!strcmp(type->ident.data, "Int32")) {
+            return AST_Create_int(0, NULL, (Position) { NULL, 0, 0, 0, 0 });
+        } else if (!strcmp(type->ident.data, "Int16")) {
+            return AST_Create_int(0, NULL, (Position) { NULL, 0, 0, 0, 0 });
+        } else if (!strcmp(type->ident.data, "Int8")) {
+            return AST_Create_int(0, NULL, (Position) { NULL, 0, 0, 0, 0 });
+        } else if (!strcmp(type->ident.data, "Real")) {
+            return AST_Create_real(0.0, NULL, (Position) { NULL, 0, 0, 0, 0 });
+        } else if (!strcmp(type->ident.data, "Real32")) {
+            return AST_Create_real(0.0, NULL, (Position) { NULL, 0, 0, 0, 0 });
+        } else if (!strcmp(type->ident.data, "Real64")) {
+            return AST_Create_real(0.0, NULL, (Position) { NULL, 0, 0, 0, 0 });
+        } else if (!strcmp(type->ident.data, "Char")) {
+            return AST_Create_char("\\0", NULL, (Position) { NULL, 0, 0, 0, 0 });
+        } else if (!strcmp(type->ident.data, "Bool")) {
+            return AST_Create_false(NULL, (Position) { NULL, 0, 0, 0, 0 });
+        }
+        break;
+    }
+    case AST_ARRAY: {
+        ASTNode* lengthDefine = List_Get(type->paramlist.defines, 0);
+        SymbolNode* lengthSymbol = lengthDefine->define.symbol;
+        ASTNode* lengthCode = lengthSymbol->def;
+        ASTNode* dataDefine = List_Get(type->paramlist.defines, 1);
+        SymbolNode* dataSymbol = dataDefine->define.symbol;
+        ASTNode* dataType = dataSymbol->type;
+
+        ASTNode* def = defaultValue(dataType);
+        if (def) {
+            ASTNode* retval = AST_Create_arrayLiteral(NULL, (Position) { NULL, 0, 0, 0, 0 });
+            validateAST(def, NULL);
+            for (int i = 0; i < lengthCode->_int.data; i++) {
+                List_Append(retval->arrayLiteral.members, def);
+            }
+            return retval;
+        }
+    }
+    }
+    return NULL;
 }
 
 void inferTypes(SymbolNode* var)
@@ -1589,7 +1575,7 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
     case AST_NOTHING:
         retval = node;
         break;
-    case AST_REAL:
+    case AST_REAL: {
         retval = node;
         if (coerceType && coerceType->astType == AST_IDENT && (!strcmp(coerceType->ident.data, "Real") || !strcmp(coerceType->ident.data, "Real32") || !strcmp(coerceType->ident.data, "Real64"))) {
             retval->type = coerceType;
@@ -1597,6 +1583,7 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
         } else {
             break;
         }
+    }
     case AST_CHAR: {
         // data is a valid character
         if (node->_char.data[0] == '\\') {
@@ -1610,8 +1597,8 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
         break;
     }
     case AST_STRING: {
-        node->string.stringID = strings->size;
-        List_Append(strings, node);
+        //node->string.stringID = strings->size;
+        //List_Append(strings, node);
         retval = node;
         break;
     }
@@ -1954,6 +1941,13 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
         /// var type is not Type or Enum
         if (var->type->astType != AST_IDENT || strcmp(var->type->ident.data, "Type")) {
             inferTypes(var);
+            if (var->def->astType == AST_UNDEF) {
+                ASTNode* def = defaultValue(var->type);
+                if (def) {
+                    var->def = def;
+                    validateAST(var->def, NULL);
+                }
+            }
         } else if (!strcmp(var->type->ident.data, "Type")) {
             var->def = expandTypeIdent(var->def, true);
             validateType(var->def, true);
@@ -2959,7 +2953,7 @@ void resolveRestrictions(SymbolNode* symbol)
     }
 }
 
-Program Validator_Validate(SymbolNode* symbol)
+SymbolNode* Validator_Validate(SymbolNode* symbol)
 {
     ASSERT(symbol != NULL);
 
@@ -2970,16 +2964,7 @@ Program Validator_Validate(SymbolNode* symbol)
     }
 
     // Done first pass through
-    if (depenGraph == NULL) {
-        functions = List_Create();
-        globalVars = List_Create();
-        enums = List_Create();
-        depenGraph = List_Create();
-        strings = List_Create();
-        verbatims = List_Create();
-
-        includes = Map_Create();
-
+    if (mainFunctionType == NULL) {
         validateType(CONST_STRING_TYPE, true);
         validateType(STRING_ARR_TYPE, true);
         permissiveTypeEquiv = true;
@@ -3053,35 +3038,6 @@ Program Validator_Validate(SymbolNode* symbol)
         if (symbol->def->astType != AST_PARAMLIST && symbol->def->astType != AST_VOID) {
             error(symbol->pos, "expected parameter list");
         }
-
-        SymbolNode* includesSymbol = Map_Get(symbol->children, "includes");
-        SymbolNode* verbatimSymbol = Map_Get(symbol->children, "verbatim");
-        if (includesSymbol) {
-            if (includesSymbol->def->astType != AST_ARRAY_LITERAL) {
-                error(includesSymbol->pos, "includes array must be a string array");
-            }
-            ListElem* e = List_Begin(includesSymbol->def->arrayLiteral.members);
-            for (; e != List_End(includesSymbol->def->arrayLiteral.members); e = e->next) {
-                ASTNode* stringLiteral = e->data;
-                if (!typesAreEquivalent(stringLiteral->type, STRING_TYPE)) {
-                    typeMismatchError(stringLiteral->pos, STRING_TYPE, stringLiteral->type);
-                }
-                Map_Put(includes, stringLiteral->string.data, 1);
-            }
-        }
-        if (verbatimSymbol) {
-            if (verbatimSymbol->def->astType != AST_ARRAY_LITERAL) {
-                error(verbatimSymbol->pos, "verbatim array must be a string array");
-            }
-            ListElem* e = List_Begin(verbatimSymbol->def->arrayLiteral.members);
-            for (; e != List_End(verbatimSymbol->def->arrayLiteral.members); e = e->next) {
-                ASTNode* stringLiteral = e->data;
-                if (!typesAreEquivalent(stringLiteral->type, STRING_TYPE)) {
-                    typeMismatchError(stringLiteral->pos, STRING_TYPE, stringLiteral->type);
-                }
-                List_Append(verbatims, stringLiteral->string.data);
-            }
-        }
         break;
     }
     case SYMBOL_FUNCTION: {
@@ -3109,11 +3065,6 @@ Program Validator_Validate(SymbolNode* symbol)
             } else {
                 mainFunction = symbol;
             }
-        }
-
-        // Add to list of function
-        if (!symbol->isExtern) {
-            List_Append(functions, symbol);
         }
         break;
     }
@@ -3178,5 +3129,5 @@ Program Validator_Validate(SymbolNode* symbol)
     }
     }
 
-    return (Program) { functions, globalVars, enums, depenGraph, strings, verbatims, includes, mainFunction };
+    return mainFunction;
 }

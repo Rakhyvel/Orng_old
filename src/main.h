@@ -15,13 +15,16 @@ want: crazy cool type system from haskell without needing to optimize the hell o
 
 char* filename;
 
+/*
 typedef struct {
     ASTNode* structDef;
     int ordinal;
     List* dependencies;
     bool visited;
 } DGraph;
+*/
 
+/*
 typedef struct {
     List* functions;
     List* globalVars;
@@ -32,6 +35,7 @@ typedef struct {
     Map* includes;
     SymbolNode* mainFunction;
 } Program;
+*/
 
 char* getRelPath(char*);
 char* pathToFilename(char* path);
