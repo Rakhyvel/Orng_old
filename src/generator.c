@@ -306,7 +306,9 @@ int printTempVarUndef(FILE* out, ASTNode* node)
         scope = scope->parent;
     }
     if (scope) {
-        fprintf(out, " _%d;\n", scope->tempVars);
+        fprintf(out, " _%d = ", scope->tempVars);
+        generateDefaultValue(out, node->type);
+        fprintf(out, ";\n");
         return scope->tempVars++;
     } else {
         return -1;
@@ -557,7 +559,7 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
             fprintf(out, "\tgoto break_defer_%s;\n", parentSymbol->name);
         }
         return -1;
-    } 
+    }
     case AST_CONTINUE: {
         ASTNode* parentBlock = List_Peek(blockStack);
         SymbolNode* parentSymbol = parentBlock->block.symbol;
@@ -1320,7 +1322,8 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
     case AST_CALL: {
         ASTNode* arglist = node->call.right;
         List* ids = List_Create();
-        for (ListElem* elem = List_Begin(arglist->arglist.args); elem != List_End(arglist->arglist.args); elem = elem->next) {
+        forall(elem, arglist->arglist.args)
+        {
             int* ptr = malloc(sizeof(int));
             ASTNode* child = elem->data;
             if (child->astType != AST_IDENT) {

@@ -467,7 +467,7 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
                 break;
             }
         }
-		type = innerType;
+        type = innerType;
         break;
     }
     case AST_PAREN: {

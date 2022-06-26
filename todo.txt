@@ -316,6 +316,7 @@ x Rework the compiler to be better [ast-union-type]
 			- combines left and right union sets
 			- ok for names to collide, so long as their types are EQUAL (not just subtype)
 			- how do tags work? How can I coerce a union literal?
+				- conversion instruction that maps sub union tags to super union tags
 			Color::Type = (|
 				red			-- tag = 0
 				orange		-- tag = 1
@@ -338,7 +339,7 @@ x Rework the compiler to be better [ast-union-type]
 			- shorthand for (|success:<Type>) || <UnionSetType>
 			- binds looser than ||
 			- errors are regular unions, become errors with the ! operator
-			- no global error set
+			- no global error set, but there is the AnyError type which is the union of all error unions
 		- can case on an error union just like any other union set
 			-- uses if-def idiom, very useful! implement it now!!!
 			file = case fileErr := openFile("filename.txt"); fileErr {
@@ -356,34 +357,47 @@ x Rework the compiler to be better [ast-union-type]
 		- catch unwraps value if no error, or evaluates to default expression
 		- errdefer is another return exit path if return is an error, a subset of defers (ie it defers all defers, and also errdefers if return is error)
 		- infer error set using !<Type> operator
-- compile time evaluation
-	- convert AST representation to IR
-		- validate the AST and then return an IR list instead
-		- there will likely be challenges figuring out alignment, how to maintain interop with external C code, etc. FIGURE IT OUT! Trust me it'll be worth it
-	- when evaluating something at compile time, just simply run the IR
-		- list of temp variables that act as registers with infinite width, single assign cannot be reassigned except for if/for/case/block evals
-		- variables as defined in Orng are then just addresses to data in memory
-	- validate that all cases mappings are unique, integer literals numbers
-	- validate that default function parameters and struct fields are constant expressions
-	x if index is comptime, must be postive
-	x if denominator is comptime, must not be 0
-	x dead code trimming
-	- calls to functions with compile time constant return type are memoized
-		- map input parameter values -> output instruction
+- do create an intermediate representation, but for generating C code
+	- So that optimzations can be made
+		- copy propagation, symbol versions, dead code trimming, all of it
+	- Should generate to C code still, with abstractions to make paramlist copying easier
+		- keep basic structures, so that MAYBE in the future I can generate assembly
+	- ease front-end optimizations, maybe none!
+		- all constant propagations can be done with IR, and better
+		- symbol versions offer a better way to track live fields for unions than the current way
+- &&= and ||= operator for &&= and ||=, do not make &= and |= polymorphic
+- 'default' keyword which takes in a type and gives its default value
+	if x == default Int64 {
+		std.system.println("x is 0")
+	}
+	- useful for generics and allocators
+	new::(T::Type, init::T=default T)->AllocationError!&T = {
+		malloc?::(size:Int64)->&Any
+		retval := malloc(sizeof T):&T
+		*retval = init
+		return retval
+	}
+	-- usage:
+	create::(alloc:&Allocator)->!&Whatever = {
+		retval := try alloc.new(Whatever, ("This is the default\n", 34, 535.5))
+		
+	}
 - generics
 	- you would need a function that 'returns' a type
+		- this would require a unification of type and value syntax
+		- can I find any instances where this leads to ambiguity that cannot be solved?
+			- addr-of type and addr-of value must be treated differently
+		- 'parameterized types', instead of a full blown function that returns a type
 	- if a function takes in all compile-time constant arguments and returns something compile-time constant, replace call with function definition
 		- can do this because:
 		- referential transparency- most function calls can simply be replaced with their definition
-			- return statements break this
-			- remove return statements?
-				- loops would still be a challenge, 
 		- all parameters are compile-time known, can simply replace references to the parameters with the arguments in the definition
 			- doesn't this imply we'd need to clone the def AST?
 	- rewrite util data structures to be generic
-	- typeof operator which gets the compiletime type tag of a type
+	- typeof operator which gets the compiletime type of an expression
 	- subtype operator which does compile time type checking
 - interfaces (traits in rust https://theburningmonk.com/2015/05/rust-memory-safety-without-gc/)
+	- are just structs with Any pointers to the base data structure, and function pointers
 	- add method calling for stack structs, just take the address in the call
 	- https://www.nmichaels.org/zig/interfaces.html interfaces in Zig
 		- compose an interface within each struct

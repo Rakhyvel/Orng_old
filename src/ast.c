@@ -268,7 +268,8 @@ ASTNode* AST_Create_orelse(struct astNode* left, struct astNode* right, struct s
 ASTNode* AST_Create_paren(struct astNode* expr, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_PAREN, scope, pos);
-    retval->unop.expr = expr;
+    retval->arglist.args = List_Create();
+    List_Append(retval->arglist.args, expr);
     return retval;
 }
 

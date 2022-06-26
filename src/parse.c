@@ -16,14 +16,14 @@ symbol tree that points to many abstract syntax trees
 
 // File handle for the input file
 static FILE* in;
-Token* prevToken;
+struct token* prevToken;
 static List* tokens;
 // The next unique identifier used for indexing blocks
 static int arrayUID = 1;
 
-static Token* accept(_TokenType type)
+static struct token* accept(_TokenType type)
 {
-    Token* token;
+    struct token* token;
     int i = 0;
     while (true) {
         if (List_IsEmpty(tokens) || i >= tokens->size) {
@@ -51,7 +51,7 @@ static bool nextIsDef()
         if (List_IsEmpty(tokens) || i >= tokens->size) {
             List_Append(tokens, Lexer_GetNextToken(in));
         }
-        Token* token = List_Get(tokens, i);
+        struct token* token = List_Get(tokens, i);
         i++;
         if (token->type == TOKEN_NEWLINE) {
             continue;
@@ -65,7 +65,7 @@ static bool nextIsDef()
         if (List_IsEmpty(tokens) || i >= tokens->size) {
             List_Append(tokens, Lexer_GetNextToken(in));
         }
-        Token* token = List_Get(tokens, i);
+        struct token* token = List_Get(tokens, i);
         i++;
         if (token->type == TOKEN_NEWLINE) {
             continue;
@@ -77,14 +77,14 @@ static bool nextIsDef()
     }
 }
 
-static Token* nextToken()
+static struct token* nextToken()
 {
     int i = 0;
     while (true) {
         if (List_IsEmpty(tokens) || i >= tokens->size) {
             List_Append(tokens, Lexer_GetNextToken(in));
         }
-        Token* token = List_Get(tokens, i);
+        struct token* token = List_Get(tokens, i);
         i++;
         if (token->type == TOKEN_NEWLINE) {
             continue;
@@ -94,7 +94,7 @@ static Token* nextToken()
     }
 }
 
-static Token* nextTokenMaybeNewline()
+static struct token* nextTokenMaybeNewline()
 {
     if (List_IsEmpty(tokens)) {
         List_Append(tokens, Lexer_GetNextToken(in));
@@ -102,9 +102,9 @@ static Token* nextTokenMaybeNewline()
     return List_Peek(tokens);
 }
 
-static Token* expect(_TokenType type)
+static struct token* expect(_TokenType type)
 {
-    Token* token;
+    struct token* token;
     if ((token = accept(type)) != NULL) {
         return token;
     } else {
@@ -253,7 +253,7 @@ static ASTNode* parseFor(SymbolNode* scope)
 static ASTNode* parseMapping(SymbolNode* scope)
 {
     List* exprs = List_Create();
-    Token* token = NULL;
+    struct token* token = NULL;
     if (accept(TOKEN_ELSE)) {
         expect(TOKEN_ARROW);
     } else {
@@ -270,7 +270,7 @@ static ASTNode* parseMapping(SymbolNode* scope)
 static ASTNode* parseFieldMapping(SymbolNode* scope)
 {
     List* exprs = List_Create();
-    Token* token = NULL;
+    struct token* token = NULL;
     if (accept(TOKEN_ELSE)) {
         expect(TOKEN_ARROW);
     } else {
@@ -297,7 +297,7 @@ static ASTNode* parseCase(SymbolNode* scope)
     ASTNode* caseNode = AST_Create_case(parseExpr(scope), scope, prevToken->pos);
 
     expect(TOKEN_LBRACE);
-    Token* token = NULL;
+    struct token* token = NULL;
     if (nextToken()->type == TOKEN_DOT) {
         caseNode->astType = AST_FIELD_CASE;
         while (!accept(TOKEN_RBRACE)) {
@@ -325,7 +325,7 @@ static ASTNode* parseCase(SymbolNode* scope)
 static ASTNode* parseFactor(SymbolNode* scope)
 {
     ASTNode* child = NULL;
-    Token* token = NULL;
+    struct token* token = NULL;
     if ((token = accept(TOKEN_IDENT)) != NULL) {
         char* text = malloc(sizeof(char) * 255);
         strncpy_s(text, 255, token->data, 254);
@@ -379,7 +379,7 @@ static ASTNode* parseFactor(SymbolNode* scope)
         }
         child = AST_Create_new(type, init, scope, token->pos);
     } else if ((token = accept(TOKEN_DOT)) != NULL) {
-        Token* ident = expect(TOKEN_IDENT);
+        struct token* ident = expect(TOKEN_IDENT);
         expect(TOKEN_ASSIGN);
         char* text = malloc(sizeof(char) * 255);
         strncpy_s(text, 255, ident->data, 254);
@@ -401,7 +401,7 @@ static ASTNode* parseFactor(SymbolNode* scope)
 static ASTNode* parsePostfix(SymbolNode* scope)
 {
     ASTNode* child = parseFactor(scope);
-    Token* token = NULL;
+    struct token* token = NULL;
     while (true) {
         if (nextTokenMaybeNewline()->type != TOKEN_NEWLINE && (token = accept(TOKEN_LPAREN)) != NULL) {
             child = AST_Create_call(child, parseArgList(scope), scope, token->pos);
@@ -460,7 +460,7 @@ static ASTNode* parsePostfix(SymbolNode* scope)
 
 static ASTNode* parsePrefix(SymbolNode* scope)
 {
-    Token* token = NULL;
+    struct token* token = NULL;
     ASTNode* prefix = NULL;
     if ((token = accept(TOKEN_EMARK)) != NULL) {
         prefix = AST_Create_not(parsePrefix(scope), scope, token->pos);
@@ -483,7 +483,7 @@ static ASTNode* parsePrefix(SymbolNode* scope)
 static ASTNode* parseTerm(SymbolNode* scope)
 {
     ASTNode* term = parsePrefix(scope);
-    Token* token = NULL;
+    struct token* token = NULL;
     while (true) {
         if ((token = accept(TOKEN_STAR)) != NULL) {
             term = AST_Create_multiply(term, parsePrefix(scope), scope, token->pos);
@@ -499,7 +499,7 @@ static ASTNode* parseTerm(SymbolNode* scope)
 
 static ASTNode* parseIntExpr(SymbolNode* scope)
 {
-    Token* token = NULL;
+    struct token* token = NULL;
     ASTNode* child = parseTerm(scope);
     while (true) {
         if ((token = accept(TOKEN_PLUS)) != NULL) {
@@ -514,7 +514,7 @@ static ASTNode* parseIntExpr(SymbolNode* scope)
 
 static ASTNode* parseShiftExpr(SymbolNode* scope)
 {
-    Token* token = NULL;
+    struct token* token = NULL;
     ASTNode* child = parseIntExpr(scope);
     while (true) {
         if ((token = accept(TOKEN_DLSR)) != NULL) {
@@ -532,7 +532,7 @@ static ASTNode* parseShiftExpr(SymbolNode* scope)
 static ASTNode* parseConditional(SymbolNode* scope)
 {
     ASTNode* child = parseShiftExpr(scope);
-    Token* token = NULL;
+    struct token* token = NULL;
     if ((token = accept(TOKEN_DEQ)) != NULL) {
         return AST_Create_eq(child, parseShiftExpr(scope), scope, token->pos);
     } else if ((token = accept(TOKEN_GTR)) != NULL) {
@@ -552,7 +552,7 @@ static ASTNode* parseConditional(SymbolNode* scope)
 static ASTNode* parseNeqExpr(SymbolNode* scope)
 {
     ASTNode* child = parseConditional(scope);
-    Token* token = NULL;
+    struct token* token = NULL;
     if ((token = accept(TOKEN_NEQ)) != NULL) {
         return AST_Create_neq(child, parseConditional(scope), scope, token->pos);
     } else {
@@ -563,7 +563,7 @@ static ASTNode* parseNeqExpr(SymbolNode* scope)
 static ASTNode* parseBitAndExpr(SymbolNode* scope)
 {
     ASTNode* child = parseNeqExpr(scope);
-    Token* token = NULL;
+    struct token* token = NULL;
     while (true) {
         if ((token = accept(TOKEN_AMPERSAND)) != NULL) {
             child = AST_Create_bitAnd(child, parseNeqExpr(scope), scope, token->pos);
@@ -576,7 +576,7 @@ static ASTNode* parseBitAndExpr(SymbolNode* scope)
 static ASTNode* parseBitXorExpr(SymbolNode* scope)
 {
     ASTNode* child = parseBitAndExpr(scope);
-    Token* token = NULL;
+    struct token* token = NULL;
     while (true) {
         if ((token = accept(TOKEN_CARET)) != NULL) {
             child = AST_Create_bitXor(child, parseBitAndExpr(scope), scope, token->pos);
@@ -589,7 +589,7 @@ static ASTNode* parseBitXorExpr(SymbolNode* scope)
 static ASTNode* parseBitOrExpr(SymbolNode* scope)
 {
     ASTNode* child = parseBitXorExpr(scope);
-    Token* token = NULL;
+    struct token* token = NULL;
     while (true) {
         if ((token = accept(TOKEN_BAR)) != NULL) {
             child = AST_Create_bitOr(child, parseBitXorExpr(scope), scope, token->pos);
@@ -603,7 +603,7 @@ static ASTNode* parseBitOrExpr(SymbolNode* scope)
 static ASTNode* parseAndExpr(SymbolNode* scope)
 {
     ASTNode* child = parseBitOrExpr(scope);
-    Token* token = NULL;
+    struct token* token = NULL;
     while (true) {
         if ((token = accept(TOKEN_DAMPERSAND)) != NULL) {
             child = AST_Create_and(child, parseBitOrExpr(scope), scope, token->pos);
@@ -617,7 +617,7 @@ static ASTNode* parseAndExpr(SymbolNode* scope)
 ASTNode* parseOrExpr(SymbolNode* scope)
 {
     ASTNode* child = parseAndExpr(scope);
-    Token* token = NULL;
+    struct token* token = NULL;
     while (true) {
         if ((token = accept(TOKEN_DBAR)) != NULL) {
             child = AST_Create_or(child, parseAndExpr(scope), scope, token->pos);
@@ -629,7 +629,7 @@ ASTNode* parseOrExpr(SymbolNode* scope)
 
 static ASTNode* parseExpr(SymbolNode* scope)
 {
-    Token* token = NULL;
+    struct token* token = NULL;
     ASTNode* child = parseOrExpr(scope);
     if ((token = accept(TOKEN_ASSIGN)) != NULL) {
         child = AST_Create_assign(child, parseOrExpr(scope), scope, token->pos);
@@ -664,7 +664,7 @@ static ASTNode* parseReturn(SymbolNode* scope)
 
 static ASTNode* parseDefer(SymbolNode* scope)
 {
-    ASTNode* deferStatement = parseExpr(scope);
+    ASTNode* deferStatement = parseStatement(scope);
     if (deferStatement == NULL) {
         error(prevToken->pos, "expected statement after defer");
     }
@@ -696,22 +696,22 @@ static ASTNode* parseStatement(SymbolNode* scope)
 // isPublic is passed in as true to make parameters and return types always public
 ASTNode* parseDefine(SymbolNode* scope)
 {
-    Token* doc = NULL;
-    Token* temp = NULL;
+    struct token* doc = NULL;
+    struct token* temp = NULL;
     bool hasDesc = false;
 
     if (doc = accept(TOKEN_DOC)) {
         hasDesc = true;
     }
 
-    Token* name = expect(TOKEN_IDENT);
+    struct token* name = expect(TOKEN_IDENT);
     SymbolNode* symbol = Symbol_Create(name->data, SYMBOL_VARIABLE, scope, name->pos);
     ASTNode* define = AST_Create_define(symbol, scope, prevToken->pos);
 
     if (temp = accept(TOKEN_QMARK)) {
         symbol->isExtern = true;
         if (accept(TOKEN_LSQUARE)) {
-            Token* externName = expect(TOKEN_IDENT);
+            struct token* externName = expect(TOKEN_IDENT);
             strcpy_s(symbol->externName, 255, externName->data);
             expect(TOKEN_RSQUARE);
         } else {
@@ -803,7 +803,7 @@ ASTNode* parseDefine(SymbolNode* scope)
 
 ASTNode* parseUnionDefine(SymbolNode* scope)
 {
-    Token* name = expect(TOKEN_IDENT);
+    struct token* name = expect(TOKEN_IDENT);
     SymbolNode* symbol = Symbol_Create(name->data, SYMBOL_VARIABLE, scope, name->pos);
     ASTNode* define = AST_Create_define(symbol, scope, prevToken->pos);
     strcpy_s(symbol->externName, 255, symbol->name);
@@ -835,7 +835,7 @@ ASTNode* parseUnionDefine(SymbolNode* scope)
 
 ASTNode* parseTypeAtom(SymbolNode* scope)
 {
-    Token* token = NULL;
+    struct token* token = NULL;
     ASTNode* child = NULL;
     if ((token = accept(TOKEN_IDENT)) != NULL) {
         char* text = malloc(sizeof(char) * 255);
@@ -878,7 +878,7 @@ ASTNode* parseTypeAtom(SymbolNode* scope)
 static ASTNode* parseTypeDot(SymbolNode* scope)
 {
     ASTNode* factor = parseTypeAtom(scope);
-    Token* token = NULL;
+    struct token* token = NULL;
     while (true) {
         if ((token = accept(TOKEN_DOT)) != NULL) {
             factor = AST_Create_dot(factor, parseTypeAtom(scope), scope, token->pos);
@@ -892,7 +892,7 @@ static ASTNode* parseTypeDot(SymbolNode* scope)
 ASTNode* parseTypeFunction(SymbolNode* scope)
 {
     ASTNode* child = parseTypeDot(scope);
-    Token* token = NULL;
+    struct token* token = NULL;
     while (true) {
         if ((token = accept(TOKEN_ARROW)) != NULL) {
             if (child->astType != AST_FUNCTION && child->astType != AST_PARAMLIST && child->astType != AST_VOID) {
@@ -911,7 +911,7 @@ ASTNode* parseTypeFunction(SymbolNode* scope)
 ASTNode* parseTypeNonConst(SymbolNode* scope)
 {
     //ASTNode* child = parseTypeFunction(scope, isPublic);
-    Token* token = NULL;
+    struct token* token = NULL;
     if ((token = accept(TOKEN_AMPERSAND)) != NULL) {
         return AST_Create_addr(parseType(scope), scope, token->pos);
     } else if ((token = accept(TOKEN_DAMPERSAND)) != NULL) {
@@ -969,7 +969,7 @@ ASTNode* parseTypeNonConst(SymbolNode* scope)
 
 ASTNode* parseType(SymbolNode* scope)
 {
-    Token* token;
+    struct token* token;
     if ((token = accept(TOKEN_COLON)) != NULL) {
         ASTNode* type = parseTypeNonConst(scope);
         type->isConst = true;
