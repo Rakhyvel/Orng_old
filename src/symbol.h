@@ -33,12 +33,12 @@ typedef struct symbolNode {
     char desc[255];
 
     struct astNode* def; // SymbolDefine ASTNode where this symbol is defined
+    struct IR* ir;
 	
 	bool isDeclared;
     bool isExtern;
     bool isRestricted;
     bool isVararg;
-    bool isReachable;
 
     // Parse tree
     struct symbolNode* parent;
@@ -46,8 +46,10 @@ typedef struct symbolNode {
     List* restrictionExpr; // list of symbol_expr
     List* restrictions; // list of symbol*
 
+	List* versions; // Used to keep track of how many versions this symbol has, list of SymbolVersion*
+
 	// Union sets
-    char* activeFieldName;
+    char* activeFieldName; // TODO: Remove, re-add in SymbolVersion
 
 	// Defer/block
     List* defers; // list of ast's, in order of declaration

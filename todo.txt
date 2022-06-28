@@ -311,6 +311,18 @@ x Rework the compiler to be better [ast-union-type]
 		x generate nothing comparisons
 		x assumptions for for loops too
 		x orelse operator
+- Generate IR from AST
+	- basic block, call graph, etc
+- Generate C code from IR
+- IR optimizations
+	- constant propagation (remove from validateAST())
+	- copy propagation
+		- requires symbol versioning
+	- dead code trimming
+		- requires symbol versioning, phi nodes etc
+- Orange should compile the program for you, too
+	- No verbatims, instead write the C file and header, include it, and add it to be included when compiling
+- Go back to adding errors and union type unions
 	- runtime errors
 		- || type operator that operates on any union sets
 			- combines left and right union sets
@@ -356,15 +368,6 @@ x Rework the compiler to be better [ast-union-type]
 		- try unwraps value if no error, or returns the error
 		- catch unwraps value if no error, or evaluates to default expression
 		- errdefer is another return exit path if return is an error, a subset of defers (ie it defers all defers, and also errdefers if return is error)
-		- infer error set using !<Type> operator
-- do create an intermediate representation, but for generating C code
-	- So that optimzations can be made
-		- copy propagation, symbol versions, dead code trimming, all of it
-	- Should generate to C code still, with abstractions to make paramlist copying easier
-		- keep basic structures, so that MAYBE in the future I can generate assembly
-	- ease front-end optimizations, maybe none!
-		- all constant propagations can be done with IR, and better
-		- symbol versions offer a better way to track live fields for unions than the current way
 - &&= and ||= operator for &&= and ||=, do not make &= and |= polymorphic
 - 'default' keyword which takes in a type and gives its default value
 	if x == default Int64 {

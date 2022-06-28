@@ -11,6 +11,6 @@ Implementation is in the file generator.c
 #include "./symbol.h"
 #include <stdio.h>
 
-void Generator_Generate(Program program, FILE* out);
+void Generator_Generate(FILE* out, Program program);
 
 #endif

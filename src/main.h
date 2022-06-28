@@ -23,14 +23,10 @@ typedef struct {
 } DGraph;
 
 typedef struct {
-    List* functions;
-    List* globalVars;
-    List* enums;
-    List* dependencyGraph;
+    List* structDependencyGraph;
     List* strings;
-    List* verbatims;
     Map* includes;
-    SymbolNode* mainFunction;
+    struct CFG* callGraph;
 } Program;
 
 char* getRelPath(char*);

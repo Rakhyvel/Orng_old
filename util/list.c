@@ -23,6 +23,24 @@ List* List_Create()
     return list;
 }
 
+// Empty the list but do not free the data
+void List_Clear(List* list)
+{
+    ListElem* toFree = NULL;
+    forall(elem, list)
+    {
+        if (toFree) {
+            free(toFree);
+        }
+        toFree = elem;
+    }
+    if (toFree) {
+        free(toFree);
+    }
+    list->head.next = &list->tail;
+    list->tail.prev = &list->head;
+}
+
 List* List_Concat(List* a, List* b)
 {
     if (a == NULL && b != NULL) {
@@ -146,4 +164,16 @@ bool List_Contains(List* list, void* data)
         }
     }
     return false;
+}
+
+bool Set_Put(List* list, void* data)
+{
+    forall(elem, list)
+    {
+        if (elem->data == data) {
+            return false;
+        }
+    }
+    List_Append(list, data);
+    return true;
 }

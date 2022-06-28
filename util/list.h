@@ -22,6 +22,7 @@ typedef struct list List;
 
 List* List_Create();
 void List_Destroy(List* list);
+void List_Clear(List* list);
 List* List_Concat(List* a, List* b);
 struct listElem* List_Begin(struct list*);
 struct listElem* List_Next(struct listElem*);
@@ -34,5 +35,6 @@ void* List_Peek(List* list);
 void* List_Pop(List* list);
 bool List_IsEmpty(List* list);
 bool List_Contains(List* list, void* data);
+bool Set_Put(List* list, double data);
 
 #endif

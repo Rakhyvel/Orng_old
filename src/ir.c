@@ -1,1081 +1,795 @@
-#include "ir.h"
+#include "./ir.h"
 #include "../util/debug.h"
-#include "../util/list.h"
-#include "ast.h"
-#include "parse.h"
+#include "./ast.h"
+#include "./main.h"
+#include "./symbol.h"
+#include "./validator.h"
 #include <stdio.h>
 #include <stdlib.h>
 
-int blockUID = 1;
+SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLabel, IR* continueLabel);
 
-ir_id getID(struct list* instructions)
-{
-    return instructions->size;
-}
-
-struct label createLabel(enum labelType labelType, char* name)
-{
-    struct label retval = {
-        labelType,
-        name
-    };
-    return retval;
-}
-
-ir_id add_loadIdent(List* instructions, char* name, struct symbolNode* scope, struct position pos)
-{
-    ir_id id = getID(instructions);
-    IR* retval = (IR*)calloc(sizeof(IR), 1);
-    retval->type = IR_LOAD_IDENT;
-    retval->pos = pos;
-    retval->loadIdent.name = name;
-    retval->loadIdent.scope = scope;
-    List_Append(instructions, retval);
-    return id;
-}
-
-ir_id add_loadInt(List* instructions, int64_t data, struct position pos)
-{
-    ir_id id = getID(instructions);
-    IR* retval = (IR*)calloc(sizeof(IR), 1);
-    retval->type = IR_LOAD_INT;
-    retval->pos = pos;
-    retval->loadInt.data = data;
-    List_Append(instructions, retval);
-    return id;
-}
-
-ir_id add_loadString(List* instructions, char* data, struct position pos)
-{
-    ir_id id = getID(instructions);
-    IR* retval = (IR*)calloc(sizeof(IR), 1);
-    retval->type = IR_LOAD_STRING;
-    retval->pos = pos;
-    retval->loadString.data = data;
-    List_Append(instructions, retval);
-    return id;
-}
-
-ir_id add_loadChar(List* instructions, char data, struct position pos)
-{
-    ir_id id = getID(instructions);
-    IR* retval = (IR*)calloc(sizeof(IR), 1);
-    retval->type = IR_LOAD_CHAR;
-    retval->pos = pos;
-    retval->loadChar.data = data;
-    List_Append(instructions, retval);
-    return id;
-}
-
-ir_id add_loadReal(List* instructions, char data, struct position pos)
-{
-    ir_id id = getID(instructions);
-    IR* retval = (IR*)calloc(sizeof(IR), 1);
-    retval->type = IR_LOAD_REAL;
-    retval->pos = pos;
-    retval->loadChar.data = data;
-    List_Append(instructions, retval);
-    return id;
-}
-
-ir_id add_loadNothing(List* instructions, struct position pos)
-{
-    ir_id id = getID(instructions);
-    IR* retval = (IR*)calloc(sizeof(IR), 1);
-    retval->type = IR_LOAD_NOTHING;
-    retval->pos = pos;
-    List_Append(instructions, retval);
-    return id;
-}
-
-ir_id add_loadTrue(List* instructions, struct position pos)
-{
-    ir_id id = getID(instructions);
-    IR* retval = (IR*)calloc(sizeof(IR), 1);
-    retval->type = IR_LOAD_TRUE;
-    retval->pos = pos;
-    List_Append(instructions, retval);
-    return id;
-}
-
-ir_id add_loadFalse(List* instructions, struct position pos)
-{
-    ir_id id = getID(instructions);
-    IR* retval = (IR*)calloc(sizeof(IR), 1);
-    retval->type = IR_LOAD_FALSE;
-    retval->pos = pos;
-    List_Append(instructions, retval);
-    return id;
-}
-
-ir_id add_loadSizeOf(List* instructions, struct astNode* type, struct position pos)
-{
-    ir_id id = getID(instructions);
-    IR* retval = (IR*)calloc(sizeof(IR), 1);
-    retval->type = IR_LOAD_SIZEOF;
-    retval->pos = pos;
-    retval->loadSizeof.type = type;
-    List_Append(instructions, retval);
-    return id;
-}
-
-ir_id add_loadArrayLiteral(List* instructions, List* members, struct position pos)
-{
-    ir_id id = getID(instructions);
-    IR* retval = (IR*)calloc(sizeof(IR), 1);
-    retval->type = IR_LOAD_ARRAY_LITERAL;
-    retval->pos = pos;
-    retval->loadArrayLiteral.members = members;
-    List_Append(instructions, retval);
-    return id;
-}
-
-ir_id add_loadStructLiteral(List* instructions, List* args, struct position pos)
-{
-    ir_id id = getID(instructions);
-    IR* retval = (IR*)calloc(sizeof(IR), 1);
-    retval->type = IR_LOAD_STRUCT_LITERAL;
-    retval->pos = pos;
-    retval->loadStructLiteral.args = args;
-    List_Append(instructions, retval);
-    return id;
-}
-
-ir_id add_declareTemp(List* instructions, struct position pos)
-{
-    ir_id id = getID(instructions);
-    IR* retval = (IR*)calloc(sizeof(IR), 1);
-    retval->type = IR_DECLARE_TEMP;
-    retval->pos = pos;
-    List_Append(instructions, retval);
-    return id;
-}
-
-ir_id add_declareDefer(List* instructions, int deferID, char* symbolName, struct position pos)
-{
-    ir_id id = getID(instructions);
-    IR* retval = (IR*)calloc(sizeof(IR), 1);
-    retval->type = IR_DECLARE_DEFER;
-    retval->pos = pos;
-    retval->declareDefer.deferID = deferID;
-    retval->declareDefer.symbolName = symbolName;
-    List_Append(instructions, retval);
-    return id;
-}
-
-ir_id add_assignTemp(List* instructions, ir_id dst, ir_id src, struct position pos)
-{
-    ir_id id = getID(instructions);
-    IR* retval = (IR*)calloc(sizeof(IR), 1);
-    retval->type = IR_ASSIGN_TEMP;
-    retval->pos = pos;
-    retval->assignTemp.dst = dst;
-    retval->assignTemp.src = src;
-    List_Append(instructions, retval);
-    return id;
-}
-
-ir_id add_return(List* instructions, ir_id expr, struct position pos)
-{
-    ir_id id = getID(instructions);
-    IR* retval = (IR*)calloc(sizeof(IR), 1);
-    retval->type = IR_RETURN;
-    retval->pos = pos;
-    retval->_return.expr = expr;
-    List_Append(instructions, retval);
-    return id;
-}
-
-ir_id add_setDefer(List* instructions, int deferID, char* symbolName, struct position pos)
-{
-    ir_id id = getID(instructions);
-    IR* retval = (IR*)calloc(sizeof(IR), 1);
-    retval->type = IR_SET_DEFER;
-    retval->pos = pos;
-    retval->setDefer.deferID = deferID;
-    retval->setDefer.symbolName = symbolName;
-    List_Append(instructions, retval);
-    return id;
-}
-
-ir_id add_getDefer(List* instructions, int deferID, char* symbolName, struct position pos)
-{
-    ir_id id = getID(instructions);
-    IR* retval = (IR*)calloc(sizeof(IR), 1);
-    retval->type = IR_SET_DEFER;
-    retval->pos = pos;
-    retval->setDefer.deferID = deferID;
-    retval->setDefer.symbolName = symbolName;
-    List_Append(instructions, retval);
-    return id;
-}
-
-ir_id add_index(List* instructions, ir_id arrExprID, ir_id subscriptID, struct position pos)
-{
-    ir_id id = getID(instructions);
-    IR* retval = (IR*)calloc(sizeof(IR), 1);
-    retval->type = IR_INDEX;
-    retval->pos = pos;
-    retval->index.arrExprID = arrExprID;
-    retval->index.subscriptID = subscriptID;
-    List_Append(instructions, retval);
-    return id;
-}
-
-ir_id add_slice(List* instructions, ir_id arrExprID, ir_id lowerBoundID, ir_id upperBoundID, struct position pos)
-{
-    ir_id id = getID(instructions);
-    IR* retval = (IR*)calloc(sizeof(IR), 1);
-    retval->type = IR_SLICE;
-    retval->pos = pos;
-    retval->slice.arrExprID = arrExprID;
-    retval->slice.lowerBoundID = lowerBoundID;
-    retval->slice.upperBoundID = upperBoundID;
-    List_Append(instructions, retval);
-    return id;
-}
-
-ir_id add_dot(List* instructions, ASTNode* dotExpr, struct position pos)
-{
-    ir_id id = getID(instructions);
-    IR* retval = (IR*)calloc(sizeof(IR), 1);
-    retval->type = IR_DOT;
-    retval->pos = pos;
-    retval->dot.dotExpr = dotExpr;
-    List_Append(instructions, retval);
-    return id;
-}
-
-ir_id add_declareLabel(List* instructions, struct label label, struct position pos)
-{
-    ir_id id = getID(instructions);
-    IR* retval = (IR*)calloc(sizeof(IR), 1);
-    retval->type = IR_DECLARE_LABEL;
-    retval->pos = pos;
-    retval->declareLabel.label = label;
-    List_Append(instructions, retval);
-    return id;
-}
-
-ir_id add_branchIfZero(List* instructions, ir_id condition, struct label label, struct position pos)
-{
-    ir_id id = getID(instructions);
-    IR* retval = (IR*)calloc(sizeof(IR), 1);
-    retval->type = IR_BRANCH_IF_ZERO;
-    retval->pos = pos;
-    retval->branchIfZero.condition = condition;
-    retval->branchIfZero.label = label;
-    List_Append(instructions, retval);
-    return id;
-}
-
-ir_id add_jump(List* instructions, struct label label, struct position pos)
-{
-    ir_id id = getID(instructions);
-    IR* retval = (IR*)calloc(sizeof(IR), 1);
-    retval->type = IR_JUMP;
-    retval->pos = pos;
-    retval->jump.label = label;
-    List_Append(instructions, retval);
-    return id;
-}
-
-ir_id add_and(List* instructions, ir_id left, ir_id right, struct position pos)
-{
-    ir_id id = getID(instructions);
-    IR* retval = (IR*)calloc(sizeof(IR), 1);
-    retval->type = IR_AND;
-    retval->pos = pos;
-    retval->add.left = left;
-    retval->add.right = right;
-    List_Append(instructions, retval);
-    return id;
-}
-
-ir_id add_or(List* instructions, ir_id left, ir_id right, struct position pos)
-{
-    ir_id id = getID(instructions);
-    IR* retval = (IR*)calloc(sizeof(IR), 1);
-    retval->type = IR_OR;
-    retval->pos = pos;
-    retval->add.left = left;
-    retval->add.right = right;
-    List_Append(instructions, retval);
-    return id;
-}
-
-ir_id add_bitAnd(List* instructions, ir_id left, ir_id right, struct position pos)
-{
-    ir_id id = getID(instructions);
-    IR* retval = (IR*)calloc(sizeof(IR), 1);
-    retval->type = IR_BIT_AND;
-    retval->pos = pos;
-    retval->add.left = left;
-    retval->add.right = right;
-    List_Append(instructions, retval);
-    return id;
-}
-
-ir_id add_bitXor(List* instructions, ir_id left, ir_id right, struct position pos)
-{
-    ir_id id = getID(instructions);
-    IR* retval = (IR*)calloc(sizeof(IR), 1);
-    retval->type = IR_BIT_XOR;
-    retval->pos = pos;
-    retval->add.left = left;
-    retval->add.right = right;
-    List_Append(instructions, retval);
-    return id;
-}
-
-ir_id add_bitOr(List* instructions, ir_id left, ir_id right, struct position pos)
-{
-    ir_id id = getID(instructions);
-    IR* retval = (IR*)calloc(sizeof(IR), 1);
-    retval->type = IR_BIT_OR;
-    retval->pos = pos;
-    retval->add.left = left;
-    retval->add.right = right;
-    List_Append(instructions, retval);
-    return id;
-}
-
-ir_id add_lshift(List* instructions, ir_id left, ir_id right, struct position pos)
-{
-    ir_id id = getID(instructions);
-    IR* retval = (IR*)calloc(sizeof(IR), 1);
-    retval->type = IR_LSHIFT;
-    retval->pos = pos;
-    retval->add.left = left;
-    retval->add.right = right;
-    List_Append(instructions, retval);
-    return id;
-}
-
-ir_id add_rshift(List* instructions, ir_id left, ir_id right, struct position pos)
-{
-    ir_id id = getID(instructions);
-    IR* retval = (IR*)calloc(sizeof(IR), 1);
-    retval->type = IR_RSHIFT;
-    retval->pos = pos;
-    retval->add.left = left;
-    retval->add.right = right;
-    List_Append(instructions, retval);
-    return id;
-}
-
-ir_id add_eq(List* instructions, ir_id left, ir_id right, struct position pos)
-{
-    ir_id id = getID(instructions);
-    IR* retval = (IR*)calloc(sizeof(IR), 1);
-    retval->type = IR_EQ;
-    retval->pos = pos;
-    retval->add.left = left;
-    retval->add.right = right;
-    List_Append(instructions, retval);
-    return id;
-}
-
-ir_id add_neq(List* instructions, ir_id left, ir_id right, struct position pos)
-{
-    ir_id id = getID(instructions);
-    IR* retval = (IR*)calloc(sizeof(IR), 1);
-    retval->type = IR_NEQ;
-    retval->pos = pos;
-    retval->add.left = left;
-    retval->add.right = right;
-    List_Append(instructions, retval);
-    return id;
-}
-
-ir_id add_gtr(List* instructions, ir_id left, ir_id right, struct position pos)
-{
-    ir_id id = getID(instructions);
-    IR* retval = (IR*)calloc(sizeof(IR), 1);
-    retval->type = IR_GTR;
-    retval->pos = pos;
-    retval->add.left = left;
-    retval->add.right = right;
-    List_Append(instructions, retval);
-    return id;
-}
-
-ir_id add_lsr(List* instructions, ir_id left, ir_id right, struct position pos)
-{
-    ir_id id = getID(instructions);
-    IR* retval = (IR*)calloc(sizeof(IR), 1);
-    retval->type = IR_LSR;
-    retval->pos = pos;
-    retval->add.left = left;
-    retval->add.right = right;
-    List_Append(instructions, retval);
-    return id;
-}
-
-ir_id add_gte(List* instructions, ir_id left, ir_id right, struct position pos)
-{
-    ir_id id = getID(instructions);
-    IR* retval = (IR*)calloc(sizeof(IR), 1);
-    retval->type = IR_GTE;
-    retval->pos = pos;
-    retval->add.left = left;
-    retval->add.right = right;
-    List_Append(instructions, retval);
-    return id;
-}
-
-ir_id add_lte(List* instructions, ir_id left, ir_id right, struct position pos)
-{
-    ir_id id = getID(instructions);
-    IR* retval = (IR*)calloc(sizeof(IR), 1);
-    retval->type = IR_LTE;
-    retval->pos = pos;
-    retval->add.left = left;
-    retval->add.right = right;
-    List_Append(instructions, retval);
-    return id;
-}
-
-ir_id add_add(List* instructions, ir_id left, ir_id right, struct position pos)
-{
-    ir_id id = getID(instructions);
-    IR* retval = (IR*)calloc(sizeof(IR), 1);
-    retval->type = IR_ADD;
-    retval->pos = pos;
-    retval->add.left = left;
-    retval->add.right = right;
-    List_Append(instructions, retval);
-    return id;
-}
-
-ir_id add_subtract(List* instructions, ir_id left, ir_id right, struct position pos)
-{
-    ir_id id = getID(instructions);
-    IR* retval = (IR*)calloc(sizeof(IR), 1);
-    retval->type = IR_SUBTRACT;
-    retval->pos = pos;
-    retval->add.left = left;
-    retval->add.right = right;
-    List_Append(instructions, retval);
-    return id;
-}
-
-ir_id add_multiply(List* instructions, ir_id left, ir_id right, struct position pos)
-{
-    ir_id id = getID(instructions);
-    IR* retval = (IR*)calloc(sizeof(IR), 1);
-    retval->type = IR_MULTIPLY;
-    retval->pos = pos;
-    retval->add.left = left;
-    retval->add.right = right;
-    List_Append(instructions, retval);
-    return id;
-}
-
-ir_id add_divide(List* instructions, ir_id left, ir_id right, struct position pos)
-{
-    ir_id id = getID(instructions);
-    IR* retval = (IR*)calloc(sizeof(IR), 1);
-    retval->type = IR_DIVIDE;
-    retval->pos = pos;
-    retval->add.left = left;
-    retval->add.right = right;
-    List_Append(instructions, retval);
-    return id;
-}
-
-ir_id add_modulus(List* instructions, ir_id left, ir_id right, struct position pos)
-{
-    ir_id id = getID(instructions);
-    IR* retval = (IR*)calloc(sizeof(IR), 1);
-    retval->type = IR_MODULUS;
-    retval->pos = pos;
-    retval->add.left = left;
-    retval->add.right = right;
-    List_Append(instructions, retval);
-    return id;
-}
-
-ir_id flatten(struct list* instructions, struct astNode* node)
-{
-    static List* blockStack = NULL;
-    if (!blockStack) {
-        blockStack = List_Create();
-    }
-
-    switch (node->astType) {
-    case AST_BLOCK: {
-        List_Push(blockStack, node);
-        SymbolNode* symbolTree = node->block.symbol;
-        strncpy(symbolTree->name, myItoa(blockUID++), 255);
-
-        for (int i = 0; i < symbolTree->defers->size; i++) {
-            add_declareDefer(instructions, i, symbolTree->name, node->pos);
-        }
-
-        ir_id lastID = -1;
-        ListElem* elem = List_Begin(node->block.children);
-        for (; elem != List_End(node->block.children); elem = elem->next) {
-            ASTNode* statement = (ASTNode*)elem->data;
-            lastID = flatten(instructions, statement);
-        }
-        List_Pop(blockStack);
-
-        struct label returnLabel = createLabel(LABEL_RETURN, symbolTree->name);
-        struct label breakLabel = createLabel(LABEL_BREAK, symbolTree->name);
-        struct label continueLabel = createLabel(LABEL_CONTINUE, symbolTree->name);
-        struct label endLabel = createLabel(LABEL_END, symbolTree->name);
-        if (!List_IsEmpty(blockStack) && (node->containsReturn || node->containsContinue || node->containsBreak) && symbolTree->defers->size > 0) {
-            add_jump(instructions, continueLabel, node->pos);
-            if (node->containsReturn) {
-                add_declareLabel(instructions, returnLabel, node->pos);
-                // TODO: generate defers
-                ASTNode* parentBlock = List_Peek(blockStack);
-                SymbolNode* parentSymbol = parentBlock->block.symbol;
-                struct label parentReturnLabel = createLabel(LABEL_RETURN, parentSymbol);
-                add_jump(instructions, parentReturnLabel, node->pos);
-            }
-
-            if (node->containsBreak) {
-                add_declareLabel(instructions, breakLabel, node->pos);
-                // TODO: generate defers
-                add_jump(instructions, endLabel, node->pos);
-            }
-            add_declareLabel(instructions, continueLabel, node->pos);
-            // TODO: generate defers
-        }
-
-        return lastID;
-    }
-    case AST_IF: {
-        ASTNode* condition = node->_if.condition;
-        ASTNode* bodyBlock = node->_if.bodyBlock;
-        ASTNode* elseBlock = node->_if.elseBlock;
-
-        struct label endLabel = createLabel(LABEL_END, bodyBlock->block.symbol->name);
-        struct label elseLabel = createLabel(LABEL_ELSE, bodyBlock->block.symbol->name);
-
-        ir_id id = add_declareTemp(instructions, node->pos);
-
-        ir_id conditionID = flatten(instructions, condition);
-        if (elseBlock->astType != AST_UNDEF) {
-            add_branchIfZero(instructions, conditionID, elseLabel, node->pos);
-        } else {
-            add_branchIfZero(instructions, conditionID, endLabel, node->pos);
-        }
-        ir_id bodyBlockID = flatten(instructions, bodyBlock);
-
-        if (elseBlock->astType != AST_UNDEF) {
-            add_assignTemp(instructions, id, bodyBlockID, node->pos);
-            add_jump(instructions, endLabel, node->pos);
-            add_declareLabel(instructions, elseLabel, node->pos);
-            ir_id elseBlockID = flatten(instructions, elseBlock);
-            add_assignTemp(instructions, id, elseBlockID, node->pos);
-        }
-
-        add_declareLabel(instructions, endLabel, node->pos);
-        return id;
-    }
-    case AST_FOR: {
-        ASTNode* precondtiton = node->_for.pre;
-        ASTNode* condition = node->_for.condition;
-        ASTNode* postcondition = node->_for.post;
-        ASTNode* bodyBlock = node->_for.bodyBlock;
-
-        struct label beginLabel = createLabel(LABEL_BEGIN, bodyBlock->block.symbol->name);
-        struct label endLabel = createLabel(LABEL_END, bodyBlock->block.symbol->name);
-
-        flatten(instructions, precondtiton);
-        add_declareLabel(instructions, beginLabel, node->pos);
-        ir_id conditionID = flatten(instructions, condition);
-        add_branchIfZero(instructions, conditionID, endLabel, node->pos);
-        flatten(instructions, bodyBlock);
-        flatten(instructions, postcondition);
-        add_jump(instructions, beginLabel, node->pos);
-        add_declareLabel(instructions, endLabel, node->pos);
-        return -1; // What is the value if it never enters the loop?
-    }
-    case AST_RETURN: {
-        ASTNode* expr = node->unop.expr;
-        ir_id exprID = flatten(instructions, expr);
-        add_return(instructions, exprID, node->pos);
-
-        ASTNode* parentBlock = (ASTNode*)List_Peek(blockStack);
-        SymbolNode* parentSymbol = parentBlock->block.symbol;
-        while (parentSymbol->defers->size == 0 && parentSymbol->parent->symbolType == SYMBOL_BLOCK) {
-            parentSymbol = parentSymbol->parent;
-        }
-        struct label returnLabel = createLabel(LABEL_RETURN, parentSymbol->name);
-        add_jump(instructions, returnLabel, node->pos);
-        return -1;
-    }
-    case AST_BREAK: {
-        ASTNode* parentBlock = (ASTNode*)List_Peek(blockStack);
-        SymbolNode* parentSymbol = parentBlock->block.symbol;
-        while (parentSymbol->defers->size == 0 && parentSymbol->parent->symbolType == SYMBOL_BLOCK && !parentSymbol->isLoop) {
-            parentSymbol = parentSymbol->parent;
-        }
-        struct label endLabel;
-        if (parentSymbol->defers->size == 0) {
-            endLabel = createLabel(LABEL_END, parentSymbol->name);
-        } else {
-            endLabel = createLabel(LABEL_BREAK, parentSymbol->name);
-        }
-        add_jump(instructions, endLabel, node->pos);
-        return -1;
-    }
-    case AST_CONTINUE: {
-        ASTNode* parentBlock = (ASTNode*)List_Peek(blockStack);
-        SymbolNode* parentSymbol = parentBlock->block.symbol;
-        while (parentSymbol->parent->symbolType == SYMBOL_BLOCK && !parentSymbol->isLoop) {
-            parentSymbol = parentSymbol->parent;
-        }
-        struct label continueLabel = createLabel(LABEL_CONTINUE, parentSymbol->name);
-        add_jump(instructions, continueLabel, node->pos);
-        return -1;
-    }
-    case AST_DEFINE: {
-
-	}
-    case AST_DEFER: {
-        return add_setDefer(instructions, node->defer.deferID, node->scope->name, node->pos);
-    }
-    case AST_IDENT: {
-        return add_loadIdent(instructions, node->ident.data, node->scope, node->pos);
-    }
-    case AST_INT: {
-        return add_loadInt(instructions, node->_int.data, node->pos);
-    }
-    case AST_STRING: {
-        return add_loadString(instructions, node->string.data, node->pos);
-    }
-    case AST_CHAR: {
-        return add_loadChar(instructions, node->_char.data, node->pos);
-    }
-    case AST_REAL: {
-        return add_loadReal(instructions, node->real.data, node->pos);
-    }
-    case AST_NOTHING: {
-        return add_loadNothing(instructions, node->pos);
-    }
-    case AST_TRUE: {
-        return add_loadTrue(instructions, node->pos);
-    }
-    case AST_FALSE: {
-        return add_loadFalse(instructions, node->pos);
-    }
-    case AST_SIZEOF: {
-        return add_loadSizeOf(instructions, node->unop.expr, node->pos);
-    }
-    case AST_ARRAY_LITERAL: {
-        List* members = List_Create();
-        for (ListElem* elem = List_Begin(node->arrayLiteral.members); elem != List_End(node->arrayLiteral.members); elem = elem->next) {
-            ASTNode* child = (ASTNode*)elem->data;
-            List_Append(members, (void*)flatten(instructions, child));
-        }
-
-        return add_loadArrayLiteral(instructions, members, node->pos);
-    }
-    case AST_ARGLIST: {
-        List* args = List_Create();
-        for (ListElem* elem = List_Begin(node->arglist.args); elem != List_End(node->arglist.args); elem = elem->next) {
-            ASTNode* child = (ASTNode*)elem->data;
-            List_Append(args, (void*)flatten(instructions, child));
-        }
-
-        return add_loadStructLiteral(instructions, args, node->pos);
-    }
-    case AST_PAREN: {
-        ASTNode* expr = List_Get(node->arglist.args, 0);
-        return flatten(instructions, expr);
-    }
-    case AST_INDEX: {
-        ASTNode* arrExpr = node->binop.left;
-        ASTNode* subscript = node->binop.right;
-
-        ir_id arrExprID = flatten(instructions, arrExpr);
-        ir_id subscriptID = flatten(instructions, subscript);
-
-        return add_index(instructions, arrExprID, subscriptID, node->pos);
-    }
-    case AST_SLICE: {
-        ASTNode* arrExpr = node->slice.arrayExpr;
-        ASTNode* lowerBound = node->slice.lowerBound;
-        ASTNode* upperBound = node->slice.upperBound;
-
-        ir_id arrExprID = flatten(instructions, arrExpr);
-        ir_id lowerBoundID = -1;
-        ir_id upperBoundID = -1;
-
-        if (lowerBound->astType != AST_UNDEF) {
-            lowerBoundID = flatten(instructions, lowerBound);
-        }
-        if (upperBound->astType != AST_UNDEF) {
-            upperBoundID = flatten(instructions, upperBound);
-        }
-
-        return add_slice(instructions, arrExprID, lowerBoundID, upperBoundID, node->pos);
-    }
-    case AST_DOT: {
-        return add_dot(instructions, node, node->pos);
-    }
-    case AST_AND: {
-        ASTNode* left = node->binop.left;
-        ASTNode* right = node->binop.right;
-        ir_id leftID = flatten(instructions, left);
-        ir_id rightID = flatten(instructions, right);
-        return add_and(instructions, leftID, rightID, node->pos);
-    }
-    case AST_OR: {
-        ASTNode* left = node->binop.left;
-        ASTNode* right = node->binop.right;
-        ir_id leftID = flatten(instructions, left);
-        ir_id rightID = flatten(instructions, right);
-        return add_or(instructions, leftID, rightID, node->pos);
-    }
-    case AST_BIT_AND: {
-        ASTNode* left = node->binop.left;
-        ASTNode* right = node->binop.right;
-        ir_id leftID = flatten(instructions, left);
-        ir_id rightID = flatten(instructions, right);
-        return add_bitAnd(instructions, leftID, rightID, node->pos);
-    }
-    case AST_BIT_XOR: {
-        ASTNode* left = node->binop.left;
-        ASTNode* right = node->binop.right;
-        ir_id leftID = flatten(instructions, left);
-        ir_id rightID = flatten(instructions, right);
-        return add_bitXor(instructions, leftID, rightID, node->pos);
-    }
-    case AST_BIT_OR: {
-        ASTNode* left = node->binop.left;
-        ASTNode* right = node->binop.right;
-        ir_id leftID = flatten(instructions, left);
-        ir_id rightID = flatten(instructions, right);
-        return add_bitOr(instructions, leftID, rightID, node->pos);
-    }
-    case AST_LSHIFT: {
-        ASTNode* left = node->binop.left;
-        ASTNode* right = node->binop.right;
-        ir_id leftID = flatten(instructions, left);
-        ir_id rightID = flatten(instructions, right);
-        return add_lshift(instructions, leftID, rightID, node->pos);
-    }
-    case AST_RSHIFT: {
-        ASTNode* left = node->binop.left;
-        ASTNode* right = node->binop.right;
-        ir_id leftID = flatten(instructions, left);
-        ir_id rightID = flatten(instructions, right);
-        return add_rshift(instructions, leftID, rightID, node->pos);
-    }
-    case AST_EQ: {
-        ASTNode* left = node->binop.left;
-        ASTNode* right = node->binop.right;
-        ir_id leftID = flatten(instructions, left);
-        ir_id rightID = flatten(instructions, right);
-        return add_eq(instructions, leftID, rightID, node->pos);
-    }
-    case AST_NEQ: {
-        ASTNode* left = node->binop.left;
-        ASTNode* right = node->binop.right;
-        ir_id leftID = flatten(instructions, left);
-        ir_id rightID = flatten(instructions, right);
-        return add_neq(instructions, leftID, rightID, node->pos);
-    }
-    case AST_GTR: {
-        ASTNode* left = node->binop.left;
-        ASTNode* right = node->binop.right;
-        ir_id leftID = flatten(instructions, left);
-        ir_id rightID = flatten(instructions, right);
-        return add_gtr(instructions, leftID, rightID, node->pos);
-    }
-    case AST_LSR: {
-        ASTNode* left = node->binop.left;
-        ASTNode* right = node->binop.right;
-        ir_id leftID = flatten(instructions, left);
-        ir_id rightID = flatten(instructions, right);
-        return add_lsr(instructions, leftID, rightID, node->pos);
-    }
-    case AST_GTE: {
-        ASTNode* left = node->binop.left;
-        ASTNode* right = node->binop.right;
-        ir_id leftID = flatten(instructions, left);
-        ir_id rightID = flatten(instructions, right);
-        return add_gte(instructions, leftID, rightID, node->pos);
-    }
-    case AST_LTE: {
-        ASTNode* left = node->binop.left;
-        ASTNode* right = node->binop.right;
-        ir_id leftID = flatten(instructions, left);
-        ir_id rightID = flatten(instructions, right);
-        return add_lte(instructions, leftID, rightID, node->pos);
-    }
-    case AST_ADD: {
-        ASTNode* left = node->binop.left;
-        ASTNode* right = node->binop.right;
-        ir_id leftID = flatten(instructions, left);
-        ir_id rightID = flatten(instructions, right);
-        return add_add(instructions, leftID, rightID, node->pos);
-    }
-    case AST_SUBTRACT: {
-        ASTNode* left = node->binop.left;
-        ASTNode* right = node->binop.right;
-        ir_id leftID = flatten(instructions, left);
-        ir_id rightID = flatten(instructions, right);
-        return add_subtract(instructions, leftID, rightID, node->pos);
-    }
-    case AST_MULTIPLY: {
-        ASTNode* left = node->binop.left;
-        ASTNode* right = node->binop.right;
-        ir_id leftID = flatten(instructions, left);
-        ir_id rightID = flatten(instructions, right);
-        return add_multiply(instructions, leftID, rightID, node->pos);
-    }
-    case AST_DIVIDE: {
-        ASTNode* left = node->binop.left;
-        ASTNode* right = node->binop.right;
-        ir_id leftID = flatten(instructions, left);
-        ir_id rightID = flatten(instructions, right);
-        return add_divide(instructions, leftID, rightID, node->pos);
-    }
-    case AST_MODULUS: {
-        ASTNode* left = node->binop.left;
-        ASTNode* right = node->binop.right;
-        ir_id leftID = flatten(instructions, left);
-        ir_id rightID = flatten(instructions, right);
-        return add_modulus(instructions, leftID, rightID, node->pos);
-    }
-    }
-}
-
-char* labelTypeToString(enum labelType type)
+char* IR_ToString(ir_type type)
 {
     switch (type) {
-    case LABEL_BEGIN:
-        return "begin";
-    case LABEL_ELSE:
-        return "else";
-    case LABEL_END:
-        return "end";
-    case LABEL_CONTINUE:
-        return "continue";
-    case LABEL_BREAK:
-        return "break";
-    case LABEL_RETURN:
-        return "return";
-    case LABEL_SHORT_CIRCUIT:
-        return "short_circuit";
+    case IR_LOAD_INT:
+        return "IR_LOAD_INT";
+    case IR_LOAD_REAL:
+        return "IR_LOAD_REAL";
+    case IR_LOAD_STR:
+        return "IR_LOAD_STR";
+    case IR_COPY:
+        return "IR_COPY";
+    case IR_CALL:
+        return "IR_CALL";
+    case IR_DECLARE_LABEL:
+        return "IR_DECLARE_LABEL";
+    case IR_JUMP:
+        return "IR_JUMP";
+    case IR_BRANCH_IF_FALSE:
+        return "IR_BRANCH_IF_FALSE";
+    case IR_RET:
+        return "IR_RET";
+    case IR_AND:
+        return "IR_AND";
+    case IR_OR:
+        return "IR_OR";
+    case IR_XOR:
+        return "IR_XOR";
+    case IR_LSHIFT:
+        return "IR_LSHIFT";
+    case IR_RSHIFT:
+        return "IR_RSHIFT";
+    case IR_EQ:
+        return "IR_EQ";
+    case IR_NEQ:
+        return "IR_NEQ";
+    case IR_GTR:
+        return "IR_GTR";
+    case IR_LSR:
+        return "IR_LSR";
+    case IR_GTE:
+        return "IR_GTE";
+    case IR_LTE:
+        return "IR_LTE";
+    case IR_ADD:
+        return "IR_ADD";
+    case IR_SUBTRACT:
+        return "IR_SUB";
+    case IR_MULTIPLY:
+        return "IR_MULTIPLY";
+    case IR_DIVIDE:
+        return "IR_DIVIDE";
+    case IR_MODULUS:
+        return "IR_MODULUS";
+    case IR_NEGATE:
+        return "IR_NEGATE";
+    case IR_NOT:
+        return "IR_NOT";
+    case IR_BIT_NOT:
+        return "IR_BIT_NOT";
+    case IR_ADDR_OF:
+        return "IR_ADDR_OF";
     }
 }
 
-void printInstructionList(struct list* instructions)
+void printInstructions(CFG* cfg)
 {
-    ListElem* elem = List_Begin(instructions);
-    int i = 0;
-    for (; elem != List_End(instructions); elem = elem->next, i++) {
-        IR* instruction = (IR*)elem->data;
-        printf("%d ", i);
-        switch (instruction->type) {
-        case IR_LOAD_IDENT: {
-            printf("IR_LOAD_IDENT %s", instruction->loadIdent.name);
-            break;
-        }
-        case IR_LOAD_INT: {
-            printf("IR_LOAD_INT %d", (int)instruction->loadInt.data);
-            break;
-        }
-        case IR_LOAD_REAL: {
-            printf("IR_LOAD_REAL %f", instruction->loadReal.data);
-            break;
-        }
-        case IR_LOAD_STRING: {
-            printf("IR_LOAD_STRING %s", instruction->loadString.data);
-            break;
-        }
-        case IR_LOAD_CHAR: {
-            printf("IR_LOAD_CHAR %c", instruction->loadChar.data);
-            break;
-        }
-        case IR_LOAD_NOTHING: {
-            printf("IR_LOAD_NOTHING");
-            break;
-        }
-        case IR_LOAD_TRUE: {
-            printf("IR_LOAD_TRUE");
-            break;
-        }
-        case IR_LOAD_FALSE: {
-            printf("IR_LOAD_FALSE");
-            break;
-        }
-        case IR_LOAD_SIZEOF: {
-            printf("IR_LOAD_SIZEOF");
-            break;
-        }
-        case IR_LOAD_ARRAY_LITERAL: {
-            printf("IR_LOAD_ARRAY_LITERAL");
-            break;
-        }
-        case IR_LOAD_STRUCT_LITERAL: {
-            printf("IR_LOAD_STRUCT_LITERAL");
-            break;
-        }
-        case IR_DECLARE_VAR: {
-            printf("IR_DECLARE_VAR");
-            break;
-        }
-        case IR_DECLARE_TEMP: {
-            printf("IR_DELCARE_TEMP");
-            break;
-        }
-        case IR_DECLARE_DEFER: {
-            printf("IR_DELCARE_DEFER %s_%d", instruction->declareDefer.symbolName, instruction->declareDefer.deferID);
-            break;
-        }
-        case IR_ASSIGN_VAR: {
-            printf("IR_ASSIGN_VAR");
-            break;
-        }
-        case IR_ASSIGN_TEMP: {
-            printf("IR_ASSIGN_TEMP %d %d", instruction->assignTemp.dst, instruction->assignTemp.src);
-            break;
-        }
-        case IR_RETURN: {
-            printf("IR_RETURN %d", instruction->_return.expr);
-            break;
-        }
-        case IR_SET_DEFER: {
-            printf("IR_SET_DEFER %s_%d", instruction->setDefer.symbolName, instruction->setDefer.deferID);
-            break;
-        }
-        case IR_INDEX: {
-            printf("IR_INDEX %d[%d]", instruction->index.arrExprID, instruction->index.subscriptID);
-            break;
-        }
-        case IR_SLICE: {
-            printf("IR_SLICE %d[%d;%d]", instruction->slice.arrExprID, instruction->slice.lowerBoundID, instruction->slice.upperBoundID);
-            break;
-        }
-        case IR_DOT: {
-            printf("IR_DOT");
-            break;
-        }
-        case IR_DECLARE_LABEL: {
-            printf("IR_DELCARE_LABEL %s_%s", labelTypeToString(instruction->declareLabel.label.labelType), instruction->declareLabel.label.labelID);
-            break;
-        }
-        case IR_BRANCH_IF_ZERO: {
-            printf("IR_BRANCH_IF_ZERO %d %s_%s", instruction->branchIfZero.condition, labelTypeToString(instruction->branchIfZero.label.labelType), instruction->branchIfZero.label.labelID);
-            break;
-        }
-        case IR_JUMP: {
-            printf("IR_JUMP %s_%s", labelTypeToString(instruction->jump.label.labelType), instruction->jump.label.labelID);
-            break;
-        }
-        case IR_CASE: {
-            printf("IR_CASE");
-            break;
-        }
-        case IR_AND: {
-            printf("IR_AND %d %d", instruction->_and.left, instruction->_and.right);
-            break;
-        }
-        case IR_OR: {
-            printf("IR_OR %d %d", instruction->_or.left, instruction->_or.right);
-            break;
-        }
-        case IR_BIT_AND: {
-            printf("IR_BIT_AND %d %d", instruction->bitAnd.left, instruction->bitAnd.right);
-            break;
-        }
-        case IR_BIT_XOR: {
-            printf("IR_BIT_XOR %d %d", instruction->bitXor.left, instruction->bitXor.right);
-            break;
-        }
-        case IR_BIT_OR: {
-            printf("IR_BIT_OR %d %d", instruction->bitOr.left, instruction->bitOr.right);
-            break;
-        }
-        case IR_LSHIFT: {
-            printf("IR_LSHIFT %d %d", instruction->lshift.left, instruction->lshift.right);
-            break;
-        }
-        case IR_RSHIFT: {
-            printf("IR_RSHIFT %d %d", instruction->rshift.left, instruction->rshift.right);
-            break;
-        }
-        case IR_EQ: {
-            printf("IR_EQ %d %d", instruction->eq.left, instruction->eq.right);
-            break;
-        }
-        case IR_NEQ: {
-            printf("IR_NEQ %d %d", instruction->neq.left, instruction->neq.right);
-            break;
-        }
-        case IR_GTR: {
-            printf("IR_GTR %d %d", instruction->gtr.left, instruction->gtr.right);
-            break;
-        }
-        case IR_LSR: {
-            printf("IR_LSR %d %d", instruction->lsr.left, instruction->lsr.right);
-            break;
-        }
-        case IR_GTE: {
-            printf("IR_GTE %d %d", instruction->gte.left, instruction->gte.right);
-            break;
-        }
-        case IR_LTE: {
-            printf("IR_LTE %d %d", instruction->lte.left, instruction->lte.right);
-            break;
-        }
-        case IR_ADD: {
-            printf("IR_ADD %d %d", instruction->add.left, instruction->add.right);
-            break;
-        }
-        case IR_SUBTRACT: {
-            printf("IR_SUBTRACT %d %d", instruction->subtract.left, instruction->subtract.right);
-            break;
-        }
-        case IR_MULTIPLY: {
-            printf("IR_MULTIPLY %d %d", instruction->multiply.left, instruction->multiply.right);
-            break;
-        }
-        case IR_DIVIDE: {
-            printf("IR_DIVIDE %d %d", instruction->divide.left, instruction->divide.right);
-            break;
-        }
-        case IR_MODULUS: {
-            printf("IR_MODULUS %d %d", instruction->modulus.left, instruction->modulus.right);
-            break;
-        }
-        case IR_NEGATE: {
-            printf("IR_NEGATE");
-            break;
-        }
-        case IR_BIT_NOT: {
-            printf("IR_BIT_NOT");
-            break;
-        }
-        case IR_ADDR_OF: {
-            printf("IR_ADDR_OF");
-            break;
-        }
-        case IR_LOAD: {
-            printf("IR_LOAD");
-            break;
-        }
-        case IR_CAST: {
-            printf("IR_CAST");
-            break;
-        }
-        case IR_CALL: {
-            printf("IR_CALL");
-            break;
-        }
-        default: {
-            PANIC("not set");
-        }
+    return;
+    for (IR* ir = cfg->head; ir != NULL; ir = ir->next) {
+        if (ir->irType == IR_DECLARE_LABEL) {
+            printf("L%d:", ir->id);
+        } else {
+            printf("%d\t%s", ir->id, IR_ToString(ir->irType));
+            if (ir->irType == IR_BRANCH_IF_FALSE && ir->branch) {
+                printf("\tL%d", ir->branch->id);
+            } else if (ir->irType == IR_JUMP && ir->branch) {
+                printf("\t\t\tL%d", ir->branch->id);
+            } else if (ir->irType == IR_COPY) {
+                printf("\t\t%d", ir->src1->def->id);
+            }
         }
         printf("\n");
     }
+}
+
+BasicBlock* createBasicBlock(CFG* cfg)
+{
+    static int blockID = 0;
+    BasicBlock* retval = calloc(sizeof(BasicBlock), 1);
+    retval->id = blockID;
+    retval->parameters = List_Create();
+    retval->arguments = List_Create();
+    blockID++;
+    List_Append(cfg->basicBlocks, retval);
+    return retval;
+}
+
+IR* createIR(ir_type type, SymbolVersion* dest, IR* src1, IR* src2)
+{
+    static int id = 0;
+    IR* retval = calloc(sizeof(IR), 1);
+    if (!retval) {
+        gen_error("out of memory");
+    }
+    if (type == IR_COPY && !src1) {
+        printf("hehe\n");
+    }
+    retval->irType = type;
+    retval->dest = dest;
+    retval->src1 = src1;
+    retval->src2 = src2;
+    retval->id = id++;
+    return retval;
+}
+
+IR* createIR_int(ir_type type, SymbolVersion* dest, IR* src1, IR* src2, int64_t data)
+{
+    IR* retval = createIR(type, dest, src1, src2);
+    retval->intData = data;
+    return retval;
+}
+
+IR* createIR_double(ir_type type, SymbolVersion* dest, IR* src1, IR* src2, double data)
+{
+    IR* retval = createIR(type, dest, src1, src2);
+    retval->doubleData = data;
+    return retval;
+}
+
+IR* createIR_branch(ir_type type, SymbolVersion* dest, IR* src1, IR* src2, IR* data)
+{
+    IR* retval = createIR(type, dest, src1, src2);
+    retval->branch = data;
+    return retval;
+}
+
+IR* createIR_symbol(ir_type type, SymbolVersion* dest, IR* src1, IR* src2, SymbolVersion* data)
+{
+    IR* retval = createIR(type, dest, src1, src2);
+    retval->symbver = data;
+    return retval;
+}
+
+IR* createIR_ast(ir_type type, SymbolVersion* dest, IR* src1, IR* src2, ASTNode* from, ASTNode* to)
+{
+    IR* retval = createIR(type, dest, src1, src2);
+    retval->fromType = from;
+    retval->toType = to;
+    return retval;
+}
+
+IR* createIR_label()
+{
+    IR* retval = createIR(IR_DECLARE_LABEL, NULL, NULL, NULL);
+    return retval;
+}
+
+void putSymbolVersion(List* symbolVersions, SymbolVersion* symver)
+{
+    for (ListElem* elem = List_Begin(symbolVersions); elem != List_End(symbolVersions); elem = elem->next) {
+        SymbolVersion* data = elem->data;
+        if (data->symbol == symver->symbol && data->version == symver->version) {
+            return;
+        }
+    }
+    List_Append(symbolVersions, symver);
+}
+
+SymbolVersion* unversionedSymbolVersion(CFG* cfg, SymbolNode* symbol, ASTNode* type)
+{
+    SymbolVersion* retval = calloc(sizeof(SymbolVersion), 1);
+    retval->symbol = symbol;
+    retval->version = -1;
+    retval->type = type;
+    List_Append(cfg->symbolVersions, retval);
+    return retval;
+}
+
+void makeSymbolVersionUnique(SymbolVersion* symbver)
+{
+    symbver->version = symbver->symbol->versions->size;
+    List_Append(symbver->symbol->versions, symbver);
+}
+
+SymbolVersion* tempSymbolVersion(CFG* cfg, ASTNode* type)
+{
+    SymbolVersion* retval = unversionedSymbolVersion(cfg, cfg->tempSymbol, type);
+    makeSymbolVersionUnique(retval);
+    return retval;
+}
+
+SymbolVersion* findVersion(SymbolVersion* symbver, IR* ir, IR* stop)
+{
+    SymbolVersion* retval = symbver;
+    for (; ir != NULL && ir != stop; ir = ir->next) {
+        if (ir->dest != NULL && ir->dest->symbol == symbver->symbol) {
+            retval = ir->dest;
+        }
+    }
+    return retval;
+}
+
+bool putSymbolVersionSet(List* set, SymbolVersion* symbver)
+{
+    forall(elem, set)
+    {
+        SymbolVersion* var = elem->data;
+        if (var->symbol == symbver->symbol) {
+            return false;
+        }
+    }
+    List_Append(set, symbver);
+    return true;
+}
+
+void appendInstruction(CFG* cfg, IR* ir)
+{
+    if (cfg->head == NULL) {
+        cfg->head = ir;
+    } else if (cfg->tail == NULL) {
+        cfg->head->next = ir;
+        cfg->tail = ir;
+        cfg->tail->prev = cfg->head;
+    } else {
+        cfg->tail->next = ir;
+        ir->prev = cfg->tail;
+        cfg->tail = ir;
+    }
+}
+
+void appendInstructionBasicBlock(BasicBlock* bb, IR* ir)
+{
+    IR* elem;
+    for (elem = bb->entry; elem->next != NULL; elem = elem->next) { }
+    elem->next = ir;
+    ir->prev = elem;
+}
+
+void removeInstruction(BasicBlock* bb, IR* ir)
+{
+    if (bb->entry == ir) {
+        bb->entry = ir->next;
+    }
+    if (ir->prev) {
+        ir->prev->next = ir->next;
+    }
+    if (ir->next) {
+        ir->next->prev = ir->prev;
+    }
+}
+
+// Whenever execution exits a block, run the defers in reverse order
+// If execution reaches end of block, run all defers
+// If continue, jump to defer needed to run, go to end of block
+// If break, jump to defer needed to run, go to break label
+// If return, jump to defer needed to run, go to return label
+void generateDefers(CFG* cfg, List* defers, List* deferLabels)
+{
+    for (int i = defers->size - 1; i >= 0; i--) {
+        appendInstruction(cfg, List_Get(deferLabels, i));
+        flattenAST(cfg, List_Get(defers, i), NULL, NULL, NULL);
+    }
+}
+
+// Adds IR instructions to a list of ir instructions, returns instructions that assign a term
+// When converting to SSA, the dest of each instruction will be set to a unique symbol version
+//                         each source will be filled with a pointer to the most recent symbol version
+// Just fill the dest with the current version now, temporary or not
+SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLabel, IR* continueLabel)
+{
+    switch (node->astType) {
+    case AST_IDENT: { // the symbol version for the ident needs to be unversioned, and not shared with any other IR
+        SymbolNode* symbol = Symbol_Find(node->ident.data, node->scope);
+
+        SymbolVersion* var = unversionedSymbolVersion(cfg, symbol, symbol->type);
+        return var;
+    }
+    case AST_INT: {
+        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
+
+        IR* ir = createIR_int(IR_LOAD_INT, temp, NULL, NULL, node->_int.data);
+        temp->def = ir;
+        appendInstruction(cfg, ir);
+        return temp;
+    }
+    case AST_TRUE: {
+        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
+
+        IR* ir = createIR_int(IR_LOAD_INT, temp, NULL, NULL, 1);
+        temp->def = ir;
+        appendInstruction(cfg, ir);
+        return temp;
+    }
+    case AST_FALSE: {
+        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
+
+        IR* ir = createIR_int(IR_LOAD_INT, temp, NULL, NULL, 0);
+        temp->def = ir;
+        appendInstruction(cfg, ir);
+        return temp;
+    }
+    case AST_CHAR: {
+        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
+
+        IR* ir = createIR_int(IR_LOAD_INT, temp, NULL, NULL, (int64_t)(*node->_char.data));
+        temp->def = ir;
+        appendInstruction(cfg, ir);
+        return temp;
+    }
+    case AST_REAL: {
+        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
+
+        IR* ir = createIR_double(IR_LOAD_REAL, temp, NULL, NULL, node->real.data);
+        temp->def = ir;
+        appendInstruction(cfg, ir);
+        return temp;
+    }
+    case AST_BLOCK: {
+        // Each defer has 3 labels, continue, break, return
+        // Start off with the given continue, break, return (-1)
+        // Every time a defer is encountered in the block, increase number by 1
+        // When passing continue, break, return, check the number and use those labels
+        List* continueLabels = List_Create();
+        List* breakLabels = List_Create();
+        List* returnLabels = List_Create();
+        forall(elem, node->block.symbol->defers)
+        {
+            List_Append(continueLabels, createIR_label());
+            List_Append(breakLabels, createIR_label());
+            List_Append(returnLabels, createIR_label());
+        }
+        IR* end = createIR_label();
+
+        IR* thisContinueLabel = continueLabel ? continueLabel : end;
+        IR* thisBreakLabel = breakLabel;
+        IR* thisReturnLabel = returnLabel;
+        int deferLabelIndex = node->block.symbol->defers->size;
+
+        SymbolVersion* var = NULL;
+        for (ListElem* elem = List_Begin(node->block.children); elem != List_End(node->block.children); elem = elem->next) {
+            ASTNode* child = elem->data;
+            var = flattenAST(cfg, child, thisReturnLabel, thisBreakLabel, thisContinueLabel);
+            if (child->astType == AST_DEFER) {
+                deferLabelIndex--;
+                thisContinueLabel = List_Get(continueLabels, deferLabelIndex);
+                thisBreakLabel = List_Get(breakLabels, deferLabelIndex);
+                thisReturnLabel = List_Get(returnLabels, deferLabelIndex);
+            }
+        }
+
+        SymbolVersion* evalSymbolVersion = NULL;
+        if (node->type->astType != AST_UNDEF && var) {
+            evalSymbolVersion = tempSymbolVersion(cfg, node->type);
+            IR* ir = createIR(IR_COPY, evalSymbolVersion, var, NULL);
+            evalSymbolVersion->def = ir;
+            appendInstruction(cfg, ir);
+        }
+
+        generateDefers(cfg, node->block.symbol->defers, continueLabels);
+        if (!continueLabel) {
+            if (!evalSymbolVersion) {
+                PANIC("AA");
+            }
+            appendInstruction(cfg, createIR(IR_RET, NULL, evalSymbolVersion, NULL));
+            appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, returnLabel));
+        } else {
+            appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, end));
+        }
+        generateDefers(cfg, node->block.symbol->defers, breakLabels);
+        appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, breakLabel));
+        generateDefers(cfg, node->block.symbol->defers, returnLabels);
+        appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, returnLabel));
+        appendInstruction(cfg, end);
+        return evalSymbolVersion;
+    }
+    case AST_IF: {
+        SymbolVersion* var = NULL;
+        if (node->type->astType != AST_UNDEF) {
+            var = tempSymbolVersion(cfg, node->type);
+            var->def = createIR(IR_PHONY, NULL, NULL, NULL); // Done just so that it is considered live, I think
+        }
+        SymbolVersion* condition = flattenAST(cfg, node->_if.condition, returnLabel, breakLabel, continueLabel);
+
+        IR* elseLabel = createIR_label();
+        IR* endLabel = createIR_label();
+
+        appendInstruction(cfg, createIR_branch(IR_BRANCH_IF_FALSE, NULL, condition, NULL, elseLabel));
+        SymbolVersion* bodySymbver = flattenAST(cfg, node->_if.bodyBlock, returnLabel, breakLabel, continueLabel);
+        if (var && bodySymbver) {
+            appendInstruction(cfg, createIR(IR_COPY, var, bodySymbver, NULL));
+        }
+        appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, endLabel));
+        appendInstruction(cfg, elseLabel);
+        SymbolVersion* elseSymbver = flattenAST(cfg, node->_if.elseBlock, returnLabel, breakLabel, continueLabel);
+        if (var && bodySymbver) {
+            appendInstruction(cfg, createIR(IR_COPY, var, elseSymbver, NULL));
+        }
+        appendInstruction(cfg, endLabel);
+        return var;
+    }
+    case AST_FOR: {
+        IR* beginLabel = createIR_label();
+        IR* thisContinueLabel = createIR_label();
+        IR* endLabel = createIR_label();
+
+        flattenAST(cfg, node->_for.pre, returnLabel, breakLabel, continueLabel);
+        appendInstruction(cfg, beginLabel);
+        SymbolVersion* condition = flattenAST(cfg, node->_for.condition, returnLabel, endLabel, thisContinueLabel);
+        appendInstruction(cfg, createIR_branch(IR_BRANCH_IF_FALSE, NULL, condition, NULL, endLabel));
+        flattenAST(cfg, node->_for.bodyBlock, returnLabel, endLabel, thisContinueLabel);
+        appendInstruction(cfg, thisContinueLabel);
+        flattenAST(cfg, node->_for.post, returnLabel, endLabel, continueLabel);
+        appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, beginLabel));
+        appendInstruction(cfg, endLabel);
+        return NULL;
+    }
+    case AST_RETURN: {
+        SymbolVersion* retval = flattenAST(cfg, node->unop.expr, returnLabel, breakLabel, continueLabel);
+        SymbolVersion* var = unversionedSymbolVersion(cfg, cfg->returnSymbol, cfg->symbol->type->function.codomainType);
+
+        appendInstruction(cfg, createIR(IR_COPY, var, retval, NULL));
+        appendInstruction(cfg, createIR(IR_RET, NULL, retval, NULL));
+        appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, returnLabel));
+        return NULL;
+    }
+    case AST_BREAK: {
+        IR* ir = createIR_branch(IR_JUMP, NULL, NULL, NULL, breakLabel);
+        appendInstruction(cfg, ir);
+        return NULL;
+    }
+    case AST_CONTINUE: {
+        IR* ir = createIR_branch(IR_JUMP, NULL, NULL, NULL, continueLabel);
+        appendInstruction(cfg, ir);
+        return NULL;
+    }
+    case AST_DEFER: {
+        return NULL;
+    }
+    case AST_DEFINE: {
+        SymbolVersion* var = unversionedSymbolVersion(cfg, node->define.symbol, node->define.symbol->type);
+        SymbolVersion* def = flattenAST(cfg, node->define.symbol->def, returnLabel, breakLabel, continueLabel);
+
+        IR* ir = createIR(IR_COPY, var, def, NULL);
+        var->def = ir;
+        appendInstruction(cfg, ir);
+        return var;
+    }
+    case AST_ADD: {
+        SymbolVersion* left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel);
+        SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel);
+        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
+
+        IR* ir = createIR(IR_ADD, temp, left, right);
+        temp->def = ir;
+        appendInstruction(cfg, ir);
+        return temp;
+    }
+    case AST_LSR: {
+        SymbolVersion* left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel);
+        SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel);
+        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
+
+        IR* ir = createIR(IR_LSR, temp, left, right);
+        temp->def = ir;
+        appendInstruction(cfg, ir);
+        return temp;
+    }
+    case AST_ASSIGN: {
+        SymbolVersion* var = NULL;
+        if (node->binop.left->astType == AST_IDENT) {
+            SymbolNode* symbol = Symbol_Find(node->binop.left->ident.data, node->scope);
+            var = unversionedSymbolVersion(cfg, symbol, symbol->type);
+        } else {
+            PANIC("not an l-value\n");
+        }
+        SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel);
+
+        IR* ir = createIR(IR_COPY, var, right, NULL);
+        var->def = ir;
+        appendInstruction(cfg, ir);
+        return NULL;
+    }
+    case AST_CAST: {
+        SymbolVersion* left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel);
+        SymbolVersion* temp = tempSymbolVersion(cfg, node->binop.right);
+
+        IR* ir = createIR_ast(IR_CONVERT, temp, left, NULL, node->binop.left->type, node->binop.right);
+        temp->def = ir;
+        appendInstruction(cfg, ir);
+        return temp;
+    }
+    case AST_UNDEF: {
+        return NULL;
+    }
+    default: {
+        PANIC("unimplemented\n");
+    }
+    }
+}
+
+BasicBlock* convertToBasicBlock(CFG* cfg, IR* ir, BasicBlock* predecessor)
+{
+    BasicBlock* retval;
+    int instruction = 0;
+    if (ir == NULL) {
+        return List_Get(cfg->basicBlocks, 0);
+    } else if (ir->inBlock) {
+        retval = ir->inBlock;
+    } else {
+        retval = createBasicBlock(cfg);
+        retval->entry = ir;
+        for (; ir != NULL; ir = ir->next, instruction++) {
+            ir->inBlock = retval;
+            if (ir->dest != NULL && ir->dest->symbol != cfg->tempSymbol) {
+                makeSymbolVersionUnique(ir->dest);
+            }
+            if (ir->src1 != NULL) {
+                if (ir->src1->symbol != cfg->tempSymbol) {
+                    ir->src1 = findVersion(ir->src1, retval->entry, ir);
+                    if (ir->src1->version == -1) {
+                        putSymbolVersionSet(retval->parameters, ir->src1);
+                    }
+                }
+            }
+            if (ir->src2 != NULL) {
+                if (ir->src2->symbol != cfg->tempSymbol) {
+                    ir->src2 = findVersion(ir->src2, retval->entry, ir);
+                    if (ir->src2->version == -1) {
+                        putSymbolVersionSet(retval->parameters, ir->src2);
+                    }
+                }
+            }
+            if (ir->irType == IR_DECLARE_LABEL) {
+                // if you find a label declaration, fall through to the new basic block
+                retval->hasBranch = false;
+                retval->next = convertToBasicBlock(cfg, ir->next, retval);
+                // retval.next might require versions of some symbols, provide those versions, if cannot find a version defined in this basic block, require it
+                if (ir->next) {
+                    ir->next->prev = NULL;
+                    ir->next = NULL;
+                }
+                break;
+            } else if (ir->irType == IR_JUMP) {
+                // if you find a jump, end this block and start new block
+                retval->hasBranch = false;
+                if (ir->branch) {
+                    retval->next = convertToBasicBlock(cfg, ir->branch->next, retval);
+                } else {
+                    retval->next = List_Get(cfg->basicBlocks, 0);
+                }
+                if (ir->next) {
+                    ir->next->prev = NULL;
+                    ir->next = NULL;
+                }
+                break;
+            } else if (ir->irType == IR_BRANCH_IF_FALSE) {
+                // if you find a branch, end this block, start both blocks
+                retval->hasBranch = true;
+                retval->next = convertToBasicBlock(cfg, ir->next, retval);
+                retval->branch = convertToBasicBlock(cfg, ir->branch->next, retval);
+                retval->condition = ir->src1;
+                if (ir->next) {
+                    ir->next->prev = NULL;
+                    ir->next = NULL;
+                }
+                break;
+            }
+        }
+    }
+    if (retval->next == NULL) {
+        retval->next = List_Get(cfg->basicBlocks, 0);
+    }
+    return retval;
+}
+
+bool copyPropagation(CFG* cfg)
+{
+    bool retval = false;
+    forall(elem, cfg->basicBlocks)
+    {
+        BasicBlock* bb = elem->data;
+        for (IR* def = bb->entry; def != NULL; def = def->next) {
+            switch (def->irType) {
+            case IR_COPY:
+                if (def->src1->def && def->src1->def->irType == IR_LOAD_INT) {
+                    def->irType = IR_LOAD_INT;
+                    def->intData = def->src1->def->intData;
+                    def->src1 = NULL;
+                    def->src2 = NULL;
+                    retval = true;
+                } else if (def->src1->def && def->src1->def->irType == IR_COPY) {
+                    def->src1 = def->src1->def->src1;
+                    retval = true;
+                }
+                break;
+            case IR_ADD:
+                if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_INT && def->src2->def->irType == IR_LOAD_INT) {
+                    def->irType = IR_LOAD_INT;
+                    def->intData = def->src1->def->intData + def->src2->def->intData;
+                    def->src1 = NULL;
+                    def->src2 = NULL;
+                    retval = true;
+                }
+                break;
+            default:
+                break;
+            }
+        }
+    }
+    return retval;
+}
+
+// Check immediate descendants params. If not defined in this block, add to params. If defined, in this block, add to arg set.
+// There should be a phi node copy from the symbol version in the outgoing block (param or arg) to the symbol version of the incoming block (always param)
+// Repeat until none found
+bool addArgs(BasicBlock* bb)
+{
+    bool retval = false;
+    if (bb->visited) {
+        return false;
+    }
+    bb->visited = true;
+
+    if (bb->next) {
+        retval |= addArgs(bb->next);
+        forall(elem, bb->next->parameters)
+        {
+            SymbolVersion* param = elem->data;
+            SymbolVersion* symbver = findVersion(param, bb->entry, NULL);
+            if (symbver->version == -1) {
+                retval |= putSymbolVersionSet(bb->parameters, symbver);
+            } else {
+                retval |= putSymbolVersionSet(bb->arguments, symbver);
+            }
+        }
+    }
+    if (bb->branch) {
+        retval |= addArgs(bb->branch);
+        forall(elem, bb->branch->parameters)
+        {
+            SymbolVersion* param = elem->data;
+            SymbolVersion* symbver = findVersion(param, bb->entry, NULL);
+            if (symbver->version == -1) {
+                retval |= putSymbolVersionSet(bb->parameters, symbver);
+            } else {
+                retval |= putSymbolVersionSet(bb->arguments, symbver);
+            }
+        }
+    }
+
+    bb->visited = false;
+    return retval;
+}
+
+// Removes code that has no effect
+bool deadCode(CFG* cfg)
+{
+    bool retval = false;
+
+    // Clear and find all basic blocks arguments
+    forall(elem, cfg->basicBlocks)
+    {
+        BasicBlock* bb = elem->data;
+        List_Clear(bb->arguments);
+    }
+    while (addArgs(cfg->blockGraph)) { }
+
+    // Clear all used flags
+    forall(elem, cfg->symbolVersions)
+    {
+        SymbolVersion* symbver = elem->data;
+        symbver->used = false;
+    }
+
+    // Find out which symbols are used
+    forall(elem, cfg->basicBlocks)
+    {
+        BasicBlock* bb = elem->data;
+        forall(elem2, bb->arguments)
+        {
+            SymbolVersion* symbver = elem2->data;
+            symbver->used = true;
+        }
+        for (IR* def = bb->entry; def != NULL; def = def->next) {
+            if (def->src1) {
+                def->src1->used = true;
+            }
+            if (def->src2) {
+                def->src2->used = true;
+            }
+        }
+    }
+
+    forall(elem, cfg->basicBlocks)
+    {
+        BasicBlock* bb = elem->data;
+
+        // Remove any symbols that aren't used
+        for (IR* def = bb->entry; def != NULL; def = def->next) {
+            if (def->dest && !def->dest->removed && !def->dest->used) {
+                removeInstruction(def->inBlock, def);
+                def->dest->removed = true;
+                retval = true;
+            }
+        }
+
+        // Remove false branches
+        if (bb->hasBranch && bb->condition->def && bb->condition->def->irType == IR_LOAD_INT) {
+            bb->hasBranch = false;
+            if (!bb->condition->def->intData) {
+                bb->next = bb->branch;
+            }
+            IR* ir = bb->entry;
+            while (ir != NULL && ir->irType != IR_BRANCH_IF_FALSE) {
+                ir = ir->next;
+            }
+            removeInstruction(bb, ir);
+            retval = true;
+        }
+
+        // Remove jump chains
+        if (bb->next && bb->next->entry && (bb->next->entry->irType == IR_JUMP || bb->next->entry->irType == IR_DECLARE_LABEL)) {
+            bb->next = bb->next->next;
+            retval = true;
+        }
+        if (bb->branch && bb->branch->entry && (bb->branch->entry->irType == IR_JUMP || bb->branch->entry->irType == IR_DECLARE_LABEL)) {
+            bb->branch = bb->branch->next;
+        }
+    }
+
+    // Remove first basic block if it is just a jump
+    if (cfg->blockGraph->entry == NULL || cfg->blockGraph->entry->irType == IR_JUMP) {
+        cfg->blockGraph = cfg->blockGraph->next;
+        retval = true;
+    }
+
+    return retval;
+}
+
+void reversionParameters(BasicBlock* bb)
+{
+    forall(elem, bb->parameters)
+    {
+        SymbolVersion* symbver = elem->data;
+        makeSymbolVersionUnique(symbver);
+    }
+}
+
+List* createCFG(SymbolNode* functionSymbol)
+{
+    CFG* cfg = calloc(sizeof(CFG), 1);
+    if (!cfg) {
+        gen_error("out of memory");
+    }
+
+    cfg->symbol = functionSymbol;
+    cfg->tempSymbol = Symbol_Create("$", SYMBOL_VARIABLE, functionSymbol, (Position) { NULL, 0, 0, 0, 0 });
+    cfg->returnSymbol = Symbol_Create("return", SYMBOL_VARIABLE, functionSymbol, (Position) { NULL, 0, 0, 0, 0 });
+    cfg->head = NULL;
+    cfg->tail = NULL;
+    cfg->basicBlocks = List_Create();
+    cfg->symbolVersions = List_Create();
+    cfg->leaves = List_Create();
+
+    // Convert function definition AST to quadruple list
+    flattenAST(cfg, functionSymbol->def, NULL, NULL, NULL);
+    printInstructions(cfg);
+
+    // Convert quadruple list to CFG of basic blocks, find versions!
+    BasicBlock* returnBlock = createBasicBlock(cfg);
+    cfg->blockGraph = convertToBasicBlock(cfg, cfg->head, NULL);
+
+    // Optimize
+    while (copyPropagation(cfg) | deadCode(cfg)) { }
+
+    forall(elem, cfg->basicBlocks)
+    {
+        BasicBlock* bb = elem->data;
+        reversionParameters(bb);
+    }
+
+    // TODO: Possibly collect strings
+
+    return cfg;
 }

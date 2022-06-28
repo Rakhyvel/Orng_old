@@ -1,65 +1,28 @@
 #include "validator.h"
 #include "../util/debug.h"
 #include "./ast.h"
+#include "./errors.h"
+#include "./ir.h"
 #include "./main.h"
 #include "./position.h"
 #include <assert.h>
 #include <string.h>
 
-static const List* functions = NULL;
-static const List* globalVars = NULL;
-static const List* enums = NULL;
-static const List* depenGraph = NULL;
+static const List* structDepenGraph = NULL;
 static const List* strings = NULL;
-static const List* verbatims = NULL;
 static const Map* includes = NULL;
 static const SymbolNode* mainFunction = NULL;
+static const CFG* callGraph = NULL;
 
 bool permissiveTypeEquiv = false;
 
 static ASTNode* mainFunctionType;
 bool typesAreEquivalent(ASTNode* a, ASTNode* b);
-static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning);
+ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning);
 static ASTNode* expandTypeIdent(ASTNode* type, bool reassigning);
 ASTNode* validateAST(ASTNode* node);
 void inferTypes(SymbolNode* var);
 Program Validator_Validate(SymbolNode* symbol);
-
-static void typeMismatchError(struct position pos, ASTNode* expectedType, ASTNode* actualType)
-{
-    char expectedStr[255];
-    char actualStr[255];
-    AST_TypeRepr(expectedStr, expectedType);
-    AST_TypeRepr(actualStr, actualType);
-    error(pos, "type mismatch: expected %s, got %s", expectedStr, actualStr);
-}
-
-static void typeMismatchError2(struct position pos, struct position pos2, ASTNode* expectedType, ASTNode* actualType)
-{
-    char expectedStr[255];
-    char actualStr[255];
-    AST_TypeRepr(expectedStr, expectedType);
-    AST_TypeRepr(actualStr, actualType);
-    error2(pos, pos2, "type mismatch: expected %s, got %s", expectedStr, actualStr);
-}
-
-static void incompatibleTypesError(struct position pos, ASTNode* leftType, ASTNode* rightType)
-{
-    char leftStr[255];
-    char rightStr[255];
-    AST_TypeRepr(leftStr, leftType);
-    AST_TypeRepr(rightStr, rightType);
-    error(pos, "incompatible types: %s and %s", leftStr, rightStr);
-}
-
-static void restrictedOrUndefError(struct position pos1, struct position pos2, char* symbolName)
-{
-    if (pos2.start_line != 0) {
-        error2(pos1, pos2, "symbol '%s' is undefined or not allowed through restriction", symbolName);
-    } else {
-        error(pos1, "symbol '%s' is undefined", symbolName);
-    }
-}
 
 /*
 * Takes in a dot chain and returns the symbol refered to by the dot chain
@@ -1139,7 +1102,7 @@ void validateType(ASTNode* node, bool collectThisType)
 
     // Collect structs
     if (collectThisType && (node->astType == AST_PARAMLIST || node->astType == AST_ARRAY || node->astType == AST_UNIONSET) && node->paramlist.defines->size > 0) {
-        DGraph* graphNode = addGraphNode(depenGraph, node);
+        DGraph* graphNode = addGraphNode(structDepenGraph, node);
 
         // go through fields, if field is a parameter list, add to dependencies
         ListElem* paramElem = List_Begin(node->paramlist.defines);
@@ -1148,7 +1111,7 @@ void validateType(ASTNode* node, bool collectThisType)
             SymbolNode* fieldVar = fieldDefine->define.symbol;
             ASTNode* fieldType = expandTypeIdent(fieldVar->type, true);
             if (fieldType->astType == AST_PARAMLIST || fieldType->astType == AST_ARRAY || fieldType->astType == AST_UNIONSET) {
-                DGraph* dependency = addGraphNode(depenGraph, fieldType);
+                DGraph* dependency = addGraphNode(structDepenGraph, fieldType);
                 List_Append(graphNode->dependencies, dependency);
             }
         }
@@ -3026,14 +2989,9 @@ Program Validator_Validate(SymbolNode* symbol)
     }
 
     // Done first pass through
-    if (depenGraph == NULL) {
-        functions = List_Create();
-        globalVars = List_Create();
-        enums = List_Create();
-        depenGraph = List_Create();
+    if (structDepenGraph == NULL) {
+        structDepenGraph = List_Create();
         strings = List_Create();
-        verbatims = List_Create();
-
         includes = Map_Create();
 
         validateType(CONST_STRING_TYPE, true);
@@ -3086,6 +3044,10 @@ Program Validator_Validate(SymbolNode* symbol)
         }
         if (mainFunction == NULL) {
             gen_error("no main function defined");
+        } else {
+            callGraph = createCFG(mainFunction);
+			// flattenAST(callGraph, ...
+			// optimize(callGraph, ...
         }
         // Reachability?
         permissiveTypeEquiv = false;
@@ -3113,7 +3075,6 @@ Program Validator_Validate(SymbolNode* symbol)
         validateAST(symbol->def);
 
         SymbolNode* includesSymbol = Map_Get(symbol->children, "includes");
-        SymbolNode* verbatimSymbol = Map_Get(symbol->children, "verbatim");
         if (includesSymbol) {
             if (includesSymbol->def->astType != AST_ARRAY_LITERAL) {
                 error(includesSymbol->pos, "includes array must be a string array");
@@ -3127,25 +3088,9 @@ Program Validator_Validate(SymbolNode* symbol)
                 Map_Put(includes, stringLiteral->string.data, 1);
             }
         }
-        if (verbatimSymbol) {
-            if (verbatimSymbol->def->astType != AST_ARRAY_LITERAL) {
-                error(verbatimSymbol->pos, "verbatim array must be a string array");
-            }
-            ListElem* e = List_Begin(verbatimSymbol->def->arrayLiteral.members);
-            for (; e != List_End(verbatimSymbol->def->arrayLiteral.members); e = e->next) {
-                ASTNode* stringLiteral = e->data;
-                if (!typesAreEquivalent(stringLiteral->type, STRING_TYPE)) {
-                    typeMismatchError(stringLiteral->pos, STRING_TYPE, stringLiteral->type);
-                }
-                List_Append(verbatims, stringLiteral->string.data);
-            }
-        }
         break;
     }
     case SYMBOL_FUNCTION: {
-        if (!symbol->isExtern) {
-            List_Append(functions, symbol);
-        }
         ListElem* elem = List_Begin(children);
         for (; elem != List_End(children); elem = elem->next) {
             SymbolNode* child = Map_Get(symbol->children, elem->data);
@@ -3210,11 +3155,6 @@ Program Validator_Validate(SymbolNode* symbol)
         for (; elem != List_End(children); elem = elem->next) {
             SymbolNode* child = Map_Get(symbol->children, elem->data);
             Validator_Validate(child);
-            if (!child->isExtern) {
-                if (child->symbolType == SYMBOL_VARIABLE) {
-                    List_Append(globalVars, child);
-                }
-            }
         }
         validateAST(symbol->def);
         break;
@@ -3233,5 +3173,5 @@ Program Validator_Validate(SymbolNode* symbol)
     }
     }
 
-    return (Program) { functions, globalVars, enums, depenGraph, strings, verbatims, includes, mainFunction };
+    return (Program) { structDepenGraph, strings, includes, callGraph };
 }

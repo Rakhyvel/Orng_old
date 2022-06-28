@@ -1,6 +1,13 @@
-testModule::Module = (
+testModule::Module = (	
 	main::(args:[]String)->Int = {
-		leetcode.test_all()
-		0
+		x:Int = 4
+		y:Int = 0
+		if x < 5 {
+			y = 5
+		} else {
+			y = 2
+		}
+		x = if y < 3 {4} else {5}
+		x
 	}
 )
