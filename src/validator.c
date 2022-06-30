@@ -994,7 +994,6 @@ void validateType(ASTNode* node, bool collectThisType)
     if (node->isValid) {
         return;
     }
-    node->isValid = true;
 
     switch (node->astType) {
     case AST_IDENT: {
@@ -1099,6 +1098,7 @@ void validateType(ASTNode* node, bool collectThisType)
         error(node->pos, "not a type");
     }
     }
+    node->isValid = true;
 
     // Collect structs
     if (collectThisType && (node->astType == AST_PARAMLIST || node->astType == AST_ARRAY || node->astType == AST_UNIONSET) && node->paramlist.defines->size > 0) {
@@ -2064,6 +2064,10 @@ ASTNode* validateAST(ASTNode* node)
                 retval = node;
                 break;
             }
+        } else if (leftType->astType == AST_ADDR) {
+            node->dot.left = AST_Create_deref(left, node->scope, node->pos);
+            retval = node;
+            break;
         } else {
             retval = node;
             break;
@@ -3046,8 +3050,8 @@ Program Validator_Validate(SymbolNode* symbol)
             gen_error("no main function defined");
         } else {
             callGraph = createCFG(mainFunction);
-			// flattenAST(callGraph, ...
-			// optimize(callGraph, ...
+            // flattenAST(callGraph, ...
+            // optimize(callGraph, ...
         }
         // Reachability?
         permissiveTypeEquiv = false;
@@ -3130,6 +3134,9 @@ Program Validator_Validate(SymbolNode* symbol)
         }
         break;
     case SYMBOL_TYPE: {
+        if (!strcmp(symbol->name, "Vec")) {
+            printf("Hereh\n");
+        }
         if (!symbol->type->isConst) {
             error(symbol->pos, "type '%s' is not constant", symbol->name);
         }

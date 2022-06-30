@@ -37,16 +37,16 @@ struct struct_5 {
 	int8_t* data;
 };
 
-struct struct_7 {
+struct struct_6 {
 	int64_t tag;
 	union {
-		struct struct_6* something;
+		struct struct_7* something;
 	};
 };
 
-struct struct_6 {
+struct struct_7 {
 	int64_t val;
-	struct struct_7 next;
+	struct struct_6 next;
 };
 
 struct struct_8 {
@@ -120,12 +120,12 @@ struct struct_1 string_56;
 
 int64_t test_testModule_main(struct struct_2 _args);
 
-#ifndef ORANGE_PROGRAM_9954
-#define ORANGE_PROGRAM_9954
+#ifndef ORANGE_PROGRAM_30148
+#define ORANGE_PROGRAM_30148
 
 /* String definitions */
-struct struct_1 string_0 = {18, (char[]){'a', 's', 's', 'e', 'r', 't', 'i', 'o', 'n', ' ', 'f', 'a', 'i', 'l', 'e', 'd', ':', ' ', '\0'}};
-struct struct_1 string_1 = {20, (char[]){'n', 'o', ' ', 'm', 'e', 's', 's', 'a', 'g', 'e', ' ', 's', 'p', 'e', 'c', 'i', 'f', 'i', 'e', 'd', '\0'}};
+struct struct_1 string_0 = {20, (char[]){'n', 'o', ' ', 'm', 'e', 's', 's', 'a', 'g', 'e', ' ', 's', 'p', 'e', 'c', 'i', 'f', 'i', 'e', 'd', '\0'}};
+struct struct_1 string_1 = {18, (char[]){'a', 's', 's', 'e', 'r', 't', 'i', 'o', 'n', ' ', 'f', 'a', 'i', 'l', 'e', 'd', ':', ' ', '\0'}};
 struct struct_1 string_2 = {10, (char[]){'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '\0'}};
 struct struct_1 string_3 = {11, (char[]){'<', 's', 't', 'd', 'b', 'o', 'o', 'l', '.', 'h', '>', '\0'}};
 struct struct_1 string_4 = {9, (char[]){'<', 'c', 't', 'y', 'p', 'e', '.', 'h', '>', '\0'}};
@@ -185,51 +185,35 @@ struct struct_1 string_56 = {11, (char[]){'<', 's', 't', 'd', 'b', 'o', 'o', 'l'
 int64_t test_testModule_main(struct struct_2 _args)
 {
 	int64_t retval;
-	int64_t _158_x_0;
+	struct struct_3 _158_x_0;
+	int64_t _1;
+	int64_t _2;
 	int64_t _3;
-	bool _4;
-	int64_t _158_y_1;
-	int64_t _158_y_2;
+	int64_t _4;
+	struct struct_3 _158_y_0;
+	int64_t _5;
+	int64_t _6;
 	int64_t _7;
-	int64_t _158_y_5;
 	int64_t _8;
-	bool _9;
-	int64_t _14;
+	int64_t _9;
+	int64_t _11;
+	int64_t _12;
 L1:;
-	_158_x_0 = 4;
-	_3 = 5;
-	_4 = _158_x_0 < _3;
-	if (!_4) {
-		goto L10;
-	} else {
-		goto L2;
-	}
-L2:;
-	_158_y_1 = 5;
-	_158_y_5 = _158_y_1;
-	goto L4;
-L4:;
-	_8 = 3;
-	_9 = _158_y_5 < _8;
-	if (!_9) {
-		goto L9;
-	} else {
-		goto L6;
-	}
-L6:;
-	_7 = 4;
-	goto L7;
-L7:;
-	_14 = _7;
-	retval = _14;
+	_1 = 0;
+	_2 = 0;
+	_3 = 0;
+	_4 = 0;
+	_158_x_0 = (struct struct_3) {4, (int64_t[]){_1, _2, _3, _4}};
+	_5 = 0;
+	_6 = _158_x_0.length;
+	_7 = _6 - _5;
+	_8 = _158_x_0.data;
+	_9 = _8 + _5;
+	_158_y_0 = (struct struct_3) {_7, _9};
+	_11 = 0;
+	_12 = _158_y_0.data[_11];
+	retval = _12;
 	goto L0;
-L9:;
-	_7 = 5;
-	goto L7;
-L10:;
-	_158_y_2 = 2;
-	_158_y_5 = _158_y_2;
-	goto L4;
 L0:;
 	return retval;
 }

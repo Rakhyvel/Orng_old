@@ -98,6 +98,18 @@ void List_Append(List* list, void* data)
     List_Insert(list, &list->tail, data);
 }
 
+void List_Remove(List* list, void* data)
+{
+    forall(elem, list)
+    {
+        if (elem->data == data) {
+            elem->prev->next = elem->next;
+            elem->next->prev = elem->prev;
+            return;
+        }
+    }
+}
+
 /*
     Prepends data to the begining of a given list */
 void List_Push(List* list, void* data)

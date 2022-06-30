@@ -89,6 +89,7 @@ enum astType {
     AST_CONTINUE,
     // Module
     AST_DOT,
+	AST_DEREF_DOT,
     // Types
     AST_SIZEOF,
     AST_VOID,

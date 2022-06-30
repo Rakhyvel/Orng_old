@@ -10,17 +10,22 @@ typedef enum ir_type {
     IR_LOAD_INT,
     IR_LOAD_REAL,
     IR_LOAD_STR,
-	// IR_LOAD_ARGLIST ?
-	// IR_LOAD_ARRAY_LITERAL ?
+    IR_LOAD_ARGLIST,
+    IR_LOAD_ARRAY_LITERAL,
 
-	// Control flow
+    // Control flow
     IR_DECLARE_LABEL,
     IR_JUMP,
     IR_BRANCH_IF_FALSE,
     IR_CALL,
     IR_RET,
 
+    // Three parameter instructions
+    IR_SLICE,
+
     // Two parameter instructions
+    IR_INDEX,
+    IR_DOT,
     IR_AND,
     IR_OR,
     IR_XOR,
@@ -33,14 +38,13 @@ typedef enum ir_type {
     IR_GTE,
     IR_LTE,
     IR_ADD,
-    IR_ADDI,
     IR_SUBTRACT,
     IR_MULTIPLY,
     IR_DIVIDE,
     IR_MODULUS,
 
     // One parameter instructions
-	IR_PHONY,
+    IR_PHONY,
     IR_COPY,
     IR_NEGATE,
     IR_NOT,
@@ -84,11 +88,17 @@ typedef struct IR {
     union {
         int64_t intData;
         double doubleData;
+        char* strData;
         struct IR* branch;
         struct SymbolVersion* symbver;
+        List* listData;
         struct {
             struct astNode* fromType;
             struct astNode* toType;
+        };
+        struct {
+            struct SymbolVersion* lowerBound;
+            struct SymbolVersion* upperBound;
         };
     };
 
@@ -101,11 +111,12 @@ typedef struct BasicBlock {
     struct IR* entry;
     bool hasBranch;
     int id;
+    int incoming;
     struct symbolVersion* condition; // Used for conditional jumps
     struct BasicBlock* next; // Used by jump, and branch if condition is true
     struct BasicBlock* branch; // Used by branch if condition is false
     struct list* parameters; // These symbols are needed to be phi-noded. They are defined somewhere in this BB, and are used by children BB
-    struct list* arguments; // These symbols are 
+    struct list* arguments; // These symbols are
     bool visited;
 } BasicBlock;
 
@@ -123,12 +134,11 @@ typedef struct CFG {
     struct symbolNode* symbol; // Symbol table for function
     struct symbolNode* tempSymbol; // Temporary symbol (could be several different types!!!)
     struct symbolNode* returnSymbol; // Used to store the return value in
-    struct symbolVersion* expr; // The last evaluated expression of the function will be put here
 
-	// Call graph
+    // Call graph
     List* leaves; // Set of other CFG nodes loaded by this CFG (as an symbol expr in some fashion, to be called or not)
 
-	bool visited; // For traversal
+    bool visited; // For traversal
 } CFG;
 
 List* createCFG(struct symbolNode* functionSymbol);

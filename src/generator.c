@@ -375,10 +375,14 @@ void printVarDef(FILE* out, SymbolVersion* version)
 void printVarAssign(FILE* out, SymbolVersion* version)
 {
     fprintf(out, "\t");
-    if (version->symbol->name[0] != '$') {
-        printPath(out, version->symbol);
+    if (!strcmp(version->symbol->name, "$return")) {
+        fprintf(out, "retval = ");
+    } else {
+        if (version->symbol->name[0] != '$') {
+            printPath(out, version->symbol);
+        }
+        fprintf(out, "_%d = ", version->version);
     }
-    fprintf(out, "_%d = ", version->version);
 }
 
 void printVar(FILE* out, SymbolVersion* version)
@@ -407,6 +411,42 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
         fprintf(out, "%f;\n", ir->doubleData);
         break;
     }
+    case IR_LOAD_ARRAY_LITERAL: {
+        printVarAssign(out, ir->dest);
+        fprintf(out, "(");
+        printType(out, ir->dest->type);
+        fprintf(out, ") {%d, (", ir->listData->size);
+        printType(out, ((SymbolVersion*)List_Get(ir->listData, 0))->type);
+        fprintf(out, "[]){");
+        forall(elem, ir->listData)
+        {
+            SymbolVersion* symbver = elem->data;
+            printVar(out, symbver);
+            if (elem->next != List_End(ir->listData)) {
+                fprintf(out, ", ");
+            } else {
+                fprintf(out, "}};\n");
+            }
+        }
+        break;
+    }
+    case IR_LOAD_ARGLIST: {
+        printVarAssign(out, ir->dest);
+        fprintf(out, "(");
+        printType(out, ir->dest->type);
+        fprintf(out, ") {");
+        forall(elem, ir->listData)
+        {
+            SymbolVersion* symbver = elem->data;
+            printVar(out, symbver);
+            if (elem->next != List_End(ir->listData)) {
+                fprintf(out, ", ");
+            } else {
+                fprintf(out, "};\n");
+            }
+        }
+        break;
+    }
     case IR_COPY: {
         printVarAssign(out, ir->dest);
         printVar(out, ir->src1);
@@ -424,10 +464,32 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
         fprintf(out, ";\n");
         break;
     }
+    case IR_INDEX: {
+        printVarAssign(out, ir->dest);
+        printVar(out, ir->src1);
+        fprintf(out, ".data[");
+        printVar(out, ir->src2);
+        fprintf(out, "];\n");
+        break;
+    }
+    case IR_DOT: {
+        printVarAssign(out, ir->dest);
+        printVar(out, ir->src1);
+        fprintf(out, ".%s;\n", ir->strData);
+        break;
+    }
     case IR_ADD: {
         printVarAssign(out, ir->dest);
         printVar(out, ir->src1);
         fprintf(out, " + ");
+        printVar(out, ir->src2);
+        fprintf(out, ";\n");
+        break;
+    }
+    case IR_SUBTRACT: {
+        printVarAssign(out, ir->dest);
+        printVar(out, ir->src1);
+        fprintf(out, " - ");
         printVar(out, ir->src2);
         fprintf(out, ";\n");
         break;
@@ -441,7 +503,9 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
         break;
     }
     case IR_CONVERT: {
-        fprintf(out, "\t; convert\n");
+        printVarAssign(out, ir->dest);
+        printVar(out, ir->src1);
+        fprintf(out, ";\n");
         break;
     }
     default: {

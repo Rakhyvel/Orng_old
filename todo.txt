@@ -311,15 +311,40 @@ x Rework the compiler to be better [ast-union-type]
 		x generate nothing comparisons
 		x assumptions for for loops too
 		x orelse operator
-- Generate IR from AST
-	- basic block, call graph, etc
-- Generate C code from IR
+x Generate IR from AST
+	x basic block, call graph, etc
+x Generate C code from IR
 - IR optimizations
-	- constant propagation (remove from validateAST())
-	- copy propagation
-		- requires symbol versioning
-	- dead code trimming
-		- requires symbol versioning, phi nodes etc
+	x constant propagation
+	x copy propagation
+		x requires symbol versioning
+	x dead code trimming
+		x requires symbol versioning, phi nodes etc
+	x default values
+	x arrays
+		x array literals, 
+		x default array literals
+		x indexing
+	x structs
+		x arglist literals
+		x default arglists
+		x dots
+		x slices (which are special arglists! no array literals!)
+		x deref inference for dots is a front-end thing, insert deref AST nodes
+	- index-copy
+	- dot-copy
+	- union literals & default union literals
+	- unops
+		- deref-copy
+	- new
+	- free
+	- and/or
+	- binops
+	- op-assign
+	- casts and type conversions
+	- calls
+	- switches
+	- union stuff
 - Orange should compile the program for you, too
 	- No verbatims, instead write the C file and header, include it, and add it to be included when compiling
 - Go back to adding errors and union type unions
@@ -421,6 +446,7 @@ x Rework the compiler to be better [ast-union-type]
 		- comments are rarely checked by programmer
 		- refinement types WILL be checked by compiler, and pre/post conditions WILL be checked by compiler
 		- comments should be kept, but only used to provide a convenient way to enumerate what to document
+	Evens::Type = {x : Int | x % 2 == 0} -- Would be checked for debug build, not checked for release build
 	- are an expression, need another expression after them
 	- can chain them and other expressions together
 	arcsin::(x:Real)->Real = 
@@ -499,6 +525,11 @@ x Rework the compiler to be better [ast-union-type]
 
 
 Maybe?
+- arglist-assign
+	Vec::Type = (x:Int, y:Int)
+	(x, y) = Vec_Create() -- Creates a Vec
+	x = 4
+	y = x + ys
 - relational operator chainings ????
 	- wasn't possible before because of duplication of code. Now that can be inlined
 	- have to be transitive operators (== < <= > >=)

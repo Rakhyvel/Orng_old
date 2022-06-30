@@ -1,13 +1,7 @@
-testModule::Module = (	
+testModule::Module = (
 	main::(args:[]String)->Int = {
-		x:Int = 4
-		y:Int = 0
-		if x < 5 {
-			y = 5
-		} else {
-			y = 2
-		}
-		x = if y < 3 {4} else {5}
-		x
+		x:[4]Int
+		y := x[;]
+		y[0]
 	}
 )
