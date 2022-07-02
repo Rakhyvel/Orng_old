@@ -1,7 +1,13 @@
 testModule::Module = (
 	main::(args:[]String)->Int = {
-		x:[4]Int
-		y := x[;]
-		y[0]
+		x:Bool = true
+		y:Bool = false
+		if x {
+			x = false
+		}
+		z:Bool = x || !y && x
+		c := &z
+		(*c) = false
+		if z {4} else {5}
 	}
 )

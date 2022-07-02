@@ -105,6 +105,7 @@ void List_Remove(List* list, void* data)
         if (elem->data == data) {
             elem->prev->next = elem->next;
             elem->next->prev = elem->prev;
+            list->size--;
             return;
         }
     }

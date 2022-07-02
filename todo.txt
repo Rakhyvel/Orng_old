@@ -331,20 +331,29 @@ x Generate C code from IR
 		x dots
 		x slices (which are special arglists! no array literals!)
 		x deref inference for dots is a front-end thing, insert deref AST nodes
-	- index-copy
-	- dot-copy
-	- union literals & default union literals
-	- unops
-		- deref-copy
-	- new
-	- free
-	- and/or
+	x index-copy
+	x dot-copy
+	x unops
+		x deref-copy
+	x and/or
 	- binops
 	- op-assign
+		- add &&= and ||=
+	- fun little optimizations for binops and unops
+		- adding/subbing 0
+		- multing/diving/modding 1
+		- anding false
+		- oring true
+		- notting a known value
+		- doing things at compile time for literals
+		- if the src of an unop is a copy, perform the unop of the src1 of the copy
+	- new
+	- free
 	- casts and type conversions
 	- calls
-	- switches
-	- union stuff
+	- cases
+	- union literals & default union literals
+	- orelse, field cases, SAT (possibly for optimizations, too!)
 - Orange should compile the program for you, too
 	- No verbatims, instead write the C file and header, include it, and add it to be included when compiling
 - Go back to adding errors and union type unions

@@ -30,12 +30,14 @@ char* IR_ToString(ir_type type)
         return "IR_BRANCH_IF_FALSE";
     case IR_RET:
         return "IR_RET";
-    case IR_AND:
-        return "IR_AND";
-    case IR_OR:
-        return "IR_OR";
-    case IR_XOR:
-        return "IR_XOR";
+    case IR_DOT:
+        return "IR_DOT";
+    case IR_BIT_AND:
+        return "IR_BIT_AND";
+    case IR_BIT_OR:
+        return "IR_BIT_OR";
+    case IR_BIT_XOR:
+        return "IR_BIT_XOR";
     case IR_LSHIFT:
         return "IR_LSHIFT";
     case IR_RSHIFT:
@@ -68,29 +70,85 @@ char* IR_ToString(ir_type type)
         return "IR_NOT";
     case IR_BIT_NOT:
         return "IR_BIT_NOT";
+    case IR_DEREF:
+        return "IR_DEREF";
+    case IR_DEREF_COPY:
+        return "IR_DEREF_COPY";
     case IR_ADDR_OF:
         return "IR_ADDR_OF";
+    case IR_PHONY:
+        return "IR_PHONY";
     }
 }
 
-void printInstructions(CFG* cfg)
+void printSymbver(SymbolVersion* symbver)
 {
-    return;
-    for (IR* ir = cfg->head; ir != NULL; ir = ir->next) {
-        if (ir->irType == IR_DECLARE_LABEL) {
-            printf("L%d:", ir->id);
-        } else {
-            printf("%d\t%s", ir->id, IR_ToString(ir->irType));
-            if (ir->irType == IR_BRANCH_IF_FALSE && ir->branch) {
-                printf("\tL%d", ir->branch->id);
-            } else if (ir->irType == IR_JUMP && ir->branch) {
-                printf("\t\t\tL%d", ir->branch->id);
-            } else if (ir->irType == IR_COPY) {
-                printf("\t\t%d", ir->src1->def->id);
-            }
+    if (symbver) {
+        if (symbver->symbol->isVolatile) {
+            printf("V");
         }
-        printf("\n");
+        printf("%s_%d\t", symbver->symbol->name, symbver->version);
+    } else {
+        printf("<NULL>\t");
     }
+}
+
+void printIR(IR* ir)
+{
+    if (!ir) {
+        printf("<NULL>\n");
+    } else if (ir->irType == IR_DECLARE_LABEL) {
+        printf("L%d:\n", ir->id);
+    } else {
+        char* mnemonic = IR_ToString(ir->irType);
+        int length = strlen(mnemonic);
+        printf("%d\t%s", ir->id, mnemonic);
+        for (int i = 20 - length; i >= 0; i--) {
+            printf(" ");
+        }
+        printSymbver(ir->dest);
+        printSymbver(ir->src1);
+        printSymbver(ir->src2);
+        if (ir->irType == IR_BRANCH_IF_FALSE && ir->branch) {
+            printf("\tL%d", ir->branch->id);
+        } else if (ir->irType == IR_JUMP && ir->branch) {
+            printf("\tL%d", ir->branch->id);
+        } else if (ir->irType == IR_PHONY) {
+            printf("\tsize:%d", ir->listData->size);
+        }
+        printf("\trem:%d\n", ir->removed);
+    }
+}
+
+void printInstructionList(CFG* cfg)
+{
+    for (IR* ir = cfg->head; ir != NULL; ir = ir->next) {
+        printIR(ir);
+    }
+}
+
+void printBlockGraph(BasicBlock* bb)
+{
+    if (!bb || bb->visited) {
+        return;
+    }
+    bb->visited = true;
+    printf("Basic Block L%d:\n", bb->id);
+    for (IR* ir = bb->entry; ir != NULL; ir = ir->next) {
+        printIR(ir);
+    }
+    if (bb->hasBranch) {
+        printf("if (!%s_%d) goto %d\n", bb->condition->symbol->name, bb->condition->version, bb->branch->id);
+    }
+    if (bb->next) {
+        printf("goto %d\n\n", bb->next->id);
+    } else {
+        printf("goto 0\n\n");
+    }
+    if (bb->hasBranch) {
+        printBlockGraph(bb->branch);
+    }
+    printBlockGraph(bb->next);
 }
 
 BasicBlock* createBasicBlock(CFG* cfg)
@@ -188,8 +246,12 @@ SymbolVersion* unversionedSymbolVersion(CFG* cfg, SymbolNode* symbol, ASTNode* t
 
 void makeSymbolVersionUnique(SymbolVersion* symbver)
 {
-    symbver->version = symbver->symbol->versions->size;
-    List_Append(symbver->symbol->versions, symbver);
+    if (symbver->version != -1) {
+        return;
+    } else {
+        symbver->version = symbver->symbol->versions->size;
+        List_Append(symbver->symbol->versions, symbver);
+    }
 }
 
 SymbolVersion* tempSymbolVersion(CFG* cfg, ASTNode* type)
@@ -238,16 +300,25 @@ void appendInstruction(CFG* cfg, IR* ir)
     }
 }
 
-void appendInstructionBasicBlock(BasicBlock* bb, IR* ir)
+IR* getTail(IR* head)
 {
-    IR* elem;
-    for (elem = bb->entry; elem->next != NULL && elem->next->irType != IR_JUMP && elem->next->irType != IR_BRANCH_IF_FALSE; elem = elem->next) { }
+    for (; head->next != NULL; head = head->next) { }
+    return head;
+}
+
+IR* appendInstructionBasicBlock(BasicBlock* bb, IR* ir)
+{
+    ir->inBlock = bb;
+    IR* elem = getTail(bb->entry);
     elem->next = ir;
     ir->prev = elem;
+    return ir;
 }
 
 void removeInstruction(BasicBlock* bb, IR* ir)
 {
+    //printf("removed instruction %d\n", ir->id);
+    ir->removed = true;
     if (bb->entry == ir) {
         bb->entry = ir->next;
     }
@@ -256,6 +327,26 @@ void removeInstruction(BasicBlock* bb, IR* ir)
     }
     if (ir->next) {
         ir->next->prev = ir->prev;
+    }
+}
+
+void removeBasicBlock(CFG* cfg, BasicBlock* bb, bool wipeIR)
+{
+    //printf("removed block %d\n", bb->id);
+    List_Remove(cfg->basicBlocks, bb);
+    if (wipeIR) {
+        for (IR* ir = bb->entry; ir != NULL; ir = ir->next) {
+            ir->removed = true;
+        }
+    }
+}
+
+void clearBBVisitedFlags(CFG* cfg)
+{
+    forall(elem, cfg->basicBlocks)
+    {
+        BasicBlock* bb = elem->data;
+        bb->visited = false;
     }
 }
 
@@ -406,6 +497,9 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
         appendInstruction(cfg, ir);
         return temp;
     }
+    case AST_PAREN: {
+        return flattenAST(cfg, List_Get(node->arglist.args, 0), returnLabel, breakLabel, continueLabel);
+    }
     case AST_BLOCK: {
         // Each defer has 3 labels, continue, break, return
         // Start off with the given continue, break, return (-1)
@@ -464,9 +558,13 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
     }
     case AST_IF: {
         SymbolVersion* var = NULL;
+        IR* phony = NULL;
         if (node->type->astType != AST_UNDEF) {
             var = tempSymbolVersion(cfg, node->type);
-            var->def = createIR(IR_PHONY, NULL, NULL, NULL); // Done just so that it is considered live, I think
+            phony = createIR(IR_PHONY, var, NULL, NULL);
+            phony->listData = List_Create();
+            var->def = phony; // Done just so that it is considered live, I think. Has no real "def", since it's run-time dependent
+            appendInstruction(cfg, phony);
         }
         SymbolVersion* condition = flattenAST(cfg, node->_if.condition, returnLabel, breakLabel, continueLabel);
 
@@ -476,13 +574,17 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
         appendInstruction(cfg, createIR_branch(IR_BRANCH_IF_FALSE, NULL, condition, NULL, elseLabel));
         SymbolVersion* bodySymbver = flattenAST(cfg, node->_if.bodyBlock, returnLabel, breakLabel, continueLabel);
         if (var && bodySymbver) {
-            appendInstruction(cfg, createIR(IR_COPY, var, bodySymbver, NULL));
+            IR* copy = createIR(IR_COPY, var, bodySymbver, NULL);
+            List_Append(phony->listData, copy);
+            appendInstruction(cfg, copy);
         }
         appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, endLabel));
         appendInstruction(cfg, elseLabel);
         SymbolVersion* elseSymbver = flattenAST(cfg, node->_if.elseBlock, returnLabel, breakLabel, continueLabel);
         if (var && elseSymbver) {
-            appendInstruction(cfg, createIR(IR_COPY, var, elseSymbver, NULL));
+            IR* copy = createIR(IR_COPY, var, elseSymbver, NULL);
+            List_Append(phony->listData, copy);
+            appendInstruction(cfg, copy);
         }
         appendInstruction(cfg, endLabel);
         return var;
@@ -621,6 +723,56 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
         appendInstruction(cfg, ir);
         return temp;
     }
+    case AST_AND: {
+        SymbolVersion* var = tempSymbolVersion(cfg, INT8_TYPE);
+        IR* phony = createIR(IR_PHONY, var, NULL, NULL);
+        phony->listData = List_Create();
+        var->def = phony; // Done just so that it is considered live, I think. Has no real "def", since it's run-time dependent
+        appendInstruction(cfg, phony);
+
+        IR* elseLabel = createIR_label();
+        IR* endLabel = createIR_label();
+
+        SymbolVersion* left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel);
+        appendInstruction(cfg, createIR_branch(IR_BRANCH_IF_FALSE, NULL, left, NULL, elseLabel));
+        SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel);
+        IR* copyRight = createIR(IR_COPY, var, right, NULL);
+        List_Append(phony->listData, copyRight);
+        appendInstruction(cfg, copyRight);
+        appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, endLabel));
+        appendInstruction(cfg, elseLabel);
+        IR* loadFalse = createIR_int(IR_LOAD_INT, var, NULL, NULL, 0);
+        List_Append(phony->listData, loadFalse);
+        appendInstruction(cfg, loadFalse);
+        appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, endLabel));
+        appendInstruction(cfg, endLabel);
+        return var;
+    }
+    case AST_OR: {
+        SymbolVersion* var = tempSymbolVersion(cfg, INT8_TYPE);
+        IR* phony = createIR(IR_PHONY, var, NULL, NULL);
+        phony->listData = List_Create();
+        var->def = phony; // Done just so that it is considered live, I think. Has no real "def", since it's run-time dependent
+        appendInstruction(cfg, phony);
+
+        IR* elseLabel = createIR_label();
+        IR* endLabel = createIR_label();
+
+        SymbolVersion* left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel);
+        appendInstruction(cfg, createIR_branch(IR_BRANCH_IF_FALSE, NULL, left, NULL, elseLabel));
+        IR* loadTrue = createIR_int(IR_LOAD_INT, var, NULL, NULL, 1);
+        List_Append(phony->listData, loadTrue);
+        appendInstruction(cfg, loadTrue);
+        appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, endLabel));
+        appendInstruction(cfg, elseLabel);
+        SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel);
+        IR* copyRight = createIR(IR_COPY, var, right, NULL);
+        List_Append(phony->listData, copyRight);
+        appendInstruction(cfg, copyRight);
+        appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, endLabel));
+        appendInstruction(cfg, endLabel);
+        return var;
+    }
     case AST_ADD: {
         SymbolVersion* left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel);
         SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel);
@@ -642,19 +794,88 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
         return temp;
     }
     case AST_ASSIGN: {
-        SymbolVersion* var = NULL;
         if (node->binop.left->astType == AST_IDENT) {
             SymbolNode* symbol = Symbol_Find(node->binop.left->ident.data, node->scope);
-            var = unversionedSymbolVersion(cfg, symbol, symbol->type);
+            SymbolVersion* var = unversionedSymbolVersion(cfg, symbol, symbol->type);
+            SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel);
+
+            IR* ir = createIR(IR_COPY, var, right, NULL);
+            var->def = ir;
+            appendInstruction(cfg, ir);
+        } else if (node->binop.left->astType == AST_INDEX) {
+            SymbolVersion* arr = flattenAST(cfg, node->binop.left->binop.left, returnLabel, breakLabel, continueLabel);
+            SymbolVersion* index = flattenAST(cfg, node->binop.left->binop.right, returnLabel, breakLabel, continueLabel);
+            SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel);
+
+            IR* ir = createIR(IR_INDEX_COPY, arr, index, right);
+            appendInstruction(cfg, ir);
+        } else if (node->binop.left->astType == AST_DOT) {
+            SymbolVersion* left = flattenAST(cfg, node->binop.left->binop.left, returnLabel, breakLabel, continueLabel);
+            SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel);
+            SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
+
+            IR* ir = createIR(IR_DOT_COPY, left, right, NULL);
+            ir->strData = node->binop.left->binop.right->ident.data;
+            appendInstruction(cfg, ir);
+        } else if (node->binop.left->astType == AST_DEREF) {
+            SymbolVersion* left = flattenAST(cfg, node->binop.left->unop.expr, returnLabel, breakLabel, continueLabel);
+            SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel);
+            SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
+
+            IR* ir = createIR(IR_DEREF_COPY, NULL, left, right);
+            appendInstruction(cfg, ir);
+        } else if (node->binop.left->astType == AST_PAREN) {
+            node->binop.left = List_Get(node->binop.left->arglist.args, 0);
+            flattenAST(cfg, node, returnLabel, breakLabel, continueLabel);
         } else {
             PANIC("not an l-value\n");
         }
-        SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel);
-
-        IR* ir = createIR(IR_COPY, var, right, NULL);
-        var->def = ir;
-        appendInstruction(cfg, ir);
         return NULL;
+    }
+    case AST_NOT: {
+        SymbolVersion* expr = flattenAST(cfg, node->unop.expr, returnLabel, breakLabel, continueLabel);
+        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
+
+        IR* ir = createIR(IR_NOT, temp, expr, NULL);
+        temp->def = ir;
+        appendInstruction(cfg, ir);
+        return temp;
+    }
+    case AST_NEG: {
+        SymbolVersion* expr = flattenAST(cfg, node->unop.expr, returnLabel, breakLabel, continueLabel);
+        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
+
+        IR* ir = createIR(IR_NEGATE, temp, expr, NULL);
+        temp->def = ir;
+        appendInstruction(cfg, ir);
+        return temp;
+    }
+    case AST_BIT_NOT: {
+        SymbolVersion* expr = flattenAST(cfg, node->unop.expr, returnLabel, breakLabel, continueLabel);
+        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
+
+        IR* ir = createIR(IR_BIT_NOT, temp, expr, NULL);
+        temp->def = ir;
+        appendInstruction(cfg, ir);
+        return temp;
+    }
+    case AST_ADDROF: {
+        SymbolVersion* expr = flattenAST(cfg, node->unop.expr, returnLabel, breakLabel, continueLabel);
+        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
+
+        IR* ir = createIR(IR_ADDR_OF, temp, expr, NULL);
+        temp->def = ir;
+        appendInstruction(cfg, ir);
+        return temp;
+    }
+    case AST_DEREF: {
+        SymbolVersion* expr = flattenAST(cfg, node->unop.expr, returnLabel, breakLabel, continueLabel);
+        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
+
+        IR* ir = createIR(IR_DEREF, temp, expr, NULL);
+        temp->def = ir;
+        appendInstruction(cfg, ir);
+        return temp;
     }
     case AST_CAST: {
         SymbolVersion* left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel);
@@ -707,10 +928,9 @@ BasicBlock* convertToBasicBlock(CFG* cfg, IR* ir, BasicBlock* predecessor)
                 }
             }
             if (ir->irType == IR_DECLARE_LABEL) {
-                // if you find a label declaration, fall through to the new basic block
+                // if you find a label declaration, end this block and jump to new block
                 retval->hasBranch = false;
                 retval->next = convertToBasicBlock(cfg, ir->next, retval);
-                // retval.next might require versions of some symbols, provide those versions, if cannot find a version defined in this basic block, require it
                 if (ir->next) {
                     ir->next->prev = NULL;
                     ir->next = NULL;
@@ -749,6 +969,24 @@ BasicBlock* convertToBasicBlock(CFG* cfg, IR* ir, BasicBlock* predecessor)
     return retval;
 }
 
+// Cannot do this during basic block conversion because the ir.next pointers are needed
+void removeBasicBlockInstructions(CFG* cfg)
+{
+    forall(elem, cfg->basicBlocks)
+    {
+        BasicBlock* bb = elem->data;
+        if (bb->entry == NULL) {
+            continue;
+        } else if (bb->entry->next == NULL) {
+            bb->entry = NULL;
+        } else {
+            IR* ir = bb->entry;
+            for (; ir->next != NULL; ir = ir->next) { }
+            ir->prev->next = NULL;
+        }
+    }
+}
+
 bool copyAndConstantPropagation(CFG* cfg)
 {
     bool retval = false;
@@ -758,28 +996,30 @@ bool copyAndConstantPropagation(CFG* cfg)
         for (IR* def = bb->entry; def != NULL; def = def->next) {
             switch (def->irType) {
             case IR_COPY:
-                if (def->src1->def && def->src1->def->irType == IR_LOAD_INT) {
+                if (def->dest->symbol == def->src1->symbol && def->dest->version == def->src1->version) {
+                    break;
+                } else if (def->src1->def && def->src1->def->irType == IR_LOAD_INT && !def->src1->symbol->isVolatile) {
                     def->irType = IR_LOAD_INT;
                     def->intData = def->src1->def->intData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
-                } else if (def->src1->def && def->src1->def->irType == IR_LOAD_ARRAY_LITERAL) {
+                } else if (def->src1->def && def->src1->def->irType == IR_LOAD_ARRAY_LITERAL && !def->src1->symbol->isVolatile) {
                     def->irType = IR_LOAD_ARRAY_LITERAL;
                     def->listData = def->src1->def->listData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
-                } else if (def->src1->def && def->src1->def->irType == IR_LOAD_ARGLIST) {
+                } else if (def->src1->def && def->src1->def->irType == IR_LOAD_ARGLIST && !def->src1->symbol->isVolatile) {
                     def->irType = IR_LOAD_ARGLIST;
                     def->listData = def->src1->def->listData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
-                } else if (def->src1->def && def->src1->def->irType == IR_COPY) {
+                } else if (def->src1->def && def->src1->def->irType == IR_COPY && def->src1 != def->src1->def->src1 && !def->src1->symbol->isVolatile) {
                     def->src1 = def->src1->def->src1;
                     retval = true;
-                } else if (def->src1->def && def->src1->def->irType == IR_DOT) {
+                } else if (def->src1->def && def->src1->def->irType == IR_DOT && !def->src1->symbol->isVolatile) {
                     def->irType = IR_DOT;
                     def->strData = def->src1->def->strData;
                     def->src1 = def->src1->def->src1;
@@ -820,6 +1060,37 @@ bool copyAndConstantPropagation(CFG* cfg)
                     def->src2 = NULL;
                     retval = true;
                 }
+                break;
+            case IR_NOT:
+                if (def->src1->def && def->src1->def->irType == IR_LOAD_INT) {
+                    def->irType = IR_LOAD_INT;
+                    def->intData = !def->src1->def->intData;
+                    def->src1 = NULL;
+                    def->src2 = NULL;
+                    retval = true;
+                }
+                break;
+            case IR_PHONY:
+                if (def && def->irType == IR_PHONY) {
+                    forall(elem, def->listData)
+                    {
+                        IR* phonyDef = elem->data;
+                        if (phonyDef->removed) {
+                            List_Remove(def->listData, phonyDef);
+                            retval = true;
+                            break;
+                        }
+                    }
+                    if (def->listData->size == 1) {
+                        IR* newDef = List_Get(def->listData, 0);
+                        def->dest->def = newDef;
+                        newDef->dest = def->dest;
+                        removeInstruction(def->inBlock, def);
+                        List_Remove(def->listData, newDef);
+                        retval = true;
+                    }
+                }
+                break;
             default:
                 break;
             }
@@ -834,7 +1105,6 @@ bool copyAndConstantPropagation(CFG* cfg)
 bool addArgs(BasicBlock* bb)
 {
     bool retval = false;
-    bb->incoming++;
     if (bb->visited) {
         return false;
     }
@@ -853,7 +1123,7 @@ bool addArgs(BasicBlock* bb)
             }
         }
     }
-    if (bb->branch) {
+    if (bb->branch && bb->hasBranch) {
         retval |= addArgs(bb->branch);
         forall(elem, bb->branch->parameters)
         {
@@ -867,28 +1137,22 @@ bool addArgs(BasicBlock* bb)
         }
     }
 
-    bb->visited = false;
     return retval;
 }
 
-// Removes code that has no effect
-bool deadCode(CFG* cfg)
+void findUnusedSymbolVersions(CFG* cfg)
 {
-    bool retval = false;
-
-    // Clear and find all basic blocks arguments
+    // Clear arguments
     forall(elem, cfg->basicBlocks)
     {
         BasicBlock* bb = elem->data;
         List_Clear(bb->arguments);
-        bb->incoming = 0;
     }
+
+    clearBBVisitedFlags(cfg);
+    // Find phi arguments
     while (addArgs(cfg->blockGraph)) {
-        forall(elem, cfg->basicBlocks)
-        {
-            BasicBlock* bb = elem->data;
-            bb->incoming = 0;
-        }
+        clearBBVisitedFlags(cfg);
     }
 
     // Clear all used flags
@@ -908,6 +1172,9 @@ bool deadCode(CFG* cfg)
             symbver->used = true;
         }
         for (IR* def = bb->entry; def != NULL; def = def->next) {
+            if (def->dest && (def->irType == IR_INDEX_COPY || def->irType == IR_DOT_COPY || def->irType == IR_DEREF_COPY)) {
+                def->dest->used = true;
+            }
             if (def->src1) {
                 def->src1->used = true;
             }
@@ -922,6 +1189,77 @@ bool deadCode(CFG* cfg)
                 }
             }
         }
+        if (bb->hasBranch) {
+            bb->condition->used = true;
+        }
+    }
+}
+
+void calculateIncomingNode(BasicBlock* bb)
+{
+    bb->incoming++;
+    if (bb->visited) {
+        return;
+    }
+    bb->visited = true;
+    if (bb->next) {
+        calculateIncomingNode(bb->next);
+    }
+    if (bb->hasBranch && bb->branch) {
+        calculateIncomingNode(bb->branch);
+    }
+}
+
+void calculateIncomingNodes(CFG* cfg)
+{
+    // Clear incoming counters
+    forall(elem, cfg->basicBlocks)
+    {
+        BasicBlock* bb = elem->data;
+        bb->incoming = 0;
+    }
+
+    clearBBVisitedFlags(cfg);
+    calculateIncomingNode(cfg->blockGraph);
+}
+
+void calculateVolatility(CFG* cfg)
+{
+    forall(elem, cfg->symbolVersions)
+    {
+        SymbolVersion* symbver = elem->data;
+        symbver->symbol->isVolatile = false;
+    }
+
+    // Go through instruction in each block. If a symbol has it's address taken, mark it as volatile
+    forall(elem, cfg->basicBlocks)
+    {
+        BasicBlock* bb = elem->data;
+        for (IR* ir = bb->entry; ir != NULL; ir = ir->next) {
+            if (ir->irType == IR_ADDR_OF) {
+                ir->src1->symbol->isVolatile = true;
+            }
+        }
+    }
+}
+
+// Removes code that has no effect
+bool deadCode(CFG* cfg)
+{
+    bool retval = false;
+
+    findUnusedSymbolVersions(cfg);
+    calculateIncomingNodes(cfg);
+    calculateVolatility(cfg);
+
+    // Remove basic blocks with no incoming basic blocks from the list of basic blocks
+    forall(elem, cfg->basicBlocks)
+    {
+        BasicBlock* bb = elem->data;
+        if (bb->incoming == 0) {
+            removeBasicBlock(cfg, bb, true);
+            return true;
+        }
     }
 
     forall(elem, cfg->basicBlocks)
@@ -930,42 +1268,35 @@ bool deadCode(CFG* cfg)
 
         // Remove any symbols that aren't used
         for (IR* def = bb->entry; def != NULL; def = def->next) {
-            if (def->dest && !def->dest->removed && !def->dest->used && def->dest->symbol != cfg->returnSymbol) {
-                removeInstruction(def->inBlock, def);
-                def->dest->removed = true;
+            if (def->dest && !def->removed && !def->dest->used && def->dest->symbol != cfg->returnSymbol) {
+                removeInstruction(bb, def);
                 retval = true;
             }
         }
 
         // Remove false branches
-        if (bb->hasBranch && bb->condition->def && bb->condition->def->irType == IR_LOAD_INT) {
+        if (bb->hasBranch && bb->condition->def && bb->condition->def->irType == IR_LOAD_INT && !bb->condition->symbol->isVolatile) {
             bb->hasBranch = false;
             if (!bb->condition->def->intData) {
                 bb->next = bb->branch;
             }
-            IR* ir = bb->entry;
-            while (ir->next != NULL && ir->irType != IR_BRANCH_IF_FALSE) {
-                ir = ir->next;
-            }
-            removeInstruction(bb, ir);
             retval = true;
         }
 
         // Remove jump chains
-        if (bb->next && bb->next->entry && (bb->next->entry->irType == IR_JUMP || bb->next->entry->irType == IR_DECLARE_LABEL)) {
+        if (bb->next && !bb->next->entry && !bb->next->hasBranch) {
             bb->next = bb->next->next;
             retval = true;
         }
-        if (bb->branch && bb->branch->entry && (bb->branch->entry->irType == IR_JUMP || bb->branch->entry->irType == IR_DECLARE_LABEL)) {
+
+        if (bb->branch && !bb->branch->entry && !bb->branch->hasBranch) {
             bb->branch = bb->branch->next;
             retval = true;
         }
 
-        if (bb->next && bb->entry && bb->next->entry && bb->entry->next && !bb->hasBranch && bb->next->incoming == 1) {
-            IR* end = bb->entry;
-            while (end->next != NULL) {
-                end = end->next;
-            }
+        // Adopt basic blocks with only one incoming block
+        if (bb->next && bb->entry && !bb->hasBranch && bb->next->incoming == 1) {
+            IR* end = getTail(bb->entry);
 
             forall(elem, bb->arguments)
             {
@@ -980,30 +1311,45 @@ bool deadCode(CFG* cfg)
                     }
                 }
                 if (parameter) {
-                    IR* ir = createIR(IR_COPY, parameter, argument, NULL);
-                    ir->inBlock = bb;
-                    parameter->def = ir;
-                    ir->prev = end->prev;
-                    end->prev->next = ir;
-                    ir->next = end;
-                    end->prev = end;
+                    if (parameter->version != argument->version) {
+                        end = appendInstructionBasicBlock(bb, createIR(IR_COPY, parameter, argument, NULL));
+                        parameter->def = end;
+                        makeSymbolVersionUnique(parameter);
+                    } else {
+                        printf("not sure if this may happen\n");
+                    }
+                } else {
+                    printf("couldn't find the parameter to match the argument\n");
                 }
             }
 
-            end->prev->next = bb->next->entry;
-            bb->next->entry->prev = end->prev;
+            // Join next block at the end of this block
+            end->next = bb->next->entry;
+            if (bb->next->entry) {
+                bb->next->entry->prev = end;
+            }
+
+            // Copy basic block end conditions
             bb->hasBranch = bb->next->hasBranch;
             bb->branch = bb->next->branch;
             bb->condition = bb->next->condition;
-            List_Remove(cfg->basicBlocks, bb->next);
+            bb->arguments = bb->next->arguments;
+
+            // Set inBlock to this block
+            for (IR* child = bb->next->entry; child != NULL; child = child->next) {
+                child->inBlock = bb;
+            }
+
+            // Remove the next block
+            removeBasicBlock(cfg, bb->next, false);
             bb->next = bb->next->next;
             retval = true;
             break;
         }
     }
 
-    // Remove first basic block if it is just a jump
-    if (cfg->blockGraph->entry == NULL || cfg->blockGraph->entry->irType == IR_JUMP) {
+    // Rebase block graph if jump chain
+    if (cfg->blockGraph && !cfg->blockGraph->entry && !cfg->blockGraph->hasBranch) {
         cfg->blockGraph = cfg->blockGraph->next;
         retval = true;
     }
@@ -1038,15 +1384,20 @@ List* createCFG(SymbolNode* functionSymbol)
 
     // Convert function definition AST to quadruple list
     flattenAST(cfg, functionSymbol->def, NULL, NULL, NULL);
-    printInstructions(cfg);
+    printInstructionList(cfg);
 
     // Convert quadruple list to CFG of basic blocks, find versions!
     BasicBlock* returnBlock = createBasicBlock(cfg);
     cfg->blockGraph = convertToBasicBlock(cfg, cfg->head, NULL);
+    removeBasicBlockInstructions(cfg);
 
     // Optimize
-    deadCode(cfg);
+    findUnusedSymbolVersions(cfg);
     while (copyAndConstantPropagation(cfg) | deadCode(cfg)) { }
+    printf("\n\n");
+    clearBBVisitedFlags(cfg);
+    printBlockGraph(cfg->blockGraph);
+    findUnusedSymbolVersions(cfg);
 
     forall(elem, cfg->basicBlocks)
     {

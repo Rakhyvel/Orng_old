@@ -20,15 +20,14 @@ typedef enum ir_type {
     IR_CALL,
     IR_RET,
 
-    // Three parameter instructions
-    IR_SLICE,
-
     // Two parameter instructions
     IR_INDEX,
+    IR_INDEX_COPY,
     IR_DOT,
-    IR_AND,
-    IR_OR,
-    IR_XOR,
+    IR_DOT_COPY,
+    IR_BIT_AND,
+    IR_BIT_OR,
+    IR_BIT_XOR,
     IR_LSHIFT,
     IR_RSHIFT,
     IR_EQ,
@@ -46,10 +45,12 @@ typedef enum ir_type {
     // One parameter instructions
     IR_PHONY,
     IR_COPY,
-    IR_NEGATE,
     IR_NOT,
+    IR_NEGATE,
     IR_BIT_NOT,
     IR_ADDR_OF,
+    IR_DEREF,
+	IR_DEREF_COPY,
     IR_CONVERT,
 } ir_type;
 
@@ -105,6 +106,7 @@ typedef struct IR {
     struct BasicBlock* inBlock;
     struct IR* next;
     struct IR* prev;
+    bool removed;
 } IR;
 
 typedef struct BasicBlock {
@@ -142,5 +144,6 @@ typedef struct CFG {
 } CFG;
 
 List* createCFG(struct symbolNode* functionSymbol);
+void clearBBVisitedFlags(CFG* cfg);
 
 #endif

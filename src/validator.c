@@ -169,7 +169,7 @@ static void validateLValue(ASTNode* node)
         break;
     }
     case AST_PAREN: {
-        ASTNode* child = node->unop.expr;
+        ASTNode* child = List_Get(node->arglist.args, 0);
         validateLValue(child);
         break;
     }
@@ -398,17 +398,6 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
     case AST_LSHIFT:
     case AST_RSHIFT:
     case AST_BIT_NOT:
-    case AST_ASSIGN:
-    case AST_ADD_ASSIGN:
-    case AST_SUB_ASSIGN:
-    case AST_MULT_ASSIGN:
-    case AST_DIV_ASSIGN:
-    case AST_MOD_ASSIGN:
-    case AST_AND_ASSIGN:
-    case AST_OR_ASSIGN:
-    case AST_XOR_ASSIGN:
-    case AST_LSHIFT_ASSIGN:
-    case AST_RSHIFT_ASSIGN:
     case AST_NAMED_ARG:
     case AST_RETURN: { // TODO: Maybe add a more nuanced system?
         ASTNode* left = node->unop.expr;
@@ -566,7 +555,18 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
     case AST_FREE:
     case AST_DEFER:
     case AST_BREAK:
-    case AST_CONTINUE: {
+    case AST_CONTINUE:
+    case AST_ASSIGN:
+    case AST_ADD_ASSIGN:
+    case AST_SUB_ASSIGN:
+    case AST_MULT_ASSIGN:
+    case AST_DIV_ASSIGN:
+    case AST_MOD_ASSIGN:
+    case AST_AND_ASSIGN:
+    case AST_OR_ASSIGN:
+    case AST_XOR_ASSIGN:
+    case AST_LSHIFT_ASSIGN:
+    case AST_RSHIFT_ASSIGN: {
         type = UNDEF_TYPE;
         break;
     }

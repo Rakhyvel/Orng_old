@@ -369,7 +369,12 @@ void printVarDef(FILE* out, SymbolVersion* version)
     if (version->symbol->name[0] != '$') {
         printPath(out, version->symbol);
     }
-    fprintf(out, "_%d;\n", version->version);
+    if (!version->symbol->isVolatile) {
+        fprintf(out, "_%d;\n", version->version);
+    } else {
+        fprintf(out, ";\n");
+        version->symbol->visited = true;
+    }
 }
 
 void printVarAssign(FILE* out, SymbolVersion* version)
@@ -381,7 +386,11 @@ void printVarAssign(FILE* out, SymbolVersion* version)
         if (version->symbol->name[0] != '$') {
             printPath(out, version->symbol);
         }
-        fprintf(out, "_%d = ", version->version);
+        if (!version->symbol->isVolatile) {
+            fprintf(out, "_%d = ", version->version);
+        } else {
+            fprintf(out, " = ");
+        }
     }
 }
 
@@ -390,7 +399,9 @@ void printVar(FILE* out, SymbolVersion* version)
     if (version->symbol->name[0] != '$') {
         printPath(out, version->symbol);
     }
-    fprintf(out, "_%d", version->version);
+    if (!version->symbol->isVolatile) {
+        fprintf(out, "_%d", version->version);
+    }
 }
 
 static void generateIR(FILE* out, CFG* cfg, IR* ir)
@@ -472,10 +483,28 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
         fprintf(out, "];\n");
         break;
     }
+    case IR_INDEX_COPY: {
+        fprintf(out, "\t");
+        printVar(out, ir->dest);
+        fprintf(out, ".data[");
+        printVar(out, ir->src1);
+        fprintf(out, "] = ");
+        printVar(out, ir->src2);
+        fprintf(out, ";\n");
+        break;
+    }
     case IR_DOT: {
         printVarAssign(out, ir->dest);
         printVar(out, ir->src1);
         fprintf(out, ".%s;\n", ir->strData);
+        break;
+    }
+    case IR_DOT_COPY: {
+        fprintf(out, "\t");
+        printVar(out, ir->dest);
+        fprintf(out, ".%s = ", ir->strData);
+        printVar(out, ir->src1);
+        fprintf(out, ";\n");
         break;
     }
     case IR_ADD: {
@@ -502,10 +531,56 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
         fprintf(out, ";\n");
         break;
     }
+    case IR_NOT: {
+        printVarAssign(out, ir->dest);
+        fprintf(out, "!");
+        printVar(out, ir->src1);
+        fprintf(out, ";\n");
+        break;
+    }
+    case IR_NEGATE: {
+        printVarAssign(out, ir->dest);
+        fprintf(out, "-");
+        printVar(out, ir->src1);
+        fprintf(out, ";\n");
+        break;
+    }
+    case IR_BIT_NOT: {
+        printVarAssign(out, ir->dest);
+        fprintf(out, "~");
+        printVar(out, ir->src1);
+        fprintf(out, ";\n");
+        break;
+    }
+    case IR_ADDR_OF: {
+        printVarAssign(out, ir->dest);
+        fprintf(out, "&");
+        printVar(out, ir->src1);
+        fprintf(out, ";\n");
+        break;
+    }
+    case IR_DEREF: {
+        printVarAssign(out, ir->dest);
+        fprintf(out, "*");
+        printVar(out, ir->src1);
+        fprintf(out, ";\n");
+        break;
+    }
+    case IR_DEREF_COPY: {
+        fprintf(out, "\t*");
+        printVar(out, ir->src1);
+        fprintf(out, " = ");
+        printVar(out, ir->src2);
+        fprintf(out, ";\n");
+        break;
+    }
     case IR_CONVERT: {
         printVarAssign(out, ir->dest);
         printVar(out, ir->src1);
         fprintf(out, ";\n");
+        break;
+    }
+    case IR_PHONY: {
         break;
     }
     default: {
@@ -546,7 +621,7 @@ static void generateBasicBlock(FILE* out, CFG* cfg, BasicBlock* bb)
         return;
     }
     bb->visited = true;
-    fprintf(out, "L%d:;\n", bb->id);
+    fprintf(out, "L%d:; // incoming:%d\n", bb->id, bb->incoming);
     for (IR* ir = bb->entry; ir != NULL; ir = ir->next) {
         generateIR(out, cfg, ir);
     }
@@ -567,6 +642,8 @@ static void generateBasicBlock(FILE* out, CFG* cfg, BasicBlock* bb)
         if (bb->next->id > 0) {
             generateBasicBlock(out, cfg, bb->next);
         }
+    } else {
+        fprintf(out, "\tgoto L0;\n");
     }
 }
 
@@ -597,11 +674,12 @@ void generateFunctionDefinitions(FILE* out, CFG* callGraphNode)
     forall(elem, callGraphNode->symbolVersions)
     {
         SymbolVersion* symbver = elem->data;
-        if (!symbver->used) {
+        if (!symbver->used || symbver->symbol->visited) {
             continue;
         }
         printVarDef(out, symbver);
     }
+    clearBBVisitedFlags(callGraphNode);
     generateBasicBlock(out, callGraphNode, callGraphNode->blockGraph);
     fprintf(out, "L0:;\n\treturn retval;\n}\n\n");
 

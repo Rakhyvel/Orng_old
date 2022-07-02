@@ -8,7 +8,7 @@ struct astNode;
 
 typedef enum symbolType {
     SYMBOL_PROGRAM,
-	SYMBOL_PACKAGE,
+    SYMBOL_PACKAGE,
     SYMBOL_MODULE,
     SYMBOL_FUNCTION,
     SYMBOL_TYPE, // typedef or struct def
@@ -34,8 +34,8 @@ typedef struct symbolNode {
 
     struct astNode* def; // SymbolDefine ASTNode where this symbol is defined
     struct IR* ir;
-	
-	bool isDeclared;
+
+    bool isDeclared;
     bool isExtern;
     bool isRestricted;
     bool isVararg;
@@ -46,12 +46,13 @@ typedef struct symbolNode {
     List* restrictionExpr; // list of symbol_expr
     List* restrictions; // list of symbol*
 
-	List* versions; // Used to keep track of how many versions this symbol has, list of SymbolVersion*
+    bool isVolatile;
+    List* versions; // Used to keep track of how many versions this symbol has, list of SymbolVersion*
 
-	// Union sets
+    // Union sets
     char* activeFieldName; // TODO: Remove, re-add in SymbolVersion
 
-	// Defer/block
+    // Defer/block
     List* defers; // list of ast's, in order of declaration
     bool isLoop;
     int tempVars;
