@@ -1948,23 +1948,8 @@ ASTNode* validateAST(ASTNode* node)
 
         node->binop.left = left;
         node->binop.right = subscript;
-
-        // if subscript is compt, subscript cannot be negative
-        if (subscript->astType == AST_INT && subscript->_int.data < 0) {
-            error(node->pos, "array index is negative");
-        }
-        // if sub is comptime and arr is comptime, cannot be greater than array size
-        if (subscript->astType == AST_INT && left->astType == AST_ARRAY_LITERAL) {
-            if (subscript->_int.data >= left->arrayLiteral.members->size) {
-                error(node->pos, "array index is greater than size of array");
-            } else {
-                retval = List_Get(left->arrayLiteral.members, subscript->_int.data);
-                break;
-            }
-        } else {
-            retval = node;
-            break;
-        }
+        retval = node;
+        break;
     }
     case AST_SLICE: {
         // left is array or addr type
@@ -1993,29 +1978,6 @@ ASTNode* validateAST(ASTNode* node)
         node->slice.arrayExpr = validArrExpr;
         node->slice.lowerBound = validLowerBound;
         node->slice.upperBound = validUpperBound;
-
-        // if subscript is compt, subscript cannot be negative
-        if (validLowerBound->astType == AST_INT && validLowerBound->_int.data < 0) {
-            error(validLowerBound->pos, "lower bound is negative");
-        }
-        if (validUpperBound->astType == AST_INT && validUpperBound->_int.data < 0) {
-            error(validUpperBound->pos, "upper bound is negative");
-        }
-        if (validLowerBound->astType == AST_INT && validUpperBound->astType == AST_INT && validLowerBound->_int.data > validUpperBound->_int.data) {
-            error(validUpperBound->pos, "upper bound is lower than lower bound");
-        }
-
-        // if sub is comptime and arr is comptime, cannot be greater than array size
-        if (validLowerBound->astType == AST_INT && validArrExpr->astType == AST_ARRAY_LITERAL) {
-            if (validLowerBound->_int.data >= validArrExpr->arrayLiteral.members->size) {
-                error(node->pos, "lower bound is greater than size of array");
-            }
-        }
-        if (validUpperBound->astType == AST_INT && validArrExpr->astType == AST_ARRAY_LITERAL) {
-            if (validUpperBound->_int.data >= validArrExpr->arrayLiteral.members->size) {
-                error(node->pos, "upper bound is greater than size of array");
-            }
-        }
 
         retval = node;
         break;
@@ -2085,13 +2047,8 @@ ASTNode* validateAST(ASTNode* node)
         }
         node->binop.left = left;
         node->binop.right = right;
-        if (left->astType == AST_TRUE || right->astType == AST_TRUE) {
-            retval = TRUE_AST;
-            break;
-        } else {
-            retval = node;
-            break;
-        }
+        retval = node;
+        break;
     }
     case AST_AND: {
         // left and right are bool types
@@ -2104,13 +2061,8 @@ ASTNode* validateAST(ASTNode* node)
         }
         node->binop.left = left;
         node->binop.right = right;
-        if (left->astType == AST_TRUE && right->astType == AST_TRUE) {
-            retval = TRUE_AST;
-            break;
-        } else {
-            retval = node;
-            break;
-        }
+        retval = node;
+        break;
     }
     case AST_BIT_OR: {
         ASTNode* left = validateAST(node->binop.left);
@@ -2123,13 +2075,8 @@ ASTNode* validateAST(ASTNode* node)
 
         node->binop.left = left;
         node->binop.right = right;
-        if (left->astType == AST_INT && right->astType == AST_INT) {
-            retval = AST_Create_int(left->_int.data | left->_int.data, node->scope, node->pos);
-            break;
-        } else {
-            retval = node;
-            break;
-        }
+        retval = node;
+        break;
     }
     case AST_BIT_XOR: {
         ASTNode* left = validateAST(node->binop.left);
@@ -2142,13 +2089,8 @@ ASTNode* validateAST(ASTNode* node)
 
         node->binop.left = left;
         node->binop.right = right;
-        if (left->astType == AST_INT && right->astType == AST_INT) {
-            retval = AST_Create_int(left->_int.data ^ left->_int.data, node->scope, node->pos);
-            break;
-        } else {
-            retval = node;
-            break;
-        }
+        retval = node;
+        break;
     }
     case AST_BIT_AND: {
         ASTNode* left = validateAST(node->binop.left);
@@ -2161,13 +2103,8 @@ ASTNode* validateAST(ASTNode* node)
 
         node->binop.left = left;
         node->binop.right = right;
-        if (left->astType == AST_INT && right->astType == AST_INT) {
-            retval = AST_Create_int(left->_int.data & left->_int.data, node->scope, node->pos);
-            break;
-        } else {
-            retval = node;
-            break;
-        }
+        retval = node;
+        break;
     }
     case AST_LSHIFT: {
         ASTNode* left = validateAST(node->binop.left);
@@ -2180,13 +2117,8 @@ ASTNode* validateAST(ASTNode* node)
 
         node->binop.left = left;
         node->binop.right = right;
-        if (left->astType == AST_INT && right->astType == AST_INT) {
-            retval = AST_Create_int(left->_int.data << left->_int.data, node->scope, node->pos);
-            break;
-        } else {
-            retval = node;
-            break;
-        }
+        retval = node;
+        break;
     }
     case AST_RSHIFT: {
         ASTNode* left = validateAST(node->binop.left);
@@ -2199,13 +2131,8 @@ ASTNode* validateAST(ASTNode* node)
 
         node->binop.left = left;
         node->binop.right = right;
-        if (left->astType == AST_INT && right->astType == AST_INT) {
-            retval = AST_Create_int(left->_int.data >> left->_int.data, node->scope, node->pos);
-            break;
-        } else {
-            retval = node;
-            break;
-        }
+        retval = node;
+        break;
     }
     case AST_EQ: {
         // right type <= left type
@@ -2225,39 +2152,6 @@ ASTNode* validateAST(ASTNode* node)
         } else if (leftType->astType == AST_PARAMLIST || leftType->astType == AST_ARRAY || rightType->astType == AST_PARAMLIST || rightType->astType == AST_ARRAY) {
             // TODO: Allow shallow struct comparisons
             error(node->pos, "comparison on struct type");
-        } else if (left->astType == AST_INT && right->astType == AST_INT) {
-            retval = (left->_int.data == right->_int.data) ? TRUE_AST : FALSE_AST;
-            break;
-        } else if (left->astType == AST_REAL && right->astType == AST_REAL) {
-            retval = (left->real.data == right->real.data) ? TRUE_AST : FALSE_AST;
-            break;
-        } else if (left->astType == AST_CHAR && right->astType == AST_CHAR) {
-            retval = (left->_char.data == right->_char.data) ? TRUE_AST : FALSE_AST;
-            break;
-        } else if (left->astType == AST_TRUE && right->astType == AST_TRUE) {
-            retval = TRUE_AST;
-            break;
-        } else if (left->astType == AST_FALSE && right->astType == AST_FALSE) {
-            retval = TRUE_AST;
-            break;
-        } else if (left->astType == AST_NOTHING && right->astType == AST_NOTHING) {
-            retval = TRUE_AST;
-            break;
-        } else if (
-            (left->astType == AST_INT
-                || left->astType == AST_REAL
-                || left->astType == AST_CHAR
-                || left->astType == AST_TRUE
-                || left->astType == AST_FALSE
-                || left->astType == AST_NOTHING)
-            && (right->astType == AST_INT
-                || right->astType == AST_REAL
-                || right->astType == AST_CHAR
-                || right->astType == AST_TRUE
-                || right->astType == AST_FALSE
-                || right->astType == AST_NOTHING)) {
-            retval = FALSE_AST;
-            break;
         } else {
             retval = node;
             break;
@@ -2280,39 +2174,6 @@ ASTNode* validateAST(ASTNode* node)
             incompatibleTypesError(node->pos, leftType, rightType);
         } else if (leftType->astType == AST_PARAMLIST || leftType->astType == AST_ARRAY || rightType->astType == AST_PARAMLIST || rightType->astType == AST_ARRAY) {
             error(node->pos, "comparison on struct type"); // TODO: allow struct comparisons
-        } else if (left->astType == AST_INT && right->astType == AST_INT) {
-            retval = (left->_int.data != right->_int.data) ? TRUE_AST : FALSE_AST;
-            break;
-        } else if (left->astType == AST_REAL && right->astType == AST_REAL) {
-            retval = (left->real.data != right->real.data) ? TRUE_AST : FALSE_AST;
-            break;
-        } else if (left->astType == AST_CHAR && right->astType == AST_CHAR) {
-            retval = (left->_char.data != right->_char.data) ? TRUE_AST : FALSE_AST;
-            break;
-        } else if (left->astType == AST_TRUE && right->astType == AST_TRUE) {
-            retval = FALSE_AST;
-            break;
-        } else if (left->astType == AST_FALSE && right->astType == AST_FALSE) {
-            retval = FALSE_AST;
-            break;
-        } else if (left->astType == AST_NOTHING && right->astType == AST_NOTHING) {
-            retval = FALSE_AST;
-            break;
-        } else if (
-            (left->astType == AST_INT
-                || left->astType == AST_REAL
-                || left->astType == AST_CHAR
-                || left->astType == AST_TRUE
-                || left->astType == AST_FALSE
-                || left->astType == AST_NOTHING)
-            && (right->astType == AST_INT
-                || right->astType == AST_REAL
-                || right->astType == AST_CHAR
-                || right->astType == AST_TRUE
-                || right->astType == AST_FALSE
-                || right->astType == AST_NOTHING)) {
-            retval = TRUE_AST;
-            break;
         } else {
             retval = node;
             break;
@@ -2341,16 +2202,8 @@ ASTNode* validateAST(ASTNode* node)
         node->binop.left = left;
         node->binop.right = right;
 
-        if (left->astType == AST_INT && right->astType == AST_INT) {
-            retval = (left->_int.data > right->_int.data) ? TRUE_AST : FALSE_AST;
-            break;
-        } else if (left->astType == AST_REAL && right->astType == AST_REAL) {
-            retval = (left->real.data > right->real.data) ? TRUE_AST : FALSE_AST;
-            break;
-        } else {
-            retval = node;
-            break;
-        }
+        retval = node;
+        break;
     }
     case AST_LSR: {
         // right type <= left type
@@ -2374,17 +2227,8 @@ ASTNode* validateAST(ASTNode* node)
 
         node->binop.left = left;
         node->binop.right = right;
-
-        if (left->astType == AST_INT && right->astType == AST_INT) {
-            retval = (left->_int.data < right->_int.data) ? TRUE_AST : FALSE_AST;
-            break;
-        } else if (left->astType == AST_REAL && right->astType == AST_REAL) {
-            retval = (left->real.data < right->real.data) ? TRUE_AST : FALSE_AST;
-            break;
-        } else {
-            retval = node;
-            break;
-        }
+        retval = node;
+        break;
     }
     case AST_GTE: {
         // right type <= left type
@@ -2409,16 +2253,8 @@ ASTNode* validateAST(ASTNode* node)
         node->binop.left = left;
         node->binop.right = right;
 
-        if (left->astType == AST_INT && right->astType == AST_INT) {
-            retval = (left->_int.data >= right->_int.data) ? TRUE_AST : FALSE_AST;
-            break;
-        } else if (left->astType == AST_REAL && right->astType == AST_REAL) {
-            retval = (left->real.data >= right->real.data) ? TRUE_AST : FALSE_AST;
-            break;
-        } else {
-            retval = node;
-            break;
-        }
+        retval = node;
+        break;
     }
     case AST_LTE: {
         // right type <= left type
@@ -2443,16 +2279,8 @@ ASTNode* validateAST(ASTNode* node)
         node->binop.left = left;
         node->binop.right = right;
 
-        if (left->astType == AST_INT && right->astType == AST_INT) {
-            retval = (left->_int.data <= right->_int.data) ? TRUE_AST : FALSE_AST;
-            break;
-        } else if (left->astType == AST_REAL && right->astType == AST_REAL) {
-            retval = (left->real.data <= right->real.data) ? TRUE_AST : FALSE_AST;
-            break;
-        } else {
-            retval = node;
-            break;
-        }
+        retval = node;
+        break;
     }
     case AST_ADD: {
         // types on both sides are scalar types
@@ -2467,22 +2295,8 @@ ASTNode* validateAST(ASTNode* node)
         node->binop.left = left;
         node->binop.right = right;
 
-        if (left->astType == AST_REAL && right->astType == AST_REAL) {
-            retval = AST_Create_real(left->real.data + right->real.data, node->scope, node->pos);
-            break;
-        } else if (left->astType == AST_INT && right->astType == AST_REAL) {
-            retval = AST_Create_real((double)left->_int.data + right->real.data, node->scope, node->pos);
-            break;
-        } else if (left->astType == AST_REAL && right->astType == AST_INT) {
-            retval = AST_Create_real(left->real.data + (double)right->_int.data, node->scope, node->pos);
-            break;
-        } else if (left->astType == AST_INT && right->astType == AST_INT) {
-            retval = AST_Create_real(left->real.data + right->real.data, node->scope, node->pos);
-            break;
-        } else {
-            retval = node;
-            break;
-        }
+        retval = node;
+        break;
     }
     case AST_SUBTRACT: {
         // types on both sides are scalar types
@@ -2497,22 +2311,8 @@ ASTNode* validateAST(ASTNode* node)
         node->binop.left = left;
         node->binop.right = right;
 
-        if (left->astType == AST_REAL && right->astType == AST_REAL) {
-            retval = AST_Create_real(left->real.data - right->real.data, node->scope, node->pos);
-            break;
-        } else if (left->astType == AST_INT && right->astType == AST_REAL) {
-            retval = AST_Create_real((double)left->_int.data - right->real.data, node->scope, node->pos);
-            break;
-        } else if (left->astType == AST_REAL && right->astType == AST_INT) {
-            retval = AST_Create_real(left->real.data - (double)right->_int.data, node->scope, node->pos);
-            break;
-        } else if (left->astType == AST_INT && right->astType == AST_INT) {
-            retval = AST_Create_real(left->real.data - right->real.data, node->scope, node->pos);
-            break;
-        } else {
-            retval = node;
-            break;
-        }
+        retval = node;
+        break;
     }
     case AST_MULTIPLY: {
         // types on both sides are scalar types
@@ -2527,22 +2327,8 @@ ASTNode* validateAST(ASTNode* node)
         node->binop.left = left;
         node->binop.right = right;
 
-        if (left->astType == AST_REAL && right->astType == AST_REAL) {
-            retval = AST_Create_real(left->real.data * right->real.data, node->scope, node->pos);
-            break;
-        } else if (left->astType == AST_INT && right->astType == AST_REAL) {
-            retval = AST_Create_real((double)left->_int.data * right->real.data, node->scope, node->pos);
-            break;
-        } else if (left->astType == AST_REAL && right->astType == AST_INT) {
-            retval = AST_Create_real(left->real.data * (double)right->_int.data, node->scope, node->pos);
-            break;
-        } else if (left->astType == AST_INT && right->astType == AST_INT) {
-            retval = AST_Create_real(left->real.data * right->real.data, node->scope, node->pos);
-            break;
-        } else {
-            retval = node;
-            break;
-        }
+        retval = node;
+        break;
     }
     case AST_DIVIDE: {
         // types on both sides are scalar types
@@ -2563,22 +2349,8 @@ ASTNode* validateAST(ASTNode* node)
         node->binop.left = left;
         node->binop.right = right;
 
-        if (left->astType == AST_REAL && right->astType == AST_REAL) {
-            retval = AST_Create_real(left->real.data / right->real.data, node->scope, node->pos);
-            break;
-        } else if (left->astType == AST_INT && right->astType == AST_REAL) {
-            retval = AST_Create_real((double)left->_int.data / right->real.data, node->scope, node->pos);
-            break;
-        } else if (left->astType == AST_REAL && right->astType == AST_INT) {
-            retval = AST_Create_real(left->real.data / (double)right->_int.data, node->scope, node->pos);
-            break;
-        } else if (left->astType == AST_INT && right->astType == AST_INT) {
-            retval = AST_Create_real(left->real.data / right->real.data, node->scope, node->pos);
-            break;
-        } else {
-            retval = node;
-            break;
-        }
+        retval = node;
+        break;
     }
     case AST_MODULUS: {
         ASTNode* left = validateAST(node->binop.left);
@@ -2592,13 +2364,8 @@ ASTNode* validateAST(ASTNode* node)
         node->binop.left = left;
         node->binop.right = right;
 
-        if (left->astType == AST_INT && right->astType == AST_INT) {
-            retval = AST_Create_real(left->_int.data % right->_int.data, node->scope, node->pos);
-            break;
-        } else {
-            retval = node;
-            break;
-        }
+        retval = node;
+        break;
     }
     case AST_ASSIGN: {
         // right type <= left type
@@ -2673,12 +2440,6 @@ ASTNode* validateAST(ASTNode* node)
         // left type is an l-value
         validateLValue(left);
 
-        if (right->astType == AST_INT && right->_int.data == 0) {
-            error(node->pos, "division by zero");
-        } else if (right->astType == AST_REAL && right->real.data == 0.0) {
-            error(node->pos, "division by zero");
-        }
-
         node->binop.left = left;
         node->binop.right = right;
 
@@ -2746,17 +2507,8 @@ ASTNode* validateAST(ASTNode* node)
             typeMismatchError(condition->pos, BOOL_TYPE, conditionType);
         }
         node->unop.expr = condition;
-
-        if (condition->astType == AST_TRUE) {
-            retval = FALSE_AST;
-            break;
-        } else if (condition->astType == AST_FALSE) {
-            retval = TRUE_AST;
-            break;
-        } else {
-            retval = node;
-            break;
-        }
+        retval = node;
+        break;
     }
     case AST_NEG: {
         ASTNode* left = validateAST(node->unop.expr);
@@ -2766,16 +2518,8 @@ ASTNode* validateAST(ASTNode* node)
             typeMismatchError(left->pos, REAL64_TYPE, leftType);
         }
         node->unop.expr = left;
-        if (left->astType == AST_INT) {
-            retval = AST_Create_int(-left->_int.data, node->scope, node->pos);
-            break;
-        } else if (left->astType == AST_REAL) {
-            retval = AST_Create_int(-left->real.data, node->scope, node->pos);
-            break;
-        } else {
-            retval = node;
-            break;
-        }
+        retval = node;
+        break;
     }
     case AST_BIT_NOT: {
         // child is an integral type
@@ -2785,13 +2529,8 @@ ASTNode* validateAST(ASTNode* node)
             typeMismatchError(left->pos, INT64_TYPE, leftType);
         }
         node->unop.expr = left;
-        if (left->astType == AST_INT) {
-            retval = AST_Create_int(~left->_int.data, node->scope, node->pos);
-            break;
-        } else {
-            retval = node;
-            break;
-        }
+        retval = node;
+        break;
     }
     case AST_ADDROF: {
         ASTNode* left = validateAST(node->unop.expr);
@@ -3100,20 +2839,20 @@ Program Validator_Validate(SymbolNode* symbol)
             SymbolNode* child = Map_Get(symbol->children, elem->data);
             Validator_Validate(child);
         }
-        validateAST(symbol->def);
+        ASTNode* newDef = validateAST(symbol->def);
 
         ASTNode* retType = symbol->type->function.codomainType;
         if (!symbol->isExtern && retType->astType != AST_VOID) {
-            if (symbol->def->astType != AST_UNDEF && symbol->def->type->astType != AST_UNDEF) {
-                if (!typesAreEquivalent(symbol->def->type, retType)) {
-                    ASTNode* coerced = tryCoerceToUnion(retType, symbol->def);
+            if (newDef->astType != AST_UNDEF && newDef->type->astType != AST_UNDEF) {
+                if (!typesAreEquivalent(newDef->type, retType)) {
+                    ASTNode* coerced = tryCoerceToUnion(retType, newDef);
                     if (coerced) {
-                        symbol->def = coerced;
+                        newDef = coerced;
                     } else {
-                        typeMismatchError(symbol->pos, symbol->def->type, retType);
+                        typeMismatchError(symbol->pos, newDef->type, retType);
                     }
                 }
-            } else if (!allReturnPath(symbol->def)) {
+            } else if (!allReturnPath(newDef)) {
                 error(symbol->pos, "not all paths return a value in '%s'", symbol->name);
             }
         }

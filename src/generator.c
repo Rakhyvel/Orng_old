@@ -507,6 +507,94 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
         fprintf(out, ";\n");
         break;
     }
+    case IR_BIT_OR: {
+        printVarAssign(out, ir->dest);
+        printVar(out, ir->src1);
+        fprintf(out, " | ");
+        printVar(out, ir->src2);
+        fprintf(out, ";\n");
+        break;
+    }
+    case IR_BIT_XOR: {
+        printVarAssign(out, ir->dest);
+        printVar(out, ir->src1);
+        fprintf(out, " ^ ");
+        printVar(out, ir->src2);
+        fprintf(out, ";\n");
+        break;
+    }
+    case IR_BIT_AND: {
+        printVarAssign(out, ir->dest);
+        printVar(out, ir->src1);
+        fprintf(out, " & ");
+        printVar(out, ir->src2);
+        fprintf(out, ";\n");
+        break;
+    }
+    case IR_LSHIFT: {
+        printVarAssign(out, ir->dest);
+        printVar(out, ir->src1);
+        fprintf(out, " << ");
+        printVar(out, ir->src2);
+        fprintf(out, ";\n");
+        break;
+    }
+    case IR_RSHIFT: {
+        printVarAssign(out, ir->dest);
+        printVar(out, ir->src1);
+        fprintf(out, " >> ");
+        printVar(out, ir->src2);
+        fprintf(out, ";\n");
+        break;
+    }
+    case IR_EQ: {
+        printVarAssign(out, ir->dest);
+        printVar(out, ir->src1);
+        fprintf(out, " == ");
+        printVar(out, ir->src2);
+        fprintf(out, ";\n");
+        break;
+    }
+    case IR_NEQ: {
+        printVarAssign(out, ir->dest);
+        printVar(out, ir->src1);
+        fprintf(out, " != ");
+        printVar(out, ir->src2);
+        fprintf(out, ";\n");
+        break;
+    }
+    case IR_GTR: {
+        printVarAssign(out, ir->dest);
+        printVar(out, ir->src1);
+        fprintf(out, " > ");
+        printVar(out, ir->src2);
+        fprintf(out, ";\n");
+        break;
+    }
+    case IR_LSR: {
+        printVarAssign(out, ir->dest);
+        printVar(out, ir->src1);
+        fprintf(out, " < ");
+        printVar(out, ir->src2);
+        fprintf(out, ";\n");
+        break;
+    }
+    case IR_GTE: {
+        printVarAssign(out, ir->dest);
+        printVar(out, ir->src1);
+        fprintf(out, " >= ");
+        printVar(out, ir->src2);
+        fprintf(out, ";\n");
+        break;
+    }
+    case IR_LTE: {
+        printVarAssign(out, ir->dest);
+        printVar(out, ir->src1);
+        fprintf(out, " <= ");
+        printVar(out, ir->src2);
+        fprintf(out, ";\n");
+        break;
+    }
     case IR_ADD: {
         printVarAssign(out, ir->dest);
         printVar(out, ir->src1);
@@ -523,10 +611,26 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
         fprintf(out, ";\n");
         break;
     }
-    case IR_LSR: {
+    case IR_MULTIPLY: {
         printVarAssign(out, ir->dest);
         printVar(out, ir->src1);
-        fprintf(out, " < ");
+        fprintf(out, " * ");
+        printVar(out, ir->src2);
+        fprintf(out, ";\n");
+        break;
+    }
+    case IR_DIVIDE: {
+        printVarAssign(out, ir->dest);
+        printVar(out, ir->src1);
+        fprintf(out, " / ");
+        printVar(out, ir->src2);
+        fprintf(out, ";\n");
+        break;
+    }
+    case IR_MODULUS: {
+        printVarAssign(out, ir->dest);
+        printVar(out, ir->src1);
+        fprintf(out, " % ");
         printVar(out, ir->src2);
         fprintf(out, ";\n");
         break;
