@@ -1620,24 +1620,11 @@ ASTNode* validateAST(ASTNode* node)
             var->activeFieldName = NULL;
         }
 
-        if (validCondition->astType == AST_TRUE) {
-            retval = validBodyBlock;
-            break;
-        } else if (validCondition->astType == AST_FALSE) {
-            if (validElseBlock->astType != AST_UNDEF) {
-                retval = validElseBlock;
-                break;
-            } else {
-                retval = NOTHING_AST;
-                break;
-            }
-        } else {
-            node->_if.condition = validCondition;
-            node->_if.bodyBlock = validBodyBlock;
-            node->_if.elseBlock = validElseBlock;
-            retval = node;
-            break;
-        }
+        node->_if.condition = validCondition;
+        node->_if.bodyBlock = validBodyBlock;
+        node->_if.elseBlock = validElseBlock;
+        retval = node;
+        break;
     }
     case AST_FOR: {
         // condition (#1) is bool type

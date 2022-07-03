@@ -308,10 +308,14 @@ IR* getTail(IR* head)
 
 IR* appendInstructionBasicBlock(BasicBlock* bb, IR* ir)
 {
-    ir->inBlock = bb;
-    IR* elem = getTail(bb->entry);
-    elem->next = ir;
-    ir->prev = elem;
+    if (bb->entry == NULL) {
+        bb->entry = ir;
+    } else {
+        ir->inBlock = bb;
+        IR* elem = getTail(bb->entry);
+        elem->next = ir;
+        ir->prev = elem;
+    }
     return ir;
 }
 
@@ -542,10 +546,7 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
         }
 
         generateDefers(cfg, node->block.symbol->defers, continueLabels);
-        if (!continueLabel && evalSymbolVersion) {
-        } else {
-            appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, end));
-        }
+        appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, end));
         generateDefers(cfg, node->block.symbol->defers, breakLabels);
         appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, breakLabel));
         generateDefers(cfg, node->block.symbol->defers, returnLabels);
@@ -1434,7 +1435,7 @@ bool deadCode(CFG* cfg)
 
         // Remove any symbols that aren't used
         for (IR* def = bb->entry; def != NULL; def = def->next) {
-            if (def->dest && !def->removed && !def->dest->used && def->dest->symbol != cfg->returnSymbol && strcmp(def->dest->symbol->name, "$return")) {
+            if (def->dest && !def->removed && !def->dest->used && def->dest->symbol != cfg->returnSymbol && def->dest->symbol != cfg->returnSymbol) {
                 removeInstruction(bb, def);
                 retval = true;
             }
@@ -1550,28 +1551,25 @@ List* createCFG(SymbolNode* functionSymbol)
 
     // Convert function definition AST to quadruple list
     SymbolVersion* eval = flattenAST(cfg, functionSymbol->def, NULL, NULL, NULL);
-    if (eval) {
-        SymbolVersion* returnVersion = unversionedSymbolVersion(cfg, cfg->returnSymbol, cfg->symbol->type->function.codomainType);
-        appendInstruction(cfg, createIR(IR_COPY, returnVersion, eval, NULL));
-        appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, NULL));
-    }
     printInstructionList(cfg);
 
     // Convert quadruple list to CFG of basic blocks, find versions!
     BasicBlock* returnBlock = createBasicBlock(cfg);
+    if (eval) {
+        SymbolVersion* returnVersion = unversionedSymbolVersion(cfg, cfg->returnSymbol, cfg->symbol->type->function.codomainType);
+        appendInstructionBasicBlock(returnBlock, createIR(IR_COPY, returnVersion, eval, NULL));
+        appendInstructionBasicBlock(returnBlock, createIR(IR_JUMP, returnVersion, eval, NULL));
+    }
     cfg->blockGraph = convertToBasicBlock(cfg, cfg->head, NULL);
     removeBasicBlockInstructions(cfg);
 
     // Optimize
-    printf("\n\n");
-    clearBBVisitedFlags(cfg);
-    printBlockGraph(cfg->blockGraph);
-    findUnusedSymbolVersions(cfg);
-    while (copyAndConstantPropagation(cfg) | deadCode(cfg)) {
+    do {
         printf("\n\n");
         clearBBVisitedFlags(cfg);
         printBlockGraph(cfg->blockGraph);
-    }
+        findUnusedSymbolVersions(cfg);
+    } while (copyAndConstantPropagation(cfg) | deadCode(cfg));
 
     forall(elem, cfg->basicBlocks)
     {
