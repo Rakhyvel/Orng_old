@@ -354,7 +354,8 @@ x Generate C code from IR
 		x div
 		x mod
 	x make validateAST not do optimizations
-	- make validateAST require coerceType (why didn't I do this before? hmm)
+	x make validateAST require coerceType (why didn't I do this before? hmm)
+	- coalesce validateAST cases
 	- op-assign
 		- add &&= and ||=
 	- fun little optimizations for binops and unops
@@ -374,6 +375,9 @@ x Generate C code from IR
 	- casts and type conversions
 	- calls
 	- cases
+		- some sort of set of mappings and their integer conditions so that duplicates can be detected
+		- what time are field case expressions?
+		- change syntax so that only one field mapping can have one codomain thingy
 	- union literals & default union literals
 	- orelse, field cases, SAT (possibly for optimizations, too!)
 - Orange should compile the program for you, too
@@ -425,6 +429,13 @@ x Generate C code from IR
 		- catch unwraps value if no error, or evaluates to default expression
 		- errdefer is another return exit path if return is an error, a subset of defers (ie it defers all defers, and also errdefers if return is error)
 - &&= and ||= operator for &&= and ||=, do not make &= and |= polymorphic
+- cleanup!
+	- replace for loops over lists with forall loops
+	- comments on everything
+	- fix enum and switch order to be consistent
+	- fix and consistify spelling of ASTs and IRs and Tokens and everything else
+	- write a markup to html program (in orange, add to github) and write tutorial/documentaiton
+	- reorder functions to be in prefix order
 - 'default' keyword which takes in a type and gives its default value
 	if x == default Int64 {
 		std.system.println("x is 0")

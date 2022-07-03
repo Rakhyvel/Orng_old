@@ -120,8 +120,8 @@ struct struct_1 string_56;
 
 int64_t test_testModule_main(struct struct_2 _args);
 
-#ifndef ORANGE_PROGRAM_17100
-#define ORANGE_PROGRAM_17100
+#ifndef ORANGE_PROGRAM_1230
+#define ORANGE_PROGRAM_1230
 
 /* String definitions */
 struct struct_1 string_0 = {20, (char[]){'n', 'o', ' ', 'm', 'e', 's', 's', 'a', 'g', 'e', ' ', 's', 'p', 'e', 'c', 'i', 'f', 'i', 'e', 'd', '\0'}};
