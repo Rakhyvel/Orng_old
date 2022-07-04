@@ -630,7 +630,7 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
     case IR_MODULUS: {
         printVarAssign(out, ir->dest);
         printVar(out, ir->src1);
-        fprintf(out, " % ");
+        fprintf(out, " %% ");
         printVar(out, ir->src2);
         fprintf(out, ";\n");
         break;
@@ -693,9 +693,9 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
     }
 }
 
-static void generatePhi(FILE* out, BasicBlock* from, BasicBlock* to, bool extraTab)
+static void generatePhi(FILE* out, List* argsList, BasicBlock* to, bool extraTab)
 {
-    forall(elem, from->arguments)
+    forall(elem, argsList)
     {
         SymbolVersion* argument = elem->data;
         SymbolVersion* parameter = NULL;
@@ -721,7 +721,7 @@ static void generatePhi(FILE* out, BasicBlock* from, BasicBlock* to, bool extraT
 
 static void generateBasicBlock(FILE* out, CFG* cfg, BasicBlock* bb)
 {
-    if (bb->visited || bb->id == 0) {
+    if (bb->visited) {
         return;
     }
     bb->visited = true;
@@ -734,20 +734,18 @@ static void generateBasicBlock(FILE* out, CFG* cfg, BasicBlock* bb)
         fprintf(out, "\tif (!");
         printVar(out, bb->condition);
         fprintf(out, ") {\n");
-        generatePhi(out, bb, bb->branch, true);
+        generatePhi(out, bb->branchArguments, bb->branch, true);
         fprintf(out, "\t\tgoto L%d;\n\t} else {\n", (int)bb->branch->id);
-        generatePhi(out, bb, bb->next, true);
+        generatePhi(out, bb->nextArguments, bb->next, true);
         fprintf(out, "\t\tgoto L%d;\n\t}\n", (int)bb->next->id);
         generateBasicBlock(out, cfg, bb->next);
         generateBasicBlock(out, cfg, bb->branch);
     } else if (bb->next) {
-        generatePhi(out, bb, bb->next, false);
+        generatePhi(out, bb->nextArguments, bb->next, false);
         fprintf(out, "\tgoto L%d;\n", (int)bb->next->id);
-        if (bb->next->id > 0) {
-            generateBasicBlock(out, cfg, bb->next);
-        }
+        generateBasicBlock(out, cfg, bb->next);
     } else {
-        fprintf(out, "\tgoto L0;\n");
+        fprintf(out, "\tgoto end;\n");
     }
 }
 
@@ -785,7 +783,7 @@ void generateFunctionDefinitions(FILE* out, CFG* callGraphNode)
     }
     clearBBVisitedFlags(callGraphNode);
     generateBasicBlock(out, callGraphNode, callGraphNode->blockGraph);
-    fprintf(out, "L0:;\n\treturn retval;\n}\n\n");
+    fprintf(out, "end:;\n\treturn retval;\n}\n\n");
 
     forall(elem, callGraphNode->leaves)
     {

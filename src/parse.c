@@ -643,12 +643,16 @@ static ASTNode* parseExpr(SymbolNode* scope)
         child = AST_Create_divAssign(child, parseOrExpr(scope), scope, token->pos);
     } else if ((token = accept(TOKEN_PERCENT_ASSIGN)) != NULL) {
         child = AST_Create_modAssign(child, parseOrExpr(scope), scope, token->pos);
-    } else if ((token = accept(TOKEN_AMPERSAND_ASSIGN)) != NULL) {
+    } else if ((token = accept(TOKEN_DAMPERSAND_ASSIGN)) != NULL) {
         child = AST_Create_andAssign(child, parseOrExpr(scope), scope, token->pos);
-    } else if ((token = accept(TOKEN_BAR_ASSIGN)) != NULL) {
+    } else if ((token = accept(TOKEN_DBAR_ASSIGN)) != NULL) {
         child = AST_Create_orAssign(child, parseOrExpr(scope), scope, token->pos);
+    } else if ((token = accept(TOKEN_AMPERSAND_ASSIGN)) != NULL) {
+        child = AST_Create_bitAndAssign(child, parseOrExpr(scope), scope, token->pos);
+    } else if ((token = accept(TOKEN_BAR_ASSIGN)) != NULL) {
+        child = AST_Create_bitOrAssign(child, parseOrExpr(scope), scope, token->pos);
     } else if ((token = accept(TOKEN_CARET_ASSIGN)) != NULL) {
-        child = AST_Create_xorAssign(child, parseOrExpr(scope), scope, token->pos);
+        child = AST_Create_bitXorAssign(child, parseOrExpr(scope), scope, token->pos);
     } else if ((token = accept(TOKEN_DLSR_ASSIGN)) != NULL) {
         child = AST_Create_lshiftAssign(child, parseOrExpr(scope), scope, token->pos);
     } else if ((token = accept(TOKEN_DGTR_ASSIGN)) != NULL) {

@@ -209,6 +209,10 @@ const char* Token_GetRepr(_TokenType type)
         return "/=";
     case TOKEN_PERCENT_ASSIGN:
         return "%=";
+    case TOKEN_DAMPERSAND_ASSIGN:
+        return "&&=";
+    case TOKEN_DBAR_ASSIGN:
+        return "||=";
     case TOKEN_AMPERSAND_ASSIGN:
         return "&=";
     case TOKEN_BAR_ASSIGN:

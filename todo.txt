@@ -355,7 +355,7 @@ x Generate C code from IR
 		x mod
 	x make validateAST not do optimizations
 	x make validateAST require coerceType (why didn't I do this before? hmm)
-	- coalesce validateAST cases
+	x coalesce validateAST cases
 	- op-assign
 		- add &&= and ||=
 	- fun little optimizations for binops and unops

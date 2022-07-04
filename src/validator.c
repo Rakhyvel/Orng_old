@@ -564,7 +564,9 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
     case AST_MOD_ASSIGN:
     case AST_AND_ASSIGN:
     case AST_OR_ASSIGN:
-    case AST_XOR_ASSIGN:
+    case AST_BIT_OR_ASSIGN:
+    case AST_BIT_XOR_ASSIGN:
+    case AST_BIT_AND_ASSIGN:
     case AST_LSHIFT_ASSIGN:
     case AST_RSHIFT_ASSIGN: {
         type = UNDEF_TYPE;
@@ -1450,6 +1452,39 @@ bool isTypeMaybe(ASTNode* type)
     }
 }
 
+typedef ASTNode* (*binopConstructor)(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
+binopConstructor getBinopConstructor(enum astType astType)
+{
+    switch (astType) {
+    case AST_ADD_ASSIGN:
+        return &AST_Create_add;
+    case AST_SUB_ASSIGN:
+        return &AST_Create_subtract;
+    case AST_MULT_ASSIGN:
+        return &AST_Create_multiply;
+    case AST_DIV_ASSIGN:
+        return &AST_Create_divide;
+    case AST_MOD_ASSIGN:
+        return &AST_Create_modulus;
+    case AST_AND_ASSIGN:
+        return &AST_Create_and;
+    case AST_OR_ASSIGN:
+        return &AST_Create_or;
+    case AST_BIT_OR_ASSIGN:
+        return &AST_Create_bitOr;
+    case AST_BIT_XOR_ASSIGN:
+        return &AST_Create_bitXor;
+    case AST_BIT_AND_ASSIGN:
+        return &AST_Create_bitAnd;
+    case AST_LSHIFT_ASSIGN:
+        return &AST_Create_lshift;
+    case AST_RSHIFT_ASSIGN:
+        return &AST_Create_rshift;
+    default:
+        PANIC("not an op-assign");
+    }
+}
+
 /*
 for reference:
 integral = int
@@ -1797,7 +1832,7 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
         if (function == NULL) {
             function = Symbol_TypeAncestor(node->scope, SYMBOL_FUNCTION);
             if (function == NULL) {
-                error(node->pos, "retval = not within function");
+                error(node->pos, "return not within function");
                 break;
             }
         }
@@ -2006,58 +2041,7 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
         retval = node;
         break;
     }
-    case AST_BIT_OR: {
-        node->binop.left = validateAST(node->binop.left, INT64_TYPE);
-        node->binop.right = validateAST(node->binop.right, INT64_TYPE);
-        retval = node;
-        break;
-    }
-    case AST_BIT_XOR: {
-        node->binop.left = validateAST(node->binop.left, INT64_TYPE);
-        node->binop.right = validateAST(node->binop.right, INT64_TYPE);
-        retval = node;
-        break;
-    }
-    case AST_BIT_AND: {
-        node->binop.left = validateAST(node->binop.left, INT64_TYPE);
-        node->binop.right = validateAST(node->binop.right, INT64_TYPE);
-        retval = node;
-        break;
-    }
-    case AST_LSHIFT: {
-        node->binop.left = validateAST(node->binop.left, INT64_TYPE);
-        node->binop.right = validateAST(node->binop.right, INT64_TYPE);
-        retval = node;
-        break;
-    }
-    case AST_RSHIFT: {
-        node->binop.left = validateAST(node->binop.left, INT64_TYPE);
-        node->binop.right = validateAST(node->binop.right, INT64_TYPE);
-        retval = node;
-        break;
-    }
-    case AST_EQ: {
-        ASTNode* left = validateAST(node->binop.left, NULL);
-        ASTNode* right = validateAST(node->binop.right, NULL);
-        ASTNode* leftType = getType(left, false, false);
-        ASTNode* rightType = getType(right, false, false);
-
-        node->binop.left = left;
-        node->binop.right = right;
-
-        if (isTypeMaybe(leftType) && left->astType == AST_IDENT && right->astType == AST_NOTHING) {
-            retval = node;
-            break;
-        } else if (!typesAreEquivalent(rightType, leftType)) {
-            incompatibleTypesError(node->pos, leftType, rightType);
-        } else if (leftType->astType == AST_PARAMLIST || leftType->astType == AST_ARRAY || rightType->astType == AST_PARAMLIST || rightType->astType == AST_ARRAY) {
-            // TODO: Allow shallow struct comparisons
-            error(node->pos, "comparison on struct type");
-        } else {
-            retval = node;
-            break;
-        }
-    }
+    case AST_EQ:
     case AST_NEQ: {
         ASTNode* left = validateAST(node->binop.left, NULL);
         ASTNode* right = validateAST(node->binop.right, NULL);
@@ -2079,98 +2063,24 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
             break;
         }
     }
-    case AST_GTR: {
-        ASTNode* left = validateAST(node->binop.left, REAL64_TYPE);
-        ASTNode* right = validateAST(node->binop.right, REAL64_TYPE);
-        ASTNode* leftType = getType(left, false, false);
-        ASTNode* rightType = getType(right, false, false);
-
-        node->binop.left = left;
-        node->binop.right = right;
-
-        retval = node;
-        break;
-    }
-    case AST_LSR: {
-        ASTNode* left = validateAST(node->binop.left, REAL64_TYPE);
-        ASTNode* right = validateAST(node->binop.right, REAL64_TYPE);
-        ASTNode* leftType = getType(left, false, false);
-        ASTNode* rightType = getType(right, false, false);
-
-        node->binop.left = left;
-        node->binop.right = right;
-        retval = node;
-        break;
-    }
-    case AST_GTE: {
-        // right type <= left type
-        ASTNode* left = validateAST(node->binop.left, REAL64_TYPE);
-        ASTNode* right = validateAST(node->binop.right, REAL64_TYPE);
-        ASTNode* leftType = getType(left, false, false);
-        ASTNode* rightType = getType(right, false, false);
-
-        node->binop.left = left;
-        node->binop.right = right;
-
-        retval = node;
-        break;
-    }
-    case AST_LTE: {
-        // right type <= left type
-        ASTNode* left = validateAST(node->binop.left, REAL64_TYPE);
-        ASTNode* right = validateAST(node->binop.right, REAL64_TYPE);
-        ASTNode* leftType = getType(left, false, false);
-        ASTNode* rightType = getType(right, false, false);
-
-        node->binop.left = left;
-        node->binop.right = right;
-
-        retval = node;
-        break;
-    }
-    case AST_ADD: {
-        // types on both sides are scalar types
-        ASTNode* left = validateAST(node->binop.left, REAL64_TYPE);
-        ASTNode* right = validateAST(node->binop.right, REAL64_TYPE);
-
-        node->binop.left = left;
-        node->binop.right = right;
-
-        retval = node;
-        break;
-    }
-    case AST_SUBTRACT: {
-        // types on both sides are scalar types
-        ASTNode* left = validateAST(node->binop.left, REAL64_TYPE);
-        ASTNode* right = validateAST(node->binop.right, REAL64_TYPE);
-
-        node->binop.left = left;
-        node->binop.right = right;
-
-        retval = node;
-        break;
-    }
-    case AST_MULTIPLY: {
-        // types on both sides are scalar types
-        ASTNode* left = validateAST(node->binop.left, REAL64_TYPE);
-        ASTNode* right = validateAST(node->binop.right, REAL64_TYPE);
-
-        node->binop.left = left;
-        node->binop.right = right;
-
-        retval = node;
-        break;
-    }
+    case AST_GTR:
+    case AST_LSR:
+    case AST_GTE:
+    case AST_LTE:
+    case AST_ADD:
+    case AST_SUBTRACT:
+    case AST_MULTIPLY:
     case AST_DIVIDE: {
-        ASTNode* left = validateAST(node->binop.left, REAL64_TYPE);
-        ASTNode* right = validateAST(node->binop.right, REAL64_TYPE);
-
-        node->binop.left = left;
-        node->binop.right = right;
-
+        node->binop.left = validateAST(node->binop.left, REAL64_TYPE);
+        node->binop.right = validateAST(node->binop.right, REAL64_TYPE);
         retval = node;
         break;
     }
+    case AST_BIT_OR:
+    case AST_BIT_XOR:
+    case AST_BIT_AND:
+    case AST_LSHIFT:
+    case AST_RSHIFT:
     case AST_MODULUS: {
         ASTNode* left = validateAST(node->binop.left, INT64_TYPE);
         ASTNode* right = validateAST(node->binop.right, INT64_TYPE);
@@ -2211,27 +2121,8 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
     }
     case AST_ADD_ASSIGN:
     case AST_SUB_ASSIGN:
-    case AST_MULT_ASSIGN: {
-        // right type <= left type
-        ASTNode* left = node->binop.left;
-        left->type = validateAST(left, REAL64_TYPE)->type;
-        ASTNode* right = validateAST(node->binop.right, REAL64_TYPE);
-        ASTNode* leftType = getType(left, false, false);
-        ASTNode* rightType = getType(right, false, false);
-        if (!typesAreEquivalent(rightType, leftType)) {
-            incompatibleTypesError(node->pos, leftType, rightType);
-        }
-
-        // left type is an l-value
-        validateLValue(left);
-        node->binop.left = left;
-        node->binop.right = right;
-
-        retval = node;
-        break;
-    }
+    case AST_MULT_ASSIGN:
     case AST_DIV_ASSIGN: {
-        // right type <= left type
         ASTNode* left = node->binop.left;
         left->type = validateAST(left, REAL64_TYPE)->type;
         ASTNode* right = validateAST(node->binop.right, REAL64_TYPE);
@@ -2241,18 +2132,15 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
             incompatibleTypesError(node->pos, leftType, rightType);
         }
 
-        // left type is an l-value
         validateLValue(left);
 
-        node->binop.left = left;
-        node->binop.right = right;
-
-        retval = node;
+        binopConstructor constructor = getBinopConstructor(node->astType);
+        retval = AST_Create_assign(left, constructor(left, right, node->scope, node->pos), node->scope, node->pos);
+        validateAST(retval, NULL); // To give it a type
         break;
     }
     case AST_AND_ASSIGN:
     case AST_OR_ASSIGN: {
-        // right type <= left type
         ASTNode* left = node->binop.left;
         left->type = validateAST(left, BOOL_TYPE)->type;
         ASTNode* right = validateAST(node->binop.right, BOOL_TYPE);
@@ -2262,20 +2150,19 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
             incompatibleTypesError(node->pos, leftType, rightType);
         }
 
-        // left type is an l-value
         validateLValue(left);
 
-        node->binop.left = left;
-        node->binop.right = right;
-
-        retval = node;
+        binopConstructor constructor = getBinopConstructor(node->astType);
+        retval = AST_Create_assign(left, constructor(left, right, node->scope, node->pos), node->scope, node->pos);
+        validateAST(retval, NULL); // To give it a type
         break;
     }
-    case AST_XOR_ASSIGN:
+    case AST_BIT_OR_ASSIGN:
+    case AST_BIT_XOR_ASSIGN:
+    case AST_BIT_AND_ASSIGN:
     case AST_MOD_ASSIGN:
     case AST_LSHIFT_ASSIGN:
     case AST_RSHIFT_ASSIGN: {
-        // right type <= left type
         ASTNode* left = node->binop.left;
         left->type = validateAST(left, INT64_TYPE)->type;
         ASTNode* right = validateAST(node->binop.right, INT64_TYPE);
@@ -2285,12 +2172,11 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
             incompatibleTypesError(node->pos, leftType, rightType);
         }
 
-        // left type is an l-value
         validateLValue(left);
-        node->binop.left = left;
-        node->binop.right = right;
 
-        retval = node;
+        binopConstructor constructor = getBinopConstructor(node->astType);
+        retval = AST_Create_assign(left, constructor(left, right, node->scope, node->pos), node->scope, node->pos);
+        validateAST(retval, NULL); // To give it a type
         break;
     }
     case AST_NOT: {

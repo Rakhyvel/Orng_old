@@ -1,7 +1,6 @@
 testModule::Module = (
 	main::(args:[]String)->Int = {
-		x:Int = 4
-		y:Int = 3
-		x | y
+		x:Int = if args.length > 0 {args.length} else {0}
+		x
 	}
 )

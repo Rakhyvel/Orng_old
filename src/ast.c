@@ -501,9 +501,25 @@ ASTNode* AST_Create_orAssign(struct astNode* left, struct astNode* right, struct
     return retval;
 }
 
-ASTNode* AST_Create_xorAssign(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos)
+ASTNode* AST_Create_bitAndAssign(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos)
 {
-    ASTNode* retval = AST_Create(AST_XOR_ASSIGN, scope, pos);
+    ASTNode* retval = AST_Create(AST_BIT_AND_ASSIGN, scope, pos);
+    retval->binop.left = left;
+    retval->binop.right = right;
+    return retval;
+}
+
+ASTNode* AST_Create_bitOrAssign(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos)
+{
+    ASTNode* retval = AST_Create(AST_BIT_OR_ASSIGN, scope, pos);
+    retval->binop.left = left;
+    retval->binop.right = right;
+    return retval;
+}
+
+ASTNode* AST_Create_bitXorAssign(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos)
+{
+    ASTNode* retval = AST_Create(AST_BIT_XOR_ASSIGN, scope, pos);
     retval->binop.left = left;
     retval->binop.right = right;
     return retval;

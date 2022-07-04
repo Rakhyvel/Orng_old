@@ -114,11 +114,12 @@ typedef struct BasicBlock {
     bool hasBranch;
     int id;
     int incoming;
-    struct symbolVersion* condition; // Used for conditional jumps
+    struct list* parameters; // List of symbol versions that are used somewhere in an IR in the BB, but are not defined anywhere in the BB up to the IR in question
     struct BasicBlock* next; // Used by jump, and branch if condition is true
+    struct list* nextArguments; // These symbols are copied to the parameters of the next BB
     struct BasicBlock* branch; // Used by branch if condition is false
-    struct list* parameters; // These symbols are needed to be phi-noded. They are defined somewhere in this BB, and are used by children BB
-    struct list* arguments; // These symbols are
+    struct symbolVersion* condition; // Used for conditional jumps
+    struct list* branchArguments; // These symbols are copied to the parameters of the branch BB
     bool visited;
 } BasicBlock;
 
