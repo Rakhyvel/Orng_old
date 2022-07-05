@@ -363,7 +363,7 @@ static void generateStrings(FILE* out, List* strings)
 
 void printVarDef(FILE* out, SymbolVersion* version)
 {
-    fprintf(out, "\t");
+    fprintf(out, "\tregister ");
     printType(out, version->type);
     fprintf(out, " ");
     if (version->symbol->name[0] != '$') {

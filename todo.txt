@@ -356,16 +356,18 @@ x Generate C code from IR
 	x make validateAST not do optimizations
 	x make validateAST require coerceType (why didn't I do this before? hmm)
 	x coalesce validateAST cases
-	- op-assign
-		- add &&= and ||=
+	x op-assign
+		x add &&= and ||=
 	- fun little optimizations for binops and unops
-		- bit or-ing 0
-		- left/right shifting 0
-		- adding/subbing 0
-		- multing/diving/modding 1
-		- known value computations
-		- doing things at compile time for literals
+		x bit or-ing 0
+		x left/right shifting 0
+		x adding/subbing 0
+		x multing/diving/modding 1
+		x multing 0
+		x known value computations for all binops
+		- doing things at compile time for literals (what)
 		- if the src of an unop is a copy, perform the unop of the src1 of the copy
+	- binops should cast up to max subtype of left and right
 	- 0 <= index < array size
 	- 0 <= slice lower bound < array size
 	- 0 <= slice upper bound < array size
@@ -374,6 +376,7 @@ x Generate C code from IR
 	- free
 	- casts and type conversions
 	- calls
+		- function arguments
 	- cases
 		- some sort of set of mappings and their integer conditions so that duplicates can be detected
 		- what time are field case expressions?
@@ -514,6 +517,13 @@ x Generate C code from IR
 	- variables are always "readers" of data
 	- mutable variables can be writers of data
 	- immutable variables cannot be writers of data
+	- f ::(x:Real)->Real = {y::Real = x; y} -- not possible, x isn't comptime known
+	  f`::(x:Real)->Real = {y:-Real = x; y} -- possible! y is runtime constant, ie always a reader and never a writer
+	- can enforce read-only through types!
+	  y:-Real = 0.4
+	  z:&-Real = &y
+	  g:-Real = *z -- maybe change deref token so its not confused with multiplication across newlines
+	  *z = 5.6 -- Cannot do! z is of type &-Real, *z is of type -Real, cannot reassign! Easy!
 - @attributes, then test suite
 	- define a type, can then congregate those symbols at compiletime in an array
 	- global namespace? or maybe a separate namespace from other identifiers

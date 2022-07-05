@@ -1,6 +1,9 @@
 testModule::Module = (
 	main::(args:[]String)->Int = {
-		x:Int = if args.length > 0 {args.length} else {0}
+		x:Int
+		for i := 0; i < 10; i += 1 {
+			x += i
+		}
 		x
 	}
 )
