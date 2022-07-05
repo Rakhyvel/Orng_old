@@ -1157,38 +1157,44 @@ bool copyAndConstantPropagation(CFG* cfg)
         for (IR* def = bb->entry; def != NULL; def = def->next) {
             switch (def->irType) {
             case IR_COPY:
+                // Self copy (should remove)
                 if (def->dest->symbol == def->src1->symbol && def->dest->version == def->src1->version) {
                     break;
-                } else if (def->src1->def && def->src1->def->irType == IR_LOAD_INT && !def->src1->symbol->isVolatile) {
+                }
+                // Integer constant propagation
+                else if (def->src1->def && def->src1->def->irType == IR_LOAD_INT && !def->src1->symbol->isVolatile) {
                     def->irType = IR_LOAD_INT;
                     def->intData = def->src1->def->intData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
-                } else if (def->src1->def && def->src1->def->irType == IR_LOAD_REAL && !def->src1->symbol->isVolatile) {
+                }
+                // Real constant propagation
+                else if (def->src1->def && def->src1->def->irType == IR_LOAD_REAL && !def->src1->symbol->isVolatile) {
                     def->irType = IR_LOAD_REAL;
                     def->doubleData = def->src1->def->doubleData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
-                } else if (def->src1->def && def->src1->def->irType == IR_LOAD_ARRAY_LITERAL && !def->src1->symbol->isVolatile) {
+                }
+                // Array literal propagation
+                else if (def->src1->def && def->src1->def->irType == IR_LOAD_ARRAY_LITERAL && !def->src1->symbol->isVolatile) {
                     def->irType = IR_LOAD_ARRAY_LITERAL;
                     def->listData = def->src1->def->listData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
-                } else if (def->src1->def && def->src1->def->irType == IR_LOAD_ARGLIST && !def->src1->symbol->isVolatile) {
+                }
+                // Arglist literal propagation
+                else if (def->src1->def && def->src1->def->irType == IR_LOAD_ARGLIST && !def->src1->symbol->isVolatile) {
                     def->irType = IR_LOAD_ARGLIST;
                     def->listData = def->src1->def->listData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
-                } else if (def->src1->def && def->src1->def->irType == IR_COPY && def->src1 != def->src1->def->src1 && !def->src1->symbol->isVolatile) {
-                    def->src1 = def->src1->def->src1;
-                    retval = true;
-                } else if (def->src1->def && def->src1->def->irType == IR_DOT && !def->src1->symbol->isVolatile) {
-                    def->irType = IR_DOT;
-                    def->strData = def->src1->def->strData;
+                }
+                // Copy propagation
+                else if (def->src1->def && def->src1->def->irType == IR_COPY && def->src1 != def->src1->def->src1 && !def->src1->symbol->isVolatile) {
                     def->src1 = def->src1->def->src1;
                     retval = true;
                 }
@@ -1218,6 +1224,22 @@ bool copyAndConstantPropagation(CFG* cfg)
                     def->src2 = NULL;
                     retval = true;
                 }
+                // Known int/real value
+                else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_INT && def->src2->def->irType == IR_LOAD_REAL) {
+                    def->irType = IR_LOAD_INT;
+                    def->doubleData = def->src1->def->intData == def->src2->def->doubleData;
+                    def->src1 = NULL;
+                    def->src2 = NULL;
+                    retval = true;
+                }
+                // Known real/real value
+                else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_REAL && def->src2->def->irType == IR_LOAD_INT) {
+                    def->irType = IR_LOAD_INT;
+                    def->intData = def->src1->def->doubleData == def->src2->def->intData;
+                    def->src1 = NULL;
+                    def->src2 = NULL;
+                    retval = true;
+                }
                 break;
             case IR_NEQ:
                 // Known int value
@@ -1232,6 +1254,22 @@ bool copyAndConstantPropagation(CFG* cfg)
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_REAL && def->src2->def->irType == IR_LOAD_REAL) {
                     def->irType = IR_LOAD_INT;
                     def->intData = def->src1->def->doubleData != def->src2->def->doubleData;
+                    def->src1 = NULL;
+                    def->src2 = NULL;
+                    retval = true;
+                }
+                // Known int/real value
+                else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_INT && def->src2->def->irType == IR_LOAD_REAL) {
+                    def->irType = IR_LOAD_INT;
+                    def->doubleData = def->src1->def->intData != def->src2->def->doubleData;
+                    def->src1 = NULL;
+                    def->src2 = NULL;
+                    retval = true;
+                }
+                // Known real/real value
+                else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_REAL && def->src2->def->irType == IR_LOAD_INT) {
+                    def->irType = IR_LOAD_INT;
+                    def->intData = def->src1->def->doubleData != def->src2->def->intData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -1254,6 +1292,22 @@ bool copyAndConstantPropagation(CFG* cfg)
                     def->src2 = NULL;
                     retval = true;
                 }
+                // Known int/real value
+                else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_INT && def->src2->def->irType == IR_LOAD_REAL) {
+                    def->irType = IR_LOAD_INT;
+                    def->doubleData = def->src1->def->intData > def->src2->def->doubleData;
+                    def->src1 = NULL;
+                    def->src2 = NULL;
+                    retval = true;
+                }
+                // Known real/real value
+                else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_REAL && def->src2->def->irType == IR_LOAD_INT) {
+                    def->irType = IR_LOAD_INT;
+                    def->intData = def->src1->def->doubleData > def->src2->def->intData;
+                    def->src1 = NULL;
+                    def->src2 = NULL;
+                    retval = true;
+                }
                 break;
             case IR_LSR:
                 // Known int value
@@ -1268,6 +1322,22 @@ bool copyAndConstantPropagation(CFG* cfg)
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_REAL && def->src2->def->irType == IR_LOAD_REAL) {
                     def->irType = IR_LOAD_INT;
                     def->intData = def->src1->def->doubleData < def->src2->def->doubleData;
+                    def->src1 = NULL;
+                    def->src2 = NULL;
+                    retval = true;
+                }
+                // Known int/real value
+                else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_INT && def->src2->def->irType == IR_LOAD_REAL) {
+                    def->irType = IR_LOAD_INT;
+                    def->doubleData = def->src1->def->intData < def->src2->def->doubleData;
+                    def->src1 = NULL;
+                    def->src2 = NULL;
+                    retval = true;
+                }
+                // Known real/real value
+                else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_REAL && def->src2->def->irType == IR_LOAD_INT) {
+                    def->irType = IR_LOAD_INT;
+                    def->intData = def->src1->def->doubleData < def->src2->def->intData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -1290,6 +1360,22 @@ bool copyAndConstantPropagation(CFG* cfg)
                     def->src2 = NULL;
                     retval = true;
                 }
+                // Known int/real value
+                else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_INT && def->src2->def->irType == IR_LOAD_REAL) {
+                    def->irType = IR_LOAD_INT;
+                    def->doubleData = def->src1->def->intData >= def->src2->def->doubleData;
+                    def->src1 = NULL;
+                    def->src2 = NULL;
+                    retval = true;
+                }
+                // Known real/real value
+                else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_REAL && def->src2->def->irType == IR_LOAD_INT) {
+                    def->irType = IR_LOAD_INT;
+                    def->intData = def->src1->def->doubleData >= def->src2->def->intData;
+                    def->src1 = NULL;
+                    def->src2 = NULL;
+                    retval = true;
+                }
                 break;
             case IR_LTE:
                 // Known int value
@@ -1308,6 +1394,22 @@ bool copyAndConstantPropagation(CFG* cfg)
                     def->src2 = NULL;
                     retval = true;
                 }
+                // Known int/real value
+                else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_INT && def->src2->def->irType == IR_LOAD_REAL) {
+                    def->irType = IR_LOAD_INT;
+                    def->doubleData = def->src1->def->intData <= def->src2->def->doubleData;
+                    def->src1 = NULL;
+                    def->src2 = NULL;
+                    retval = true;
+                }
+                // Known real/real value
+                else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_REAL && def->src2->def->irType == IR_LOAD_INT) {
+                    def->irType = IR_LOAD_INT;
+                    def->intData = def->src1->def->doubleData <= def->src2->def->intData;
+                    def->src1 = NULL;
+                    def->src2 = NULL;
+                    retval = true;
+                }
                 break;
             case IR_ADD:
                 // Known int value
@@ -1322,6 +1424,22 @@ bool copyAndConstantPropagation(CFG* cfg)
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_REAL && def->src2->def->irType == IR_LOAD_REAL) {
                     def->irType = IR_LOAD_REAL;
                     def->doubleData = def->src1->def->doubleData + def->src2->def->doubleData;
+                    def->src1 = NULL;
+                    def->src2 = NULL;
+                    retval = true;
+                }
+                // Known int/real value
+                else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_INT && def->src2->def->irType == IR_LOAD_REAL) {
+                    def->irType = IR_LOAD_REAL;
+                    def->doubleData = def->src1->def->intData + def->src2->def->doubleData;
+                    def->src1 = NULL;
+                    def->src2 = NULL;
+                    retval = true;
+                }
+                // Known real/real value
+                else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_REAL && def->src2->def->irType == IR_LOAD_INT) {
+                    def->irType = IR_LOAD_REAL;
+                    def->doubleData = def->src1->def->doubleData + def->src2->def->intData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -1357,6 +1475,22 @@ bool copyAndConstantPropagation(CFG* cfg)
                     def->src2 = NULL;
                     retval = true;
                 }
+                // Known int/real value
+                else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_INT && def->src2->def->irType == IR_LOAD_REAL) {
+                    def->irType = IR_LOAD_REAL;
+                    def->doubleData = def->src1->def->intData - def->src2->def->doubleData;
+                    def->src1 = NULL;
+                    def->src2 = NULL;
+                    retval = true;
+                }
+                // Known real/real value
+                else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_REAL && def->src2->def->irType == IR_LOAD_INT) {
+                    def->irType = IR_LOAD_REAL;
+                    def->doubleData = def->src1->def->doubleData - def->src2->def->intData;
+                    def->src1 = NULL;
+                    def->src2 = NULL;
+                    retval = true;
+                }
                 // Left identity
                 else if (def->src1->def && def->src1->def->irType == IR_LOAD_INT && def->src1->def->intData == 0) {
                     def->irType = IR_COPY;
@@ -1384,6 +1518,22 @@ bool copyAndConstantPropagation(CFG* cfg)
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_REAL && def->src2->def->irType == IR_LOAD_REAL) {
                     def->irType = IR_LOAD_REAL;
                     def->doubleData = def->src1->def->doubleData * def->src2->def->doubleData;
+                    def->src1 = NULL;
+                    def->src2 = NULL;
+                    retval = true;
+                }
+                // Known int/real value
+                else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_INT && def->src2->def->irType == IR_LOAD_REAL) {
+                    def->irType = IR_LOAD_REAL;
+                    def->doubleData = def->src1->def->intData * def->src2->def->doubleData;
+                    def->src1 = NULL;
+                    def->src2 = NULL;
+                    retval = true;
+                }
+                // Known real/real value
+                else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_REAL && def->src2->def->irType == IR_LOAD_INT) {
+                    def->irType = IR_LOAD_REAL;
+                    def->doubleData = def->src1->def->doubleData * def->src2->def->intData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -1431,6 +1581,22 @@ bool copyAndConstantPropagation(CFG* cfg)
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_REAL && def->src2->def->irType == IR_LOAD_REAL) {
                     def->irType = IR_LOAD_REAL;
                     def->doubleData = def->src1->def->doubleData / def->src2->def->doubleData;
+                    def->src1 = NULL;
+                    def->src2 = NULL;
+                    retval = true;
+                }
+                // Known int/real value
+                else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_INT && def->src2->def->irType == IR_LOAD_REAL) {
+                    def->irType = IR_LOAD_REAL;
+                    def->doubleData = def->src1->def->intData / def->src2->def->doubleData;
+                    def->src1 = NULL;
+                    def->src2 = NULL;
+                    retval = true;
+                }
+                // Known real/real value
+                else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_REAL && def->src2->def->irType == IR_LOAD_INT) {
+                    def->irType = IR_LOAD_REAL;
+                    def->doubleData = def->src1->def->doubleData / def->src2->def->intData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -1533,8 +1699,8 @@ bool copyAndConstantPropagation(CFG* cfg)
                     def->intData = 0;
                     retval = true;
                 }
-				// Right known value
-				else if (def->src2->def && def->src2->def->irType == IR_LOAD_INT && def->src2->def->intData == 0) {
+                // Right known value
+                else if (def->src2->def && def->src2->def->irType == IR_LOAD_INT && def->src2->def->intData == 0) {
                     def->irType = IR_COPY;
                     def->src2 = NULL;
                     retval = true;
@@ -1565,6 +1731,7 @@ bool copyAndConstantPropagation(CFG* cfg)
                 }
                 break;
             case IR_NOT:
+				// Known int value
                 if (def->src1->def && def->src1->def->irType == IR_LOAD_INT) {
                     def->irType = IR_LOAD_INT;
                     def->intData = !def->src1->def->intData;
@@ -1574,6 +1741,7 @@ bool copyAndConstantPropagation(CFG* cfg)
                 }
                 break;
             case IR_NEGATE:
+                // Known int value
                 if (def->src1->def && def->src1->def->irType == IR_LOAD_INT) {
                     def->irType = IR_LOAD_INT;
                     def->intData = -def->src1->def->intData;
@@ -1581,8 +1749,17 @@ bool copyAndConstantPropagation(CFG* cfg)
                     def->src2 = NULL;
                     retval = true;
                 }
+                // Known real value
+                else if (def->src1->def && def->src1->def->irType == IR_LOAD_REAL) {
+                    def->irType = IR_LOAD_INT;
+                    def->doubleData = -def->src1->def->doubleData;
+                    def->src1 = NULL;
+                    def->src2 = NULL;
+                    retval = true;
+                }
                 break;
             case IR_BIT_NOT:
+				// Known int value
                 if (def->src1->def && def->src1->def->irType == IR_LOAD_INT) {
                     def->irType = IR_LOAD_INT;
                     def->intData = ~def->src1->def->intData;
@@ -1592,7 +1769,8 @@ bool copyAndConstantPropagation(CFG* cfg)
                 }
                 break;
             case IR_PHONY:
-                if (def && def->irType == IR_PHONY) {
+				// Phony IRs with only one def should be that single def
+                if (def && def->irType == IR_PHONY) { // Make sure this is consistent, does necessarily have to be
                     forall(elem, def->listData)
                     {
                         IR* phonyDef = elem->data;

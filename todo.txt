@@ -365,15 +365,13 @@ x Generate C code from IR
 		x multing/diving/modding 1
 		x multing 0
 		x known value computations for all binops
-		- doing things at compile time for literals (what)
-		- if the src of an unop is a copy, perform the unop of the src1 of the copy
-	- binops should cast up to max subtype of left and right
 	- 0 <= index < array size
 	- 0 <= slice lower bound < array size
 	- 0 <= slice upper bound < array size
 	- cannot divide by zero
 	- new
 	- free
+	- strings
 	- casts and type conversions
 	- calls
 		- function arguments
@@ -436,6 +434,7 @@ x Generate C code from IR
 	- replace for loops over lists with forall loops
 	- comments on everything
 	- fix enum and switch order to be consistent
+	- change references to "double" to "real"
 	- fix and consistify spelling of ASTs and IRs and Tokens and everything else
 	- write a markup to html program (in orange, add to github) and write tutorial/documentaiton
 	- reorder functions to be in prefix order

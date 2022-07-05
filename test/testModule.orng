@@ -1,9 +1,4 @@
 testModule::Module = (
-	main::(args:[]String)->Int = {
-		x:Int
-		for i := 0; i < 10; i += 1 {
-			x += i
-		}
-		x
-	}
+	main::(args:[]String)->Int = 
+		if 4 / 2.0 == 0 {0} else {1}
 )

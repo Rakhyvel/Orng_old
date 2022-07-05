@@ -120,8 +120,8 @@ struct struct_1 string_56;
 
 int64_t test_testModule_main(struct struct_2 _args);
 
-#ifndef ORANGE_PROGRAM_10683
-#define ORANGE_PROGRAM_10683
+#ifndef ORANGE_PROGRAM_27227
+#define ORANGE_PROGRAM_27227
 
 /* String definitions */
 struct struct_1 string_0 = {20, (char[]){'n', 'o', ' ', 'm', 'e', 's', 's', 'a', 'g', 'e', ' ', 's', 'p', 'e', 'c', 'i', 'f', 'i', 'e', 'd', '\0'}};
@@ -185,48 +185,8 @@ struct struct_1 string_56 = {11, (char[]){'<', 's', 't', 'd', 'b', 'o', 'o', 'l'
 int64_t test_testModule_main(struct struct_2 _args)
 {
 	int64_t retval;
-	register int64_t _158_x_0;
-	register int64_t _159_i_0;
-	register int64_t _159_i_2;
-	register int64_t _2;
-	register bool _3;
-	register int64_t _158_x_5;
-	register int64_t _159_i_3;
-	register int64_t _4;
-	register int64_t _159_i_1;
-	register int64_t _5;
-	register int64_t _6;
-	register int64_t _158_x_6;
-	register int64_t _158_x_3;
-	register int64_t _158_x_4;
-L0:; // incoming:1
-	_158_x_0 = 0;
-	_159_i_0 = 0;
-	_159_i_2 = _159_i_0;
-	_158_x_4 = _158_x_0;
-	goto L1;
-L1:; // incoming:2
-	_2 = 10;
-	_3 = _159_i_2 < _2;
-	if (!_3) {
-		_158_x_6 = _158_x_4;
-		goto L6;
-	} else {
-		_158_x_5 = _158_x_4;
-		_159_i_3 = _159_i_2;
-		goto L2;
-	}
-L2:; // incoming:1
-	_4 = _158_x_5 + _159_i_3;
-	_158_x_3 = _4;
-	_5 = 1;
-	_6 = _159_i_3 + _5;
-	_159_i_1 = _6;
-	_159_i_2 = _159_i_1;
-	_158_x_4 = _158_x_3;
-	goto L1;
-L6:; // incoming:1
-	retval = _158_x_6;
+L3:; // incoming:1
+	retval = 1;
 	goto end;
 end:;
 	return retval;
