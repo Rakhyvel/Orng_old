@@ -365,7 +365,7 @@ x Generate C code from IR
 		x multing/diving/modding 1
 		x multing 0
 		x known value computations for all binops
-	- 0 <= index < array size
+	x 0 <= index < array size
 	- 0 <= slice lower bound < array size
 	- 0 <= slice upper bound < array size
 	- cannot divide by zero
@@ -437,12 +437,21 @@ x Generate C code from IR
 	- change references to "double" to "real"
 	- fix and consistify spelling of ASTs and IRs and Tokens and everything else
 	- write a markup to html program (in orange, add to github) and write tutorial/documentaiton
-	- reorder functions to be in prefix order
+	- reorder functions to be in prefix order, fix header order
+	- variable name semantics
+		- 'type' for AST nodes that are types
+		- 'node' for other AST nodes
+		- 'ir' for IRs
+		- 'bb' for Basic Blocks
+		- 'token' for Tokens
+		- 'cfg' for a CFG
+		- 'pos' for a Position
+		- 'symbol' for a SymbolNode (not 'scope')
 - 'default' keyword which takes in a type and gives its default value
 	if x == default Int64 {
 		std.system.println("x is 0")
 	}
-	- useful for generics and allocators
+	- useful for variants and allocators
 	new::(T::Type, init::T=default T)->AllocationError!&T = {
 		malloc?::(size:Int64)->&Any
 		retval := malloc(sizeof T):&T
@@ -454,7 +463,7 @@ x Generate C code from IR
 		retval := try alloc.new(Whatever, ("This is the default\n", 34, 535.5))
 		
 	}
-- generics
+- parametric types
 	- you would need a function that 'returns' a type
 		- this would require a unification of type and value syntax
 		- can I find any instances where this leads to ambiguity that cannot be solved?
@@ -465,7 +474,7 @@ x Generate C code from IR
 		- referential transparency- most function calls can simply be replaced with their definition
 		- all parameters are compile-time known, can simply replace references to the parameters with the arguments in the definition
 			- doesn't this imply we'd need to clone the def AST?
-	- rewrite util data structures to be generic
+	- rewrite util data structures to be variant
 	- typeof operator which gets the compiletime type of an expression
 	- subtype operator which does compile time type checking
 - interfaces (traits in rust https://theburningmonk.com/2015/05/rust-memory-safety-without-gc/)
@@ -576,26 +585,32 @@ x Generate C code from IR
 
 
 Maybe?
-- arglist-assign
-	Vec::Type = (x:Int, y:Int)
-	(x, y) = Vec_Create() -- Creates a Vec
-	x = 4
-	y = x + ys
-- relational operator chainings ????
-	- wasn't possible before because of duplication of code. Now that can be inlined
-	- have to be transitive operators (== < <= > >=)
-		_0 = 0 -- init chain result as false
-		_1 = 0 -- init first child
+- Cool math syntax (i really like these and it should be done!)
+	- arglist-assign
+		Vec::Type = (x:Int, y:Int)
+		(x, y) = Vec_Create() -- Creates a Vec
+		x = 4
+		y = x + ys
+	- exponentiation (useful) instead of bitwise xor (not as useful)
+		- circleArea::(r:Real)->Real = 3.1415 * r ^ 2
+		- generates as pow() or powf() function
+	- adjacent multiplication
+		- circleArea::(r:Real)->Real = 3.1415 r^2
+	- relational operator chaining
+		- exclusive with implicit eq above
+		- have to be transitive operators (== < <= > >=)
+			_0 = 0 -- init chain result as false
+			_1 = 0 -- init first child
 
-		_2 = x	-- basic pattern is init next child, comp with prev child
-		if !(_1 < _2) goto over_1 -- if any comparison is false, jump to false
+			_2 = x	-- basic pattern is init next child, comp with prev child
+			if !(_1 < _2) goto over_1 -- if any comparison is false, jump to false
 
-		_3 = 100 -- init next child
-		if !(_2 < 100) goto over_1
+			_3 = 100 -- init next child
+			if !(_2 < 100) goto over_1
 
-		_0 = 1	-- If we get here, result is true
-	over_1:; -- end of chain
-	- Syntax is weird to parse, need to loop over possible chains, but how to keep track of the symbols for each operator?
+			_0 = 1	-- If we get here, result is true
+		over_1:; -- end of chain
+		- Syntax is weird to parse, need to loop over possible chains, but how to keep track of the symbols for each operator?
 
 - implicit dereferencing, like how C++ uses references
 	- there is a sharp distinction between C++ references and pointers
@@ -609,3 +624,16 @@ Maybe?
 		- A pointer now can be marked as &:T, so that T is constant and cannot be changed by the callee
 		- however, this would require coercing T to :T, which is not possible
 		- maybe T <: :T, and &T = &:T ?? strange
+
+- structural type inference
+	- requires than '=', ')' and ',' are not in type alphabet, reasonable
+	- x:&               = giveMeAnAddress()    -- x is an address to ... something! Type is infered
+	- x::               = 5					   -- already supported! x is a compile time constant, type is infered
+	- x:-               = 4.3				   -- x is a runtime constant, type is infered (would be nice to have!!!!)
+	- x:[]              = [3, 4, 5]			   -- x is an array of any size, type is infered. Not as useful
+	- x:(a:Int, b:, c:) = (3, 4, 5)			   -- x is a struct with an int a field, and a b and c field that are type infered
+
+- Orange should be able to parse C header files
+	- would be cool if Orange was compatible with C both ways, especially if you were to switch to Orange in a C codebase
+	- finds types and functions, adds them as external with the name of the header file being the name of the module automatically and everything with externs happening automatically
+	- would be tricky with macros

@@ -979,3 +979,11 @@ char* AST_GetString(enum astType type)
         return "Unknown ASTNode type";
     }
 }
+
+int getArrayLength(ASTNode* type)
+{
+    ASTNode* lengthDefine = List_Get(type->paramlist.defines, 0);
+    SymbolNode* lengthSymbol = lengthDefine->define.symbol;
+    ASTNode* lengthCode = lengthSymbol->def;
+    return lengthCode->astType == AST_INT ? lengthCode->_int.data : -1;
+}

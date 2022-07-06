@@ -6,7 +6,6 @@
 
 typedef enum ir_type {
     // Constants and literals
-    IR_LOAD_IDENT,
     IR_LOAD_INT,
     IR_LOAD_REAL,
     IR_LOAD_STR,
@@ -18,7 +17,6 @@ typedef enum ir_type {
     IR_JUMP,
     IR_BRANCH_IF_FALSE,
     IR_CALL,
-    IR_RET,
 
     // Two parameter instructions
     IR_INDEX,
@@ -51,7 +49,7 @@ typedef enum ir_type {
     IR_ADDR_OF,
     IR_DEREF,
 	IR_DEREF_COPY,
-    IR_CONVERT,
+    IR_CONVERT
 } ir_type;
 
 /*
@@ -106,6 +104,7 @@ typedef struct IR {
     struct BasicBlock* inBlock;
     struct IR* next;
     struct IR* prev;
+    struct position pos;
     bool removed;
 } IR;
 

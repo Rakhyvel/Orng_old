@@ -1,4 +1,8 @@
 testModule::Module = (
-	main::(args:[]String)->Int = 
-		if 4 / 2.0 == 0 {0} else {1}
+	main::(args:[]String)->Int = {
+		x:[3]Int = [1, 2, 3]
+		y := 0
+		y += 430
+		x[y]
+	}
 )

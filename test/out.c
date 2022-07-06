@@ -120,8 +120,8 @@ struct struct_1 string_56;
 
 int64_t test_testModule_main(struct struct_2 _args);
 
-#ifndef ORANGE_PROGRAM_27227
-#define ORANGE_PROGRAM_27227
+#ifndef ORANGE_PROGRAM_20165
+#define ORANGE_PROGRAM_20165
 
 /* String definitions */
 struct struct_1 string_0 = {20, (char[]){'n', 'o', ' ', 'm', 'e', 's', 's', 'a', 'g', 'e', ' ', 's', 'p', 'e', 'c', 'i', 'f', 'i', 'e', 'd', '\0'}};
@@ -185,8 +185,20 @@ struct struct_1 string_56 = {11, (char[]){'<', 's', 't', 'd', 'b', 'o', 'o', 'l'
 int64_t test_testModule_main(struct struct_2 _args)
 {
 	int64_t retval;
-L3:; // incoming:1
-	retval = 1;
+	register struct struct_3 _158_x_0;
+	register int64_t _1;
+	register int64_t _2;
+	register int64_t _3;
+	register int64_t _158_y_1;
+	register int64_t _7;
+L0:; // incoming:1
+	_1 = 1;
+	_2 = 2;
+	_3 = 3;
+	_158_x_0 = (struct struct_3) {3, (int64_t[]){_1, _2, _3}};
+	_158_y_1 = 430;
+	_7 = _158_x_0.data[_158_y_1];
+	retval = _7;
 	goto end;
 end:;
 	return retval;

@@ -10,6 +10,9 @@ typedef struct position {
     int end_span;
 } Position;
 
+#define invalid_pos \
+    ((struct position) { NULL, 0, 0, 0, 0})
+
 Position merge(Position a, Position b);
 
 #endif

@@ -407,14 +407,9 @@ void printVar(FILE* out, SymbolVersion* version)
 static void generateIR(FILE* out, CFG* cfg, IR* ir)
 {
     switch (ir->irType) {
-    case IR_LOAD_IDENT: {
-        printVarAssign(out, ir->dest);
-        printVar(out, ir->src1);
-        break;
-    }
     case IR_LOAD_INT: {
         printVarAssign(out, ir->dest);
-        fprintf(out, "%d;\n", ir->intData);
+        fprintf(out, "%d;\n", (int)ir->intData);
         break;
     }
     case IR_LOAD_REAL: {
@@ -467,12 +462,6 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
     case IR_DECLARE_LABEL: // Just don't do anything... these instructions are generated at the end of a basic block
     case IR_JUMP:
     case IR_BRANCH_IF_FALSE: {
-        break;
-    }
-    case IR_RET: {
-        fprintf(out, "\tretval = ");
-        printVar(out, ir->src1);
-        fprintf(out, ";\n");
         break;
     }
     case IR_INDEX: {
