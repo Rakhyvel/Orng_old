@@ -436,6 +436,7 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
         }
         break;
     }
+    case IR_SLICE:
     case IR_LOAD_ARGLIST: {
         printVarAssign(out, ir->dest);
         fprintf(out, "(");

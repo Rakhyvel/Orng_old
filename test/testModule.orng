@@ -1,8 +1,8 @@
 testModule::Module = (
 	main::(args:[]String)->Int = {
-		x:[3]Int = [1, 2, 3]
-		y := 0
-		y += 430
-		x[y]
+		x:Real = 4.0
+		y:Int = 4
+		y /= x:Int
+		(x):Int
 	}
 )

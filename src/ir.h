@@ -21,6 +21,7 @@ typedef enum ir_type {
     // Two parameter instructions
     IR_INDEX,
     IR_INDEX_COPY,
+	IR_SLICE,
     IR_DOT,
     IR_DOT_COPY,
     IR_BIT_AND,

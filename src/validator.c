@@ -1582,8 +1582,7 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
         break;
     }
     case AST_PAREN: {
-        node->arglist.args = validateAST(List_Get(node->arglist.args, 0), coerceType);
-        retval = node;
+        retval = validateAST(List_Get(node->arglist.args, 0), coerceType);
         break;
     }
     case AST_ARGLIST: {

@@ -20,6 +20,8 @@ char* IR_ToString(ir_type type)
         return "IR_LOAD_STR";
     case IR_LOAD_ARRAY_LITERAL:
         return "IR_LOAD_ARRAY_LITERAL";
+    case IR_LOAD_ARGLIST:
+        return "IR_LOAD_ARGLIST";
     case IR_COPY:
         return "IR_COPY";
     case IR_CALL:
@@ -32,6 +34,8 @@ char* IR_ToString(ir_type type)
         return "IR_BRANCH_IF_FALSE";
     case IR_INDEX:
         return "IR_INDEX";
+    case IR_SLICE:
+        return "IR_SLICE";
     case IR_DOT:
         return "IR_DOT";
     case IR_BIT_AND:
@@ -692,6 +696,9 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
         SymbolVersion* lowerBound;
         if (node->slice.lowerBound->astType != AST_UNDEF) {
             lowerBound = flattenAST(cfg, node->slice.lowerBound, returnLabel, breakLabel, continueLabel);
+            if (lowerBound->def && lowerBound->def->irType == IR_LOAD_INT && lowerBound->def->intData < 0) {
+                error(lowerBound->def->pos, "lower bound is negative");
+            }
         } else {
             lowerBound = tempSymbolVersion(cfg, INT64_TYPE);
             IR* loadLowerBoundIR = createIR_int(IR_LOAD_INT, lowerBound, NULL, NULL, 0, node->pos);
@@ -729,7 +736,7 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
         appendInstruction(cfg, newPtrIR);
 
         SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
-        IR* ir = createIR(IR_LOAD_ARGLIST, temp, arr, NULL, node->pos);
+        IR* ir = createIR(IR_SLICE, temp, arr, NULL, node->pos);
         ir->listData = List_Create();
         temp->def = ir;
         List_Append(ir->listData, newSizeSymbver);
@@ -1205,6 +1212,13 @@ bool copyAndConstantPropagation(CFG* cfg)
                     retval = true;
                 }
                 break;
+            case IR_SLICE: {
+                SymbolVersion* length = List_Get(def->listData, 0);
+                if (length->def && length->def->irType == IR_LOAD_INT && length->def->intData <= 0) {
+                    error(length->def->pos, "array with non-positive length");
+                }
+                break;
+            }
             case IR_EQ:
                 // Known int value
                 if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_INT && def->src2->def->irType == IR_LOAD_INT) {
@@ -1567,8 +1581,16 @@ bool copyAndConstantPropagation(CFG* cfg)
                 }
                 break;
             case IR_DIVIDE:
+                // Cannot divide by int zero
+                if (def->src2->def && def->src2->def->irType == IR_LOAD_INT && def->src2->def->intData == 0) {
+                    error(def->pos, "division by zero");
+                }
+                // Cannot divide by real zero
+                else if (def->src2->def && def->src2->def->irType == IR_LOAD_REAL && def->src2->def->doubleData == 0.0) {
+                    error(def->pos, "division by zero");
+                }
                 // Known int value
-                if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_INT && def->src2->def->irType == IR_LOAD_INT) {
+                else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_INT && def->src2->def->irType == IR_LOAD_INT) {
                     def->irType = IR_LOAD_INT;
                     def->intData = def->src1->def->intData / def->src2->def->intData;
                     def->src1 = NULL;
@@ -1915,7 +1937,7 @@ void findUnusedSymbolVersions(CFG* cfg)
             if (def->src2) {
                 def->src2->used = true;
             }
-            if (def->irType == IR_LOAD_ARRAY_LITERAL || def->irType == IR_LOAD_ARGLIST) {
+            if (def->irType == IR_LOAD_ARRAY_LITERAL || def->irType == IR_LOAD_ARGLIST || def->irType == IR_SLICE) {
                 forall(elem, def->listData)
                 {
                     SymbolVersion* symbver = elem->data;

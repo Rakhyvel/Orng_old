@@ -358,7 +358,7 @@ x Generate C code from IR
 	x coalesce validateAST cases
 	x op-assign
 		x add &&= and ||=
-	- fun little optimizations for binops and unops
+	x fun little optimizations for binops and unops
 		x bit or-ing 0
 		x left/right shifting 0
 		x adding/subbing 0
@@ -366,9 +366,9 @@ x Generate C code from IR
 		x multing 0
 		x known value computations for all binops
 	x 0 <= index < array size
-	- 0 <= slice lower bound < array size
-	- 0 <= slice upper bound < array size
-	- cannot divide by zero
+	x slice lower bound < slice upper bound
+	x cannot divide by zero
+	- x:[-3]Int causes infinite loop
 	- new
 	- free
 	- strings
@@ -569,6 +569,7 @@ x Generate C code from IR
 	INCREDIBLY USEFUL FOR DEFINING AN IDENT AS A DOT AND CHECKING FOR NOTHING!
 	since you we can't reason about dots, can only reason about ident symbols
 	can assign an ident to a dot, which then 
+- language server for visual studio code
 - quantifiers from Alloy- or maybe these would be better as interfaces?
 	- basically just iterators, use interface above
 	- should be expressions, generate as a function call
