@@ -6,9 +6,9 @@
 
 typedef enum ir_type {
     // Constants and literals
+	IR_LOAD_SYMBOL,
     IR_LOAD_INT,
     IR_LOAD_REAL,
-    IR_LOAD_STR,
     IR_LOAD_ARGLIST,
     IR_LOAD_ARRAY_LITERAL,
 
@@ -50,7 +50,12 @@ typedef enum ir_type {
     IR_ADDR_OF,
     IR_DEREF,
 	IR_DEREF_COPY,
-    IR_CONVERT
+
+	// Type IRs
+    IR_CONVERT,
+	IR_SIZEOF,
+	IR_NEW, // TODO: remove
+	IR_FREE // TODO: remove
 } ir_type;
 
 /*
@@ -92,6 +97,7 @@ typedef struct IR {
         struct IR* branch;
         struct SymbolVersion* symbver;
         List* listData;
+        struct symbolNode* symbol;
         struct {
             struct astNode* fromType;
             struct astNode* toType;
@@ -133,7 +139,7 @@ typedef struct CFG {
     List* basicBlocks; // flat list of all basic block
 
     // Symbols
-    List* symbolVersions;
+    //List* symbolVersions;
     struct symbolNode* symbol; // Symbol table for function
     struct symbolNode* tempSymbol; // Temporary symbol (could be several different types!!!)
     struct symbolNode* returnSymbol; // Used to store the return value in
@@ -144,7 +150,7 @@ typedef struct CFG {
     bool visited; // For traversal
 } CFG;
 
-List* createCFG(struct symbolNode* functionSymbol);
+List* createCFG(struct symbolNode* functionSymbol, CFG* caller);
 void clearBBVisitedFlags(CFG* cfg);
 
 #endif

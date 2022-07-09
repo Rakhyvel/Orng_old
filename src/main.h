@@ -24,7 +24,6 @@ typedef struct {
 
 typedef struct {
     List* structDependencyGraph;
-    List* strings;
     Map* includes;
     struct CFG* callGraph;
 } Program;

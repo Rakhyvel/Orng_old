@@ -987,3 +987,19 @@ int getArrayLength(ASTNode* type)
     ASTNode* lengthCode = lengthSymbol->def;
     return lengthCode->astType == AST_INT ? lengthCode->_int.data : -1;
 }
+
+ASTNode* getArrayDataType(ASTNode* type)
+{
+    ASTNode* dataDefine = List_Get(type->paramlist.defines, 1);
+    SymbolNode* dataSymbol = dataDefine->define.symbol;
+    ASTNode* dataType = dataSymbol->type->unop.expr;
+    return dataType;
+}
+
+ASTNode* getArrayDataTypeAddr(ASTNode* type)
+{
+    ASTNode* dataDefine = List_Get(type->paramlist.defines, 1);
+    SymbolNode* dataSymbol = dataDefine->define.symbol;
+    ASTNode* dataType = dataSymbol->type;
+    return dataType;
+}

@@ -3,16 +3,16 @@
 leetcode::Module = (
     test_all::()->() = {
         test_twoSum()
-        test_addTwoNumbers()
+        --test_addTwoNumbers()
         --test_lengthOfLongestSubstring()
-        test_findMedianSortedArrays()
-        test_longestPalindrome()
-        test_convert()
-        test_reverse()
-        test_myAtoi()
-        test_isPalindrome()
-        test_isMatch()
-        test_maxArea()
+        --test_findMedianSortedArrays()
+        --test_longestPalindrome()
+        --test_convert()
+        --test_reverse()
+        --test_myAtoi()
+        --test_isPalindrome()
+        --test_isMatch()
+        --test_maxArea()
     }
 
 

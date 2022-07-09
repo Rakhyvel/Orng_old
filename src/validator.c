@@ -6,10 +6,10 @@
 #include "./main.h"
 #include "./position.h"
 #include <assert.h>
+#include <stdlib.h>
 #include <string.h>
 
 static const List* structDepenGraph = NULL;
-static const List* strings = NULL;
 static const Map* includes = NULL;
 static const SymbolNode* mainFunction = NULL;
 static const CFG* callGraph = NULL;
@@ -23,6 +23,82 @@ static ASTNode* expandTypeIdent(ASTNode* type, bool reassigning);
 ASTNode* validateAST(ASTNode* node);
 void inferTypes(SymbolNode* var);
 Program Validator_Validate(SymbolNode* symbol);
+
+int getTypeSize(ASTNode* type)
+{
+    switch (type->astType) {
+    case AST_IDENT: {
+        if (!strcmp(type->ident.data, "Int")) {
+            return 8;
+        } else if (!strcmp(type->ident.data, "Char")) {
+            return 1;
+        } else if (!strcmp(type->ident.data, "Bool")) {
+            return 1;
+        } else if (!strcmp(type->ident.data, "Real")) {
+            return 8;
+        } else if (!strcmp(type->ident.data, "String")) {
+            return 16;
+        } else if (!strcmp(type->ident.data, "Int8")) {
+            return 1;
+        } else if (!strcmp(type->ident.data, "Int16")) {
+            return 2;
+        } else if (!strcmp(type->ident.data, "Int32")) {
+            return 4;
+        } else if (!strcmp(type->ident.data, "Int64")) {
+            return 8;
+        } else if (!strcmp(type->ident.data, "Real32")) {
+            return 4;
+        } else if (!strcmp(type->ident.data, "Real64")) {
+            return 8;
+        }
+        return -1;
+    }
+    case AST_ARRAY:
+    case AST_PARAMLIST: {
+        int prevAlign = 0;
+        int size = 0;
+        for (ListElem* elem = List_Begin(type->paramlist.defines); elem != List_End(type->paramlist.defines); elem = elem->next) {
+            ASTNode* memberDefine = elem->data;
+            SymbolNode* memberSymbol = memberDefine->define.symbol;
+            int typeSize = getTypeSize(memberSymbol->type);
+            int padding = typeSize - prevAlign;
+            if (memberSymbol->symbolType != SYMBOL_VARIABLE) {
+            }
+            size += typeSize + padding;
+            prevAlign = size;
+        }
+        return size;
+    }
+    case AST_UNIONSET: {
+        int maxMemberSize = 0;
+        for (ListElem* elem = List_Begin(type->paramlist.defines); elem != List_End(type->paramlist.defines); elem = elem->next) {
+            ASTNode* memberDefine = elem->data;
+            SymbolNode* memberSymbol = memberDefine->define.symbol;
+            int typeSize = getTypeSize(memberSymbol->type);
+            maxMemberSize = max(maxMemberSize, typeSize);
+        }
+        return maxMemberSize + 8; // add 8 for the tag size
+    }
+    case AST_FUNCTION: {
+        return 8;
+    }
+    case AST_ADDR: {
+        return 8;
+    }
+    case AST_VOID: {
+        return 0;
+    }
+    case AST_EXTERN:
+        return 0;
+    case AST_DOT:
+    case AST_UNDEF: {
+        error(type->pos, "idk how to calculate this size yet");
+    }
+    default: {
+        error(type->pos, "not a type");
+    }
+    }
+}
 
 /*
 * Takes in a dot chain and returns the symbol refered to by the dot chain
@@ -682,8 +758,7 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
     case AST_NEW: {
         ASTNode* newType = node->binop.left;
         if (newType->astType != AST_ARRAY) {
-            ASTNode* addr = AST_Create_addr(newType, node->scope, node->pos);
-            type = addr;
+            type = AST_Create_addr(newType, node->scope, node->pos);
         } else {
             type = newType;
         }
@@ -1085,9 +1160,9 @@ void validateType(ASTNode* node, bool collectThisType)
         SymbolNode* type = typeDefine->define.symbol;
         SymbolNode* length = lengthDefine->define.symbol;
         validateType(type->type, collectThisType);
-        validateAST(length->def, NULL);
+        length->def = validateAST(length->def, NULL);
         ASTNode* lengthType = getType(length->def, "", false);
-        if (lengthType->astType != AST_UNDEF && !typesAreEquivalent(lengthType, INT32_TYPE)) {
+        if (lengthType->astType != AST_UNDEF && !typesAreEquivalent(lengthType, INT64_TYPE)) {
             typeMismatchError(node->pos, INT32_TYPE, lengthType);
         }
         break;
@@ -1531,6 +1606,7 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
     case AST_TRUE:
     case AST_FALSE:
     case AST_NOTHING:
+    case AST_STRING:
         retval = node;
         break;
     case AST_CHAR: {
@@ -1544,13 +1620,7 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
         }
         retval = node;
         break;
-    }
-    case AST_STRING: {
-        node->string.stringID = strings->size;
-        List_Append(strings, node);
-        retval = node;
-        break;
-    }
+    } 
     case AST_ARRAY_LITERAL: {
         if (node->arrayLiteral.members->size <= 0) {
             error(node->pos, "array literal is empty");
@@ -1598,7 +1668,11 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
     case AST_SIZEOF: {
         node->unop.expr = expandTypeIdent(node->unop.expr, true);
         validateType(node->unop.expr, true);
-        retval = node;
+        if (node->unop.expr->astType != AST_EXTERN) {
+            retval = AST_Create_int(getTypeSize(node->unop.expr), node->scope, node->pos);
+        } else {
+            retval = node;
+        }
         break;
     }
     case AST_BLOCK: {
@@ -1988,8 +2062,6 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
             leftVar = Symbol_Find(node->dot.left->ident.data, node->scope);
         } else if (node->dot.left->astType == AST_DOT) {
             leftVar = getDotSymbol(node->dot.left);
-        } else {
-            error(node->pos, "cannot resolve left side of dot expression to symbol");
         }
 
         ASTNode* leftType = getType(left, false, false);
@@ -2019,7 +2091,7 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
                 break;
             }
         } else if (leftType->astType == AST_ADDR) {
-            node->dot.left = AST_Create_deref(left, node->scope, node->pos);
+            node->dot.left = validateAST(AST_Create_deref(left, node->scope, node->pos), NULL);
             retval = node;
             break;
         } else {
@@ -2185,7 +2257,15 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
     }
     case AST_NEG: {
         node->unop.expr = validateAST(node->unop.expr, REAL64_TYPE);
-        retval = node;
+        if (node->unop.expr->astType == AST_INT) {
+            node->unop.expr->_int.data *= -1;
+            retval = node->unop.expr;
+        } else if (node->unop.expr->astType == AST_REAL) {
+            node->unop.expr->real.data *= -1;
+            retval = node->unop.expr;
+        } else {
+            retval = node;
+        }
         break;
     }
     case AST_BIT_NOT: {
@@ -2402,7 +2482,6 @@ Program Validator_Validate(SymbolNode* symbol)
     // Done first pass through
     if (structDepenGraph == NULL) {
         structDepenGraph = List_Create();
-        strings = List_Create();
         includes = Map_Create();
 
         validateType(CONST_STRING_TYPE, true);
@@ -2456,7 +2535,7 @@ Program Validator_Validate(SymbolNode* symbol)
         if (mainFunction == NULL) {
             gen_error("no main function defined");
         } else {
-            callGraph = createCFG(mainFunction);
+            callGraph = createCFG(mainFunction, NULL);
             // flattenAST(callGraph, ...
             // optimize(callGraph, ...
         }
@@ -2587,5 +2666,5 @@ Program Validator_Validate(SymbolNode* symbol)
     }
     }
 
-    return (Program) { structDepenGraph, strings, includes, callGraph };
+    return (Program) { structDepenGraph, includes, callGraph };
 }

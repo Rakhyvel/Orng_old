@@ -387,6 +387,8 @@ ASTNode* AST_Create_addr(struct astNode* type, struct symbolNode* scope, struct 
 ASTNode* AST_Create_extern(struct symbolNode* externSymbol, struct symbolNode* scope, struct position pos);
 
 int getArrayLength(ASTNode* type);
+ASTNode* getArrayDataType(ASTNode* type);
+ASTNode* getArrayDataTypeAddr(ASTNode* type);
 ASTNode* createArrayTypeNode(ASTNode* baseType, int length);
 ASTNode* AST_Create(enum astType type, SymbolNode* scope, struct position pos);
 void AST_Print(ASTNode* root, char* prefix, char* childrenPrefix);

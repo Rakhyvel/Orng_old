@@ -596,10 +596,8 @@ static int generateAST(FILE* out, ASTNode* node, bool isLValue)
             ASTNode* dataType = dataSymbol->type->unop.expr;
             int lengthID = generateAST(out, lengthCode, false);
             id = printTempVar(out, node);
-            fprintf(out, "{_%d, malloc(sizeof(", lengthID);
-            printType(out, dataType);
-            fprintf(out, ") * _%d)};\n", lengthID);
             fprintf(out, "\t_%d.length = _%d;\n", id, lengthID);
+            fprintf(out, "\t_%d.data = malloc(", id);
             fprintf(out, "\tfor(int i = 0; i < _%d; i++) {_%d.data[i] = ", lengthID, id);
             if (initID == -1) {
                 generateDefaultValue(out, dataType);
