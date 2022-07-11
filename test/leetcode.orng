@@ -56,14 +56,14 @@ leetcode::Module = (
 
     test_twoSum::()->() = {
         nums: [4]Int = [2, 7, 11, 15]
-        target := 9
+        target := 10
 
         ans := twoSum(nums, target)
 
         if nums[ans[0]] + nums[ans[1]] == target {
             std.system.println("twoSum: Passed!")
         } else {
-            std.system.println("twoSum: Failed %d %d", nums[ans[0]], nums[ans[1]])
+            std.system.println("twoSum: Failed %d %d", ans[0]:Int32, ans[1]:Int32)
         }
     }
 

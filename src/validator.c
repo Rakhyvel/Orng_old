@@ -11,6 +11,7 @@
 
 static const List* structDepenGraph = NULL;
 static const Map* includes = NULL;
+static const List* verbatims = NULL;
 static const SymbolNode* mainFunction = NULL;
 static const CFG* callGraph = NULL;
 
@@ -2483,6 +2484,7 @@ Program Validator_Validate(SymbolNode* symbol)
     if (structDepenGraph == NULL) {
         structDepenGraph = List_Create();
         includes = Map_Create();
+        verbatims = List_Create();
 
         validateType(CONST_STRING_TYPE, true);
         validateType(STRING_ARR_TYPE, true);
@@ -2565,6 +2567,7 @@ Program Validator_Validate(SymbolNode* symbol)
         validateAST(symbol->def, NULL);
 
         SymbolNode* includesSymbol = Map_Get(symbol->children, "includes");
+        SymbolNode* verbatimSymbol = Map_Get(symbol->children, "verbatim");
         if (includesSymbol) {
             if (includesSymbol->def->astType != AST_ARRAY_LITERAL) {
                 error(includesSymbol->pos, "includes array must be a string array");
@@ -2576,6 +2579,19 @@ Program Validator_Validate(SymbolNode* symbol)
                     typeMismatchError(stringLiteral->pos, STRING_TYPE, stringLiteral->type);
                 }
                 Map_Put(includes, stringLiteral->string.data, 1);
+            }
+        }
+        if (verbatimSymbol) {
+            if (verbatimSymbol->def->astType != AST_ARRAY_LITERAL) {
+                error(verbatimSymbol->pos, "verbatim array must be a string array");
+            }
+            ListElem* e = List_Begin(verbatimSymbol->def->arrayLiteral.members);
+            for (; e != List_End(verbatimSymbol->def->arrayLiteral.members); e = e->next) {
+                ASTNode* stringLiteral = e->data;
+                if (!typesAreEquivalent(stringLiteral->type, STRING_TYPE)) {
+                    typeMismatchError(stringLiteral->pos, STRING_TYPE, stringLiteral->type);
+                }
+                List_Append(verbatims, stringLiteral->string.data);
             }
         }
         break;
@@ -2666,5 +2682,5 @@ Program Validator_Validate(SymbolNode* symbol)
     }
     }
 
-    return (Program) { structDepenGraph, includes, callGraph };
+    return (Program) { structDepenGraph, includes, verbatims, callGraph };
 }

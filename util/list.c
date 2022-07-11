@@ -39,6 +39,7 @@ void List_Clear(List* list)
     }
     list->head.next = &list->tail;
     list->tail.prev = &list->head;
+    list->size = 0;
 }
 
 List* List_Concat(List* a, List* b)

@@ -1,13 +1,6 @@
 testModule::Module = (
 	main::(args:[]String)->Int = {
-		nums: [4]Int = [2, 7, 11, 15]
-        target := 9
-
-        ans := twoSum(nums, target)
+		leetcode.test_lengthOfLongestSubstring()
 		0
 	}
-	
-	twoSum::(numArg:[]Int, targetArg:Int)->[2]Int = {
-		[3, 4]
-    }
 )

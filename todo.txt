@@ -385,8 +385,11 @@ x Generate C code from IR
 		x function arguments
 	- open flood gates and test leetcode
 		x don't print out symbol versions that are void type
-		- calls to functions that are void are just calls, not evaluated
-		- don't print out a retval for a function that is void codomain typed
+		x calls to functions that are void are just calls, not evaluated
+		x don't print out a retval for a function that is void codomain typed
+		x call, arglist, array symbol versioning
+		x don't phi function parameters that aren't used
+		- make an IR_LOAD_STRING
 	- cases
 		- some sort of set of mappings and their integer conditions so that duplicates can be detected
 		- what time are field case expressions?
@@ -627,6 +630,7 @@ Maybe?
 			_0 = 1	-- If we get here, result is true
 		over_1:; -- end of chain
 		- Syntax is weird to parse, need to loop over possible chains, but how to keep track of the symbols for each operator?
+	- back tick	'`' as an identifier, similar to haskell '\'' for "prime" identifiers
 
 - implicit dereferencing, like how C++ uses references
 	- there is a sharp distinction between C++ references and pointers

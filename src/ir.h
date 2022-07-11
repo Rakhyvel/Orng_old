@@ -11,6 +11,7 @@ typedef enum ir_type {
     IR_LOAD_REAL,
     IR_LOAD_ARGLIST,
     IR_LOAD_ARRAY_LITERAL,
+	IR_LOAD_STRING,
 
     // Control flow
     IR_DECLARE_LABEL,
@@ -90,6 +91,7 @@ typedef struct IR {
     SymbolVersion* dest;
     SymbolVersion* src1;
     SymbolVersion* src2;
+    SymbolVersion* src3;
     union {
         int64_t intData;
         double doubleData;

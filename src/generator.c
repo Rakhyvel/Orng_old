@@ -277,6 +277,17 @@ static void generateStructDefinitions(FILE* out, List* depenGraph)
     }
 }
 
+void generateVerbatims(FILE* out, List* verbatims)
+{
+    fprintf(out, "/* Verbatim code */\n");
+    ListElem* elem = List_Begin(verbatims);
+    for (; elem != List_End(verbatims); elem = elem->next) {
+        fprintf(out, (char*)elem->data);
+        fprintf(out, "\n");
+    }
+    fprintf(out, "\n");
+}
+
 void generateForwardFunctions(FILE* out, CFG* callGraphNode)
 {
     if (callGraphNode->visited) {
@@ -398,6 +409,13 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
         }
         break;
     }
+    case IR_LOAD_STRING: {
+        printVarAssign(out, ir->dest);
+        fprintf(out, "(");
+        printType(out, ir->dest->type);
+        fprintf(out, ") {%d, \"%s\"};\n", strlen(ir->strData), ir->strData);
+        break;
+    }
     case IR_SLICE:
     case IR_LOAD_ARGLIST: {
         printVarAssign(out, ir->dest);
@@ -458,11 +476,11 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
     }
     case IR_INDEX_COPY: {
         fprintf(out, "\t");
-        printVar(out, ir->dest);
-        fprintf(out, ".data[");
         printVar(out, ir->src1);
-        fprintf(out, "] = ");
+        fprintf(out, ".data[");
         printVar(out, ir->src2);
+        fprintf(out, "] = ");
+        printVar(out, ir->src3);
         fprintf(out, ";\n");
         break;
     }
@@ -742,14 +760,27 @@ static void generatePhi(FILE* out, List* argsList, BasicBlock* to, bool extraTab
     }
 }
 
-static void generatePhiFunction(FILE* out, BasicBlock* to)
+// All symbols are either defined in the basic block or are arguments to the function
+// Print out copies for each argument to the BB parameter
+static void generatePhiFunction(FILE* out, CFG* cfg)
 {
-    forall(elem2, to->parameters)
+    forall(elem, cfg->symbol->type->function.domainType->paramlist.defines)
     {
-        SymbolVersion* symbver = elem2->data;
-        if (symbver->used) {
-            printVarAssign(out, symbver);
-            printPath(out, symbver->symbol);
+        ASTNode* define = elem->data;
+        SymbolNode* symbol = define->define.symbol;
+
+        SymbolVersion* parameter = NULL;
+        forall(elem2, cfg->blockGraph->parameters)
+        {
+            SymbolVersion* symbver = elem2->data;
+            if (!strcmp(symbver->symbol->name, symbol->name)) {
+                parameter = symbver;
+                break;
+            }
+        }
+        if (parameter) {
+            printVarAssign(out, parameter);
+            printPath(out, symbol);
             fprintf(out, ";\n");
         }
     }
@@ -822,8 +853,13 @@ void generateFunctionDefinitions(FILE* out, CFG* callGraphNode)
             }
             printVarDef(out, symbver);
         }
+        forall(elem2, bb->parameters)
+        {
+            SymbolVersion* symbver = elem2->data;
+            printVarDef(out, symbver);
+        }
     }
-    generatePhiFunction(out, callGraphNode->blockGraph);
+    generatePhiFunction(out, callGraphNode);
     clearBBVisitedFlags(callGraphNode);
     generateBasicBlock(out, callGraphNode, callGraphNode->blockGraph);
     fprintf(out, "end:;\n");
@@ -890,6 +926,7 @@ void Generator_Generate(FILE* out, Program _program)
     fprintf(out, "/* Code generated using Orange Translator http://josephs-projects.com */\n\n");
     generateIncludes(out, program.includes);
     generateStructDefinitions(out, program.structDependencyGraph);
+    generateVerbatims(out, program.verbatims);
     generateForwardFunctions(out, program.callGraph);
     fprintf(out, "\n#ifndef ORANGE_PROGRAM_%s\n#define ORANGE_PROGRAM_%s\n\n", myItoa(randID), myItoa(randID));
     generateFunctionDefinitions(out, program.callGraph);
