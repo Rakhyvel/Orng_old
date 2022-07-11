@@ -848,7 +848,7 @@ void generateFunctionDefinitions(FILE* out, CFG* callGraphNode)
         BasicBlock* bb = elem->data;
         for (IR* ir = bb->entry; ir != NULL; ir = ir->next) {
             SymbolVersion* symbver = ir->dest;
-            if (!symbver || !symbver->used || symbver->symbol->visited || symbver->type->astType == AST_VOID) {
+            if (!symbver || !symbver->used || symbver->symbol->visited || symbver->type->astType == AST_VOID || symbver->def != ir) {
                 continue;
             }
             printVarDef(out, symbver);

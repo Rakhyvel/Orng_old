@@ -145,6 +145,7 @@ typedef struct CFG {
     struct symbolNode* symbol; // Symbol table for function
     struct symbolNode* tempSymbol; // Temporary symbol (could be several different types!!!)
     struct symbolNode* returnSymbol; // Used to store the return value in
+    int phonies;
 
     // Call graph
     List* leaves; // Set of other CFG nodes loaded by this CFG (as an symbol expr in some fashion, to be called or not)

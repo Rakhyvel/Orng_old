@@ -2,10 +2,12 @@
 #include "../util/debug.h"
 #include "./ast.h"
 #include "./main.h"
+#include "./parse.h"
 #include "./symbol.h"
 #include "./validator.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLabel, IR* continueLabel);
 
@@ -319,6 +321,18 @@ SymbolVersion* findVersion(SymbolVersion* symbver, IR* ir, IR* stop)
         }
     }
     return retval;
+}
+
+// Finds the first def and version
+SymbolVersion* findDef(SymbolVersion* symbver, IR* ir, IR* stop)
+{
+    SymbolVersion* retval = symbver;
+    for (; ir != NULL && ir != stop; ir = ir->next) {
+        if (ir->dest != NULL && ir->dest->symbol == symbver->symbol && ir->dest->version == symbver->version) {
+            retval = ir->dest;
+        }
+    }
+    return NULL;
 }
 
 bool putSymbolVersionSet(List* set, SymbolVersion* symbver)
@@ -1259,6 +1273,134 @@ void removeBasicBlockInstructions(CFG* cfg)
     }
 }
 
+bool addArgs(CFG* cfg, BasicBlock* bb)
+{
+    bool retval = false;
+    if (bb->visited) {
+        return false;
+    }
+    bb->visited = true;
+
+    if (bb->next) {
+        retval |= addArgs(cfg, bb->next);
+        forall(elem, bb->next->parameters)
+        {
+            SymbolVersion* param = elem->data; // parameter symbol for next block
+            SymbolVersion* symbver = findVersion(param, bb->entry, NULL);
+            if (symbver == param) { // Could not find param def in this block, require it as a parameter for this own block
+                SymbolVersion* myParam = findSymbolVersionSet(bb->parameters, param);
+                if (myParam) {
+                    symbver = myParam;
+                } else {
+                    symbver = unversionedSymbolVersion(cfg, param->symbol, param->type);
+                    putSymbolVersionSet(bb->parameters, symbver); // When you add symbol versions to the parameters, you need to go through IR and see if any dest/src are unversioned
+                }
+            } // else found in this block already, add it to the arguments
+            retval |= putSymbolVersionSet(bb->nextArguments, symbver);
+            if (retval) {
+                printf("Added %s_%d to L%d nextArgs\n", symbver->symbol->name, symbver->version, bb->id);
+            }
+        }
+    }
+
+    if (bb->branch && bb->hasBranch) {
+        retval |= addArgs(cfg, bb->branch);
+        forall(elem, bb->branch->parameters)
+        {
+            SymbolVersion* param = elem->data;
+            SymbolVersion* symbver = findVersion(param, bb->entry, NULL);
+            if (symbver == param) { // Could not find param def in this block, require it as a parameter for this own block
+                SymbolVersion* myParam = findSymbolVersionSet(bb->parameters, param);
+                if (myParam) {
+                    symbver = myParam;
+                } else {
+                    symbver = unversionedSymbolVersion(cfg, param->symbol, param->type);
+                    putSymbolVersionSet(bb->parameters, symbver);
+                }
+            }
+            retval |= putSymbolVersionSet(bb->branchArguments, symbver);
+            if (retval) {
+                printf("Added %s_%d to L%d branchArgs\n", symbver->symbol->name, symbver->version, bb->id);
+            }
+        }
+    }
+
+    return retval;
+}
+
+void addParam(CFG* cfg, BasicBlock* bb, IR* ir, SymbolVersion* symbver)
+{
+    if (symbver != NULL && symbver->version == -1) {
+        symbver = findVersion(symbver, bb->entry, ir);
+        if (symbver->version == -1) {
+            putSymbolVersionSet(bb->parameters, symbver);
+        }
+    }
+}
+
+void calculateArgs(CFG* cfg)
+{
+    // Clear arguments
+    forall(elem, cfg->basicBlocks)
+    {
+        BasicBlock* bb = elem->data;
+        List_Clear(bb->parameters);
+        List_Clear(bb->nextArguments);
+        List_Clear(bb->branchArguments);
+
+        // Parameters are symbols used by IR without a definition for the symbol before the IR
+        for (IR* ir = bb->entry; ir != NULL; ir = ir->next) {
+            // If src1 version is undefined, and is not defined in this BB, request it as parameter
+            if (ir->src1 != NULL && ir->src1->symbol != cfg->tempSymbol && ir->src1->version == -1) {
+                ir->src1 = findVersion(ir->src1, bb->entry, ir);
+                if (ir->src1->version == -1) {
+                    putSymbolVersionSet(bb->parameters, ir->src1);
+                }
+            }
+            // If src2 version is undefined, and is not defined in this BB, request it as parameter
+            if (ir->src2 != NULL && ir->src2->symbol != cfg->tempSymbol && ir->src2->version == -1) {
+                ir->src2 = findVersion(ir->src2, bb->entry, ir);
+                if (ir->src2->version == -1) {
+                    putSymbolVersionSet(bb->parameters, ir->src2);
+                }
+            }
+            // If src3 version is undefined, and is not defined in this BB, request it as parameter
+            if (ir->src3 != NULL && ir->src3->symbol != cfg->tempSymbol && ir->src3->version == -1) {
+                ir->src3 = findVersion(ir->src3, bb->entry, ir);
+                if (ir->src3->version == -1) {
+                    putSymbolVersionSet(bb->parameters, ir->src3);
+                }
+            }
+
+            if (ir->irType == IR_CALL || ir->irType == IR_LOAD_ARGLIST || ir->irType == IR_LOAD_ARRAY_LITERAL) {
+                forall(elem, ir->listData)
+                {
+                    if (((SymbolVersion*)elem->data)->symbol != cfg->tempSymbol && ((SymbolVersion*)elem->data)->version == -1) {
+                        elem->data = findVersion(((SymbolVersion*)elem->data), bb->entry, ir);
+                        if (((SymbolVersion*)elem->data)->version == -1) {
+                            putSymbolVersionSet(bb->parameters, ((SymbolVersion*)elem->data));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Add function parameters as basic block symbol version parameters
+    forall(elem, cfg->symbol->type->function.domainType->paramlist.defines)
+    {
+        ASTNode* define = elem->data;
+        SymbolNode* param = define->define.symbol;
+        SymbolVersion* symbver = unversionedSymbolVersion(cfg, param, param->type);
+        putSymbolVersionSet(cfg->blockGraph->parameters, symbver);
+    }
+
+    // Find phi arguments
+    do {
+        clearBBVisitedFlags(cfg);
+    } while (addArgs(cfg, cfg->blockGraph));
+}
+
 bool copyAndConstantPropagation(CFG* cfg)
 {
     bool retval = false;
@@ -1938,124 +2080,6 @@ bool copyAndConstantPropagation(CFG* cfg)
     return retval;
 }
 
-bool addArgs(CFG* cfg, BasicBlock* bb)
-{
-    bool retval = false;
-    if (bb->visited) {
-        return false;
-    }
-    bb->visited = true;
-
-    if (bb->next) {
-        retval |= addArgs(cfg, bb->next);
-        forall(elem, bb->next->parameters)
-        {
-            SymbolVersion* param = elem->data; // parameter symbol for next block
-            SymbolVersion* symbver = findVersion(param, bb->entry, NULL);
-            if (symbver == param) { // Could not find param def in this block, require it as a parameter for this own block
-                SymbolVersion* myParam = findSymbolVersionSet(bb->parameters, param);
-                if (myParam) {
-                    symbver = myParam;
-                } else {
-                    symbver = unversionedSymbolVersion(cfg, param->symbol, param->type);
-                    putSymbolVersionSet(bb->parameters, symbver); // When you add symbol versions to the parameters, you need to go through IR and see if any dest/src are unversioned
-                }
-            } // else found in this block already, add it to the arguments
-            retval |= putSymbolVersionSet(bb->nextArguments, symbver);
-            if (retval) {
-                printf("Added %s_%d to L%d nextArgs\n", symbver->symbol->name, symbver->version, bb->id);
-            }
-        }
-    }
-
-    if (bb->branch && bb->hasBranch) {
-        retval |= addArgs(cfg, bb->branch);
-        forall(elem, bb->branch->parameters)
-        {
-            SymbolVersion* param = elem->data;
-            SymbolVersion* symbver = findVersion(param, bb->entry, NULL);
-            if (symbver == param) { // Could not find param def in this block, require it as a parameter for this own block
-                SymbolVersion* myParam = findSymbolVersionSet(bb->parameters, param);
-                if (myParam) {
-                    symbver = myParam;
-                } else {
-                    symbver = unversionedSymbolVersion(cfg, param->symbol, param->type);
-                    putSymbolVersionSet(bb->parameters, symbver);
-                }
-            }
-            retval |= putSymbolVersionSet(bb->branchArguments, symbver);
-            if (retval) {
-                printf("Added %s_%d to L%d branchArgs\n", symbver->symbol->name, symbver->version, bb->id);
-            }
-        }
-    }
-
-    return retval;
-}
-
-void calculateArgs(CFG* cfg)
-{
-    // Clear arguments
-    forall(elem, cfg->basicBlocks)
-    {
-        BasicBlock* bb = elem->data;
-        List_Clear(bb->parameters);
-        List_Clear(bb->nextArguments);
-        List_Clear(bb->branchArguments);
-
-        // Parameters are symbols used by IR without a definition for the symbol before the IR
-        for (IR* ir = bb->entry; ir != NULL; ir = ir->next) {
-            // If src1 version is undefined, and is not defined in this BB, request it as parameter
-            if (ir->src1 != NULL && ir->src1->symbol != cfg->tempSymbol && ir->src1->version == -1) {
-                ir->src1 = findVersion(ir->src1, bb->entry, ir);
-                if (ir->src1->version == -1) {
-                    putSymbolVersionSet(bb->parameters, ir->src1);
-                }
-            }
-            // If src2 version is undefined, and is not defined in this BB, request it as parameter
-            if (ir->src2 != NULL && ir->src2->symbol != cfg->tempSymbol && ir->src2->version == -1) {
-                ir->src2 = findVersion(ir->src2, bb->entry, ir);
-                if (ir->src2->version == -1) {
-                    putSymbolVersionSet(bb->parameters, ir->src2);
-                }
-            }
-            // If src3 version is undefined, and is not defined in this BB, request it as parameter
-            if (ir->src3 != NULL && ir->src3->symbol != cfg->tempSymbol && ir->src3->version == -1) {
-                ir->src3 = findVersion(ir->src3, bb->entry, ir);
-                if (ir->src3->version == -1) {
-                    putSymbolVersionSet(bb->parameters, ir->src3);
-                }
-            }
-
-            if (ir->irType == IR_CALL || ir->irType == IR_LOAD_ARGLIST || ir->irType == IR_LOAD_ARRAY_LITERAL) {
-                forall(elem, ir->listData)
-                {
-                    if (((SymbolVersion*)elem->data)->symbol != cfg->tempSymbol && ((SymbolVersion*)elem->data)->version == -1) {
-                        elem->data = findVersion(((SymbolVersion*)elem->data), bb->entry, ir);
-                        if (((SymbolVersion*)elem->data)->version == -1) {
-                            putSymbolVersionSet(bb->parameters, ((SymbolVersion*)elem->data));
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // Add function parameters as basic block symbol version parameters
-    forall(elem, cfg->symbol->type->function.domainType->paramlist.defines)
-    {
-        ASTNode* define = elem->data;
-        SymbolNode* param = define->define.symbol;
-        SymbolVersion* symbver = unversionedSymbolVersion(cfg, param, param->type);
-        putSymbolVersionSet(cfg->blockGraph->parameters, symbver);
-    }
-
-    // Find phi arguments
-    do {
-        clearBBVisitedFlags(cfg);
-    } while (addArgs(cfg, cfg->blockGraph));
-}
-
 void findUnusedSymbolVersions(CFG* cfg)
 {
     // Find out which symbols are used
@@ -2083,7 +2107,7 @@ void findUnusedSymbolVersions(CFG* cfg)
 
         // Go through and see if each symbol is used
         for (IR* def = bb->entry; def != NULL; def = def->next) {
-            if (def->dest && (def->irType == IR_DOT_COPY || def->irType == IR_DEREF_COPY || def->irType == IR_FREE || def->irType == IR_CALL)) {
+            if (def->dest && (def->irType == IR_DOT_COPY || def->irType == IR_DEREF_COPY || def->irType == IR_FREE || def->irType == IR_CALL || (def->dest->def && def->dest->def->irType == IR_PHONY))) {
                 def->dest->used = true;
             }
             if (def->src1) {
@@ -2172,7 +2196,7 @@ void calculateVolatility(CFG* cfg)
 // Removes code that has no effect
 bool deadCode(CFG* cfg)
 {
-    printf("\n\n%s\n", cfg->symbol->name);
+    printf("\n\n%s(in between)\n", cfg->symbol->name);
     clearBBVisitedFlags(cfg);
     printBlockGraph(cfg->blockGraph);
 
@@ -2200,10 +2224,10 @@ bool deadCode(CFG* cfg)
 
         // Remove any symbols that aren't used
         for (IR* def = bb->entry; def != NULL; def = def->next) {
-            if (def->dest && !def->removed && !def->dest->used && def->dest->symbol != cfg->returnSymbol) {
+            if (def->dest && !def->removed && !def->dest->used && def->dest->symbol != cfg->returnSymbol && def->irType != IR_PHONY) {
+                printf("remove ir %d %s_%d %p\n", def->id, def->dest->symbol->name, def->dest->version, def->dest);
                 removeInstruction(bb, def);
                 retval = true;
-                printf("remove ir %d\n", def->id);
             }
         }
 

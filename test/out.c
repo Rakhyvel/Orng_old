@@ -68,8 +68,8 @@ int64_t test_leetcode_lengthOfLongestSubstring(struct struct_1 _str);
 bool test_leetcode_areDistinct(struct struct_1 _str, int64_t _i, int64_t _j);
 double std_math_max(double _x, double _y);
 
-#ifndef ORANGE_PROGRAM_1679
-#define ORANGE_PROGRAM_1679
+#ifndef ORANGE_PROGRAM_13030
+#define ORANGE_PROGRAM_13030
 
 int64_t test_testModule_main(struct struct_2 _args)
 {
@@ -93,6 +93,7 @@ void test_leetcode_test_lengthOfLongestSubstring()
 	register int64_t (*_1) (struct struct_1 _str);
 	register int64_t _2;
 	register int64_t _63_ans_0;
+	register int64_t _3;
 	register int64_t _4;
 	register bool _5;
 	register int64_t (*_6) (struct struct_1 _format, ...);
@@ -120,6 +121,7 @@ L31:; // incoming:1
 	_6 = std_system_println;
 	_8 = (struct struct_1) {33, "lengthOfLongestSubstring: Passed!"};
 	_7 = _6(_8);
+	_3 = _7;
 	goto L34;
 L34:; // incoming:2
 	goto end;
@@ -127,6 +129,7 @@ L35:; // incoming:1
 	_10 = std_system_println;
 	_12 = (struct struct_1) {35, "lengthOfLongestSubstring: Failed %d"};
 	_11 = _10(_12, _63_ans_1);
+	_3 = _11;
 	goto L34;
 end:;
 	return;
@@ -389,24 +392,32 @@ end:;
 double std_math_max(double _x, double _y)
 {
 	double retval;
+	register double _0;
 	register bool _1;
 	register double _x_0;
 	register double _y_0;
+	register double _x_1;
+	register double _y_1;
 	_x_0 = _x;
 	_y_0 = _y;
 L9:; // incoming:1
 	_1 = _x_0 > _y_0;
 	if (!_1) {
-		goto L13;
+		_y_1 = _y_0;
+		goto L14;
 	} else {
-		goto L12;
+		_x_1 = _x_0;
+		goto L11;
 	}
+L11:; // incoming:1
+	_0 = _x_1;
+	goto L12;
 L12:; // incoming:2
-	retval = _x_0;
+	retval = _0;
 	goto end;
-L13:; // incoming:2
-	retval = _y_0;
-	goto end;
+L14:; // incoming:1
+	_0 = _y_1;
+	goto L12;
 end:;
 	return retval;
 }
