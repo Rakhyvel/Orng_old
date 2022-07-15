@@ -56,7 +56,7 @@ leetcode::Module = (
 
     test_twoSum::()->() = {
         nums: [4]Int = [2, 7, 11, 15]
-        target := 10
+        target := 9
 
         ans := twoSum(nums, target)
 
@@ -254,21 +254,13 @@ leetcode::Module = (
     -- Write the code that will take a string and make this conversion given a
     -- number of rows
     -- https://leetcode.com/problems/zigzag-conversion/
-    convert
-        ::(
-            s:String, numRows:Int)
-        -> 
-        String 
-    = {
-        board: [][]Char = new [s.length][]Char
-        for i := 0; i < s.length; i += 1 {
-            board[i] = new [numRows]Char
-        }
+    convert::(s:String, numRows:Int)-> String = {
+        board: [][]Char = new [s.length][numRows]Char
         defer {
             for i := 0; i < s.length; i += 1 {
-                free board[i]
+                --free board[i]
             }
-            free board
+            --free board
         }
 
         x := 0

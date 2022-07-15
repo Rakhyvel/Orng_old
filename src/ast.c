@@ -980,6 +980,14 @@ char* AST_GetString(enum astType type)
     }
 }
 
+ASTNode* getArrayLengthAST(ASTNode* type)
+{
+    ASTNode* lengthDefine = List_Get(type->paramlist.defines, 0);
+    SymbolNode* lengthSymbol = lengthDefine->define.symbol;
+    ASTNode* lengthCode = lengthSymbol->def;
+    return lengthCode;
+}
+
 int getArrayLength(ASTNode* type)
 {
     ASTNode* lengthDefine = List_Get(type->paramlist.defines, 0);

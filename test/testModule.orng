@@ -1,6 +1,11 @@
 testModule::Module = (
 	main::(args:[]String)->Int = {
+		leetcode.test_twoSum()
 		leetcode.test_lengthOfLongestSubstring()
+		leetcode.test_findMedianSortedArrays()
+		leetcode.test_longestPalindrome()
+		leetcode.test_convert()
+		leetcode.test_isMatch()
 		0
 	}
 )

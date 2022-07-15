@@ -13,7 +13,12 @@
 #define PRINTF_FORMAT(FMT, FIRST) __attribute__((format(printf, FMT, FIRST)))
 
 #define PANIC(...) debug_panic(__FILE__, __LINE__, __func__, __VA_ARGS__)
+
+#ifdef DEBUG
 #define LOG(...) debug_log(__FILE__, __LINE__, __func__, __VA_ARGS__)
+#else 
+#define LOG(...) ;
+#endif
 
 void debug_panic(const char* file, int line, const char* function,
     const char* message, ...);

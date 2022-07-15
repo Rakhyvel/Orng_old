@@ -11,6 +11,7 @@ typedef enum ir_type {
     IR_LOAD_REAL,
     IR_LOAD_ARGLIST,
     IR_LOAD_ARRAY_LITERAL,
+	IR_LOAD_DEFAULT_ARRAY,
 	IR_LOAD_STRING,
 
     // Control flow
@@ -55,8 +56,9 @@ typedef enum ir_type {
 	// Type IRs
     IR_CONVERT,
 	IR_SIZEOF,
-	IR_NEW, // TODO: remove
-	IR_FREE // TODO: remove
+	IR_NEW, 
+	IR_NEW_ARR,
+	IR_FREE 
 } ir_type;
 
 /*

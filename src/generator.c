@@ -320,7 +320,7 @@ void generateForwardFunctions(FILE* out, CFG* callGraphNode)
 
 void printVarDef(FILE* out, SymbolVersion* version)
 {
-    fprintf(out, "\tregister ");
+    fprintf(out, "\t");
     printType(out, version->type);
     fprintf(out, " ");
     bool functionPtr = version->type->astType == AST_FUNCTION;
@@ -407,6 +407,16 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
                 fprintf(out, "}};\n");
             }
         }
+        break;
+    }
+    case IR_LOAD_DEFAULT_ARRAY: {
+        fprintf(out, "\tfor(int i = 0; i < ");
+        printVar(out, ir->src2);
+        fprintf(out, "; i++) {");
+        printVar(out, ir->dest);
+        fprintf(out, ".data[i] = ");
+        printVar(out, ir->src1);
+        fprintf(out, ";}\n");
         break;
     }
     case IR_LOAD_STRING: {
@@ -689,38 +699,84 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
         break;
     }
     case IR_NEW: {
-        if (ir->fromType->astType == AST_ARRAY) {
-            printVarAssign(out, ir->dest);
+        printVarAssign(out, ir->dest);
+        fprintf(out, "calloc(sizeof(");
+        printType(out, ir->src1->type);
+        fprintf(out, "), 1);\n");
+        fprintf(out, "\t*");
+        printVar(out, ir->dest);
+        fprintf(out, " = ");
+        printVar(out, ir->src1);
+        fprintf(out, ";\n");
+        break;
+    }
+    case IR_NEW_ARR: {
+        fprintf(out, "\t");
+        SymbolVersion* lastLen = NULL;
+        int dim = 0;
+        ASTNode* arrType = ir->dest->type;
+        forall(elem, ir->listData)
+        {
+            SymbolVersion* len = elem->data;
+            lastLen = len;
+            dim++;
+
+            printVar(out, ir->dest);
+            for (ListElem* elem2 = List_Begin(ir->listData); elem2 != elem; elem2 = elem2->next) {
+                SymbolVersion* len2 = elem2->data;
+                fprintf(out, ".data[i");
+                printVar(out, len2);
+                fprintf(out, "]");
+            }
+            fprintf(out, " = ");
+
             fprintf(out, "(");
-            printType(out, ir->dest->type);
+            printType(out, arrType);
+            arrType = getArrayDataType(arrType);
             fprintf(out, ") ");
             fprintf(out, "{");
-            printVar(out, ir->src2);
+            printVar(out, len);
             fprintf(out, ", malloc(sizeof(");
-            printType(out, ir->src1->type);
+            printType(out, arrType);
             fprintf(out, ") * ");
-            printVar(out, ir->src2);
-            fprintf(out, ")};\n");
+            printVar(out, len);
+            fprintf(out, ")}");
 
-            fprintf(out, "\tfor(int i = 0; i < ");
-            printVar(out, ir->src2);
-            fprintf(out, "; i++) {");
-            printVar(out, ir->dest);
-            fprintf(out, ".data[i] = ");
-            printVar(out, ir->src1);
-            fprintf(out, ".data[i]");
-            fprintf(out, ";}\n");
-        } else {
-            printVarAssign(out, ir->dest);
-            fprintf(out, "calloc(sizeof(");
-            printType(out, ir->fromType);
-            fprintf(out, "), 1);\n");
-            fprintf(out, "\t*");
-            printVar(out, ir->dest);
-            fprintf(out, " = ");
-            printVar(out, ir->src1);
-            fprintf(out, ";\n");
+            fprintf(out, "; ");
+
+            fprintf(out, "for (int i");
+            printVar(out, len);
+            fprintf(out, " = 0; i");
+            printVar(out, len);
+            fprintf(out, " < ");
+            printVar(out, len);
+            fprintf(out, "; i");
+            printVar(out, len);
+            fprintf(out, "++) {");
         }
+
+        printVar(out, ir->dest);
+        forall(elem, ir->listData)
+        {
+            SymbolVersion* len2 = elem->data;
+            fprintf(out, ".data[i");
+            printVar(out, len2);
+            fprintf(out, "]");
+        }
+        fprintf(out, " = ");
+        if (ir->src1) {
+            printVar(out, ir->src1);
+        } else {
+            printVar(out, ir->src2);
+            fprintf(out, ".data[i");
+            printVar(out, lastLen);
+            fprintf(out, "]");
+		}
+        fprintf(out, ";");
+        for (int i = 0; i < dim; i++) {
+            fprintf(out, "}");
+        }
+        fprintf(out, "\n");
         break;
     }
     case IR_FREE: {
