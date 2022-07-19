@@ -389,7 +389,7 @@ x Generate C code from IR
 		x don't print out a retval for a function that is void codomain typed
 		x call, arglist, array symbol versioning
 		x don't phi function parameters that aren't used
-		- make an IR_LOAD_STRING
+		x make an IR_LOAD_STRING
 	- cases
 		- some sort of set of mappings and their integer conditions so that duplicates can be detected
 		- what time are field case expressions?
@@ -618,6 +618,7 @@ Maybe?
 		- circleArea::(r:Real)->Real = 3.1415 r^2
 		- factor::(x1:Real, x2:Real, x:Real)->Real = (x - x1)(x - x2)
 	- relational operator chaining
+		- 0 < x == y < 4
 		- exclusive with implicit eq above
 		- have to be transitive operators (== < <= > >=)
 			_0 = 0 -- init chain result as false

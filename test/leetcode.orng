@@ -17,8 +17,8 @@ leetcode::Module = (
 
 
     -- not leetcode, but a functional approach to fizzbuzz
-    fizzbuzz::(n:Int)->() = 
-        if n % 16 == 0 {
+    fizzbuzz::(n:Int)->String = 
+        if n % 15 == 0 {
             "fizzbuzz"
         } else if n % 3 == 0 {
             "fizz"
@@ -325,7 +325,7 @@ leetcode::Module = (
         list.next = nothing
         return newList
     }
-    
+
     reverse::(x:Int)->Int = convertToInt(reverseList(convertToList(x)))
 
     test_reverse::()->() = {

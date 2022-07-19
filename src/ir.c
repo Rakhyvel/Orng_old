@@ -96,6 +96,8 @@ char* IR_ToString(ir_type type)
         return "IR_SIZEOF";
     case IR_NEW:
         return "IR_NEW";
+    case IR_NEW_ARR:
+        return "IR_NEW_ARR";
     case IR_FREE:
         return "IR_FREE";
     }
@@ -740,6 +742,79 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
         appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, beginLabel, node->pos));
         appendInstruction(cfg, endLabel);
         return NULL;
+    }
+    case AST_CASE: {
+        SymbolVersion* var = NULL;
+        IR* phony = NULL;
+        if (node->type->astType != AST_UNDEF) {
+            var = tempSymbolVersion(cfg, node->type);
+            phony = createIR(IR_PHONY, var, NULL, NULL, node->pos);
+            phony->listData = List_Create();
+            var->def = phony; // Done just so that it is considered live, I think. Has no real "def", since it's run-time dependent
+            appendInstruction(cfg, phony);
+        }
+        SymbolVersion* caseExpr = flattenAST(cfg, node->_case.expr, returnLabel, breakLabel, continueLabel);
+
+        // Generate a list of labels for each mapping, and an else label if there is one
+        List* mappingLabels = List_Create();
+        for (int i = 0; i < node->_case.mappings->size; i++) {
+            List_Append(mappingLabels, createIR_label(node->pos));
+        }
+        IR* endLabel = createIR_label(node->pos);
+
+        // For each expr in each mapping, branch if false to the mapping's label if caseExpr does not equal mapping expr
+        int i = 0;
+        forall(elem, node->_case.mappings)
+        {
+            ASTNode* mapping = elem->data;
+            IR* mappingLabel = List_Get(mappingLabels, i);
+            forall(elem2, mapping->mapping.exprs)
+            {
+                SymbolVersion* mappingExpr = flattenAST(cfg, elem2->data, returnLabel, breakLabel, continueLabel);
+                SymbolVersion* notEqualSymbol = tempSymbolVersion(cfg, BOOL_TYPE);
+                IR* notEqualIR = createIR(IR_NEQ, notEqualSymbol, caseExpr, mappingExpr, node->pos);
+                notEqualSymbol->def = notEqualIR;
+                appendInstruction(cfg, notEqualIR);
+                appendInstruction(cfg, createIR_branch(IR_BRANCH_IF_FALSE, NULL, notEqualSymbol, NULL, mappingLabel, node->pos));
+            }
+            i++;
+        }
+        // Append else label, append else block if there is one, with a jump to the end label
+        forall(elem, node->_case.mappings)
+        {
+            ASTNode* mapping = elem->data;
+            if (mapping->mapping.exprs->size == 0) {
+                SymbolVersion* bodySymbver = flattenAST(cfg, mapping->mapping.expr, returnLabel, endLabel, continueLabel);
+                if (var && bodySymbver) {
+                    IR* copy = createIR(IR_COPY, var, bodySymbver, NULL, node->pos);
+                    List_Append(phony->listData, copy);
+                    appendInstruction(cfg, copy);
+                }
+                appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, endLabel, node->pos));
+                break;
+            }
+        }
+        // For each mapping, append mapping label and flatten mapping code, with a jump to the end label
+        i = 0;
+        forall(elem, node->_case.mappings)
+        {
+            ASTNode* mapping = elem->data;
+            IR* mappingLabel = List_Get(mappingLabels, i);
+            if (mapping->mapping.exprs->size != 0) {
+                appendInstruction(cfg, mappingLabel);
+                SymbolVersion* bodySymbver = flattenAST(cfg, mapping->mapping.expr, returnLabel, endLabel, continueLabel);
+                if (var && bodySymbver) {
+                    IR* copy = createIR(IR_COPY, var, bodySymbver, NULL, node->pos);
+                    List_Append(phony->listData, copy);
+                    appendInstruction(cfg, copy);
+                }
+                appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, endLabel, node->pos));
+            }
+            i++;
+        }
+        // Append end label
+        appendInstruction(cfg, endLabel);
+        return var;
     }
     case AST_RETURN: {
         SymbolVersion* retval = flattenAST(cfg, node->unop.expr, returnLabel, breakLabel, continueLabel);
@@ -2390,7 +2465,7 @@ List* createCFG(SymbolNode* functionSymbol, CFG* caller)
         appendInstruction(cfg, createIR(IR_COPY, returnVersion, eval, NULL, invalid_pos));
         appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, NULL, invalid_pos));
     }
-    //printInstructionList(cfg);
+    printInstructionList(cfg);
 
     // Convert quadruple list to CFG of basic blocks, find versions!
     cfg->blockGraph = convertToBasicBlock(cfg, cfg->head, NULL);
@@ -2398,9 +2473,9 @@ List* createCFG(SymbolNode* functionSymbol, CFG* caller)
 
     // Optimize
     do {
-        //printf("\n\n%s\n", cfg->symbol->name);
-        //clearBBVisitedFlags(cfg);
-        //printBlockGraph(cfg->blockGraph);
+        printf("\n\n%s\n", cfg->symbol->name);
+        clearBBVisitedFlags(cfg);
+        printBlockGraph(cfg->blockGraph);
     } while (copyAndConstantPropagation(cfg) | deadCode(cfg));
 
     // Parameters and the such are kept
