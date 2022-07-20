@@ -635,6 +635,14 @@ ASTNode* AST_Create_dot(struct astNode* container, struct astNode* identifier, s
     return retval;
 }
 
+ASTNode* AST_Create_maybe(struct astNode* container, struct symbolNode* scope, struct position pos)
+{
+    ASTNode* retval = AST_Create(AST_DOT, scope, pos);
+    retval->dot.left = container;
+    retval->dot.right = AST_Create_ident("something", scope, pos);
+    return retval;
+}
+
 ASTNode* AST_Create_sizeof(struct astNode* type, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_SIZEOF, scope, pos);

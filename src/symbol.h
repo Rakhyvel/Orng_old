@@ -49,9 +49,6 @@ typedef struct symbolNode {
     bool isVolatile;
     List* versions; // Used to keep track of how many versions this symbol has, list of SymbolVersion*
 
-    // Union sets
-    char* activeFieldName; // TODO: Remove, re-add in SymbolVersion
-
     // Defer/block
     List* defers; // list of ast's, in order of declaration
     bool isLoop;

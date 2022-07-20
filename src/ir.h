@@ -84,6 +84,7 @@ typedef struct symbolVersion {
 
     bool removed;
     bool used;
+    bool lvalue;
 } SymbolVersion;
 
 typedef struct IR {

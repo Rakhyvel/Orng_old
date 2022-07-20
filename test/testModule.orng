@@ -1,5 +1,6 @@
 testModule::Module = (
 	main::(args:[]String)->Int = {
-		std.system.println("%s", leetcode.fizzbuzz(args.length))
+		leetcode.test_all()
+		0
 	}
 )

@@ -371,8 +371,53 @@ void printVar(FILE* out, SymbolVersion* version)
     }
 }
 
+static void generateLValueIR(FILE* out, SymbolVersion* version)
+{
+    if (!version->def || !version->lvalue) {
+        printVar(out, version);
+    } else {
+        switch (version->def->irType) {
+        case IR_LOAD_SYMBOL: {
+            printPath(out, version->def->symbol);
+            break;
+        }
+        case IR_INDEX: {
+            fprintf(out, "(");
+            generateLValueIR(out, version->def->src1);
+            fprintf(out, ".data[");
+            printVar(out, version->def->src2);
+            fprintf(out, "])");
+            break;
+        }
+        case IR_DOT: {
+            fprintf(out, "(");
+            generateLValueIR(out, version->def->src1);
+            fprintf(out, ".%s)", version->def->strData);
+            break;
+        }
+        case IR_DEREF: {
+            fprintf(out, "(*");
+            generateLValueIR(out, version->def->src1);
+            fprintf(out, ")");
+            break;
+        }
+        case IR_ADDR_OF: {
+            fprintf(out, "(&");
+            generateLValueIR(out, version->def->src1);
+            fprintf(out, ")");
+            break;
+        }
+        }
+    }
+}
+
 static void generateIR(FILE* out, CFG* cfg, IR* ir)
 {
+	// Don't generate L value IRs, UNLESS they are copies
+    if (ir->dest && ir->dest->lvalue && ir->irType != IR_COPY) {
+        return;
+    }
+
     switch (ir->irType) {
     case IR_LOAD_SYMBOL: {
         printVarAssign(out, ir->dest);
@@ -486,7 +531,7 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
     }
     case IR_INDEX_COPY: {
         fprintf(out, "\t");
-        printVar(out, ir->src1);
+        generateLValueIR(out, ir->src1);
         fprintf(out, ".data[");
         printVar(out, ir->src2);
         fprintf(out, "] = ");
@@ -502,9 +547,9 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
     }
     case IR_DOT_COPY: {
         fprintf(out, "\t");
-        printVar(out, ir->dest);
+        generateLValueIR(out, ir->src1);
         fprintf(out, ".%s = ", ir->strData);
-        printVar(out, ir->src1);
+        printVar(out, ir->src2);
         fprintf(out, ";\n");
         break;
     }
@@ -673,7 +718,7 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
     }
     case IR_DEREF_COPY: {
         fprintf(out, "\t*");
-        printVar(out, ir->src1);
+        generateLValueIR(out, ir->src1);
         fprintf(out, " = ");
         printVar(out, ir->src2);
         fprintf(out, ";\n");
@@ -771,7 +816,7 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
             fprintf(out, ".data[i");
             printVar(out, lastLen);
             fprintf(out, "]");
-		}
+        }
         fprintf(out, ";");
         for (int i = 0; i < dim; i++) {
             fprintf(out, "}");

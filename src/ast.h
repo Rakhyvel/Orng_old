@@ -92,6 +92,7 @@ enum astType {
     // Module
     AST_DOT,
     AST_DEREF_DOT,
+    AST_MAYBE,
     // Types
     AST_SIZEOF,
     AST_VOID,
@@ -167,6 +168,7 @@ typedef struct astNode_dot {
     struct astNode* left;
     struct astNode* right;
     struct symbolNode* symbol;
+    bool assign;
 } astNode_dot;
 
 typedef struct astNode_slice {
@@ -326,6 +328,8 @@ ASTNode* AST_Create_false(struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_nothing(struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_undef(struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_neg(struct astNode* right, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_addrOf(struct astNode* expr, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_deref(struct astNode* expr, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_add(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_subtract(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_multiply(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
@@ -376,6 +380,7 @@ ASTNode* AST_Create_defer(struct astNode* expr, struct symbolNode* scope, struct
 ASTNode* AST_Create_break(struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_continue(struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_dot(struct astNode* container, struct astNode* identifier, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_maybe(struct astNode* container, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_sizeof(struct astNode* type, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_void(struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_cast(struct astNode* expr, struct astNode* type, struct symbolNode* scope, struct position pos);

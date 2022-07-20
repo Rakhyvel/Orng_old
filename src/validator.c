@@ -1108,24 +1108,6 @@ void validateType(ASTNode* node, bool collectThisType)
     }
     case AST_UNIONSET: {
         validateAST(node, NULL);
-
-        // TODO: types of defs are unique
-        ListElem* elem1 = List_Begin(node->unionset.defines);
-        for (; elem1 != List_End(node->unionset.defines)->prev; elem1 = elem1->next) {
-            ListElem* elem2 = elem1->next;
-            for (; elem2 != List_End(node->unionset.defines)->prev; elem2 = elem2->next) {
-                ASTNode* firstDefine = elem1->data;
-                ASTNode* secondDefine = elem2->data;
-                SymbolNode* firstVar = firstDefine->define.symbol;
-                SymbolNode* secondVar = secondDefine->define.symbol;
-                if (
-                    firstVar->type->astType != AST_VOID && secondVar->type->astType != AST_VOID
-                    && (typesAreEquivalent(firstVar->type, secondVar->type)
-                        || typesAreEquivalent(secondVar->type, firstVar->type))) {
-                    error2(firstDefine->pos, secondDefine->pos, "duplicate non-void types in union");
-                }
-            }
-        }
         break;
     }
     case AST_DOT: {
@@ -1451,73 +1433,6 @@ void argsMatchParams(ASTNode* expr, ASTNode* args, ASTNode* params)
     }
 }
 
-struct SAT {
-    List* trueExprs;
-    List* falseExprs;
-};
-
-struct SAT sat(ASTNode* expr, bool assumption)
-{
-    switch (expr->astType) {
-    case AST_NOT: {
-        return sat(expr->unop.expr, !assumption);
-    }
-    case AST_AND: {
-        if (assumption) {
-            struct SAT leftExprs = sat(expr->binop.left, true);
-            struct SAT rightExprs = sat(expr->binop.right, true);
-            return (struct SAT) { List_Concat(leftExprs.trueExprs, rightExprs.trueExprs), List_Concat(leftExprs.falseExprs, rightExprs.falseExprs) };
-        } else {
-            return (struct SAT) { NULL, NULL };
-        }
-    }
-    case AST_OR: {
-        if (!assumption) {
-            struct SAT leftExprs = sat(expr->binop.left, false);
-            struct SAT rightExprs = sat(expr->binop.right, false);
-            return (struct SAT) { List_Concat(leftExprs.trueExprs, rightExprs.trueExprs), List_Concat(leftExprs.falseExprs, rightExprs.falseExprs) };
-        } else {
-            return (struct SAT) { NULL, NULL };
-        }
-    }
-    case AST_PAREN: {
-        return sat(List_Get(expr->arglist.args, 0), assumption);
-    }
-    default: {
-        List* list = List_Create();
-        List_Append(list, expr);
-        if (assumption) {
-            return (struct SAT) { list, NULL };
-        } else {
-            return (struct SAT) { NULL, list };
-        }
-    }
-    }
-}
-
-void reasonAboutSymbols(List* assumptions, enum ASTType nothingType, List* somethingSymbols)
-{
-    if (assumptions == NULL) {
-        return;
-    }
-    for (ListElem* elem = List_Begin(assumptions); elem != List_End(assumptions); elem = elem->next) {
-        ASTNode* expr = elem->data;
-        if ((expr->astType == AST_EQ || expr->astType == AST_NEQ) && expr->binop.right->astType == AST_NOTHING) {
-            SymbolNode* var = NULL;
-            if (expr->binop.left->astType == AST_IDENT) {
-                var = Symbol_Find(expr->binop.left->ident.data, expr->binop.left->scope);
-            } else if (expr->binop.left->astType == AST_DOT) {
-                var = getDotSymbol(expr->binop.left);
-            } else {
-                error(expr->binop.left->pos, "unable to resolve to a symbol");
-            }
-            if (var->activeFieldName == NULL && expr->astType != nothingType) {
-                List_Append(somethingSymbols, var);
-            }
-        }
-    }
-}
-
 bool isTypeMaybe(ASTNode* type)
 {
     if (type->astType == AST_UNIONSET) {
@@ -1591,11 +1506,6 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
         Validator_Validate(var);
         if (var->type->isConst) {
             retval = var->def;
-            break;
-        } else if (var->activeFieldName) {
-            ASTNode* right = AST_Create_ident(var->activeFieldName, node->scope, node->pos);
-            ASTNode* dot = AST_Create_dot(node, right, node->scope, node->pos);
-            retval = dot;
             break;
         } else {
             retval = node;
@@ -1692,35 +1602,8 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
     }
     case AST_IF: {
         ASTNode* validCondition = validateAST(node->_if.condition, BOOL_TYPE);
-
-        struct SAT assumeTrue = sat(validCondition, true);
-        List* somethingSymbols = List_Create();
-        reasonAboutSymbols(assumeTrue.trueExprs, AST_EQ, somethingSymbols);
-        reasonAboutSymbols(assumeTrue.falseExprs, AST_NEQ, somethingSymbols);
-        for (ListElem* elem = List_Begin(somethingSymbols); elem != List_End(somethingSymbols); elem = elem->next) {
-            SymbolNode* var = elem->data;
-            var->activeFieldName = "something";
-        }
         ASTNode* validBodyBlock = validateAST(node->_if.bodyBlock, coerceType);
-        for (ListElem* elem = List_Begin(somethingSymbols); elem != List_End(somethingSymbols); elem = elem->next) {
-            SymbolNode* var = elem->data;
-            var->activeFieldName = NULL;
-        }
-
-        struct SAT assumeFalse = sat(validCondition, false);
-        somethingSymbols = List_Create();
-        reasonAboutSymbols(assumeFalse.trueExprs, AST_EQ, somethingSymbols);
-        reasonAboutSymbols(assumeFalse.falseExprs, AST_NEQ, somethingSymbols);
-        for (ListElem* elem = List_Begin(somethingSymbols); elem != List_End(somethingSymbols); elem = elem->next) {
-            SymbolNode* var = elem->data;
-            var->activeFieldName = "something";
-            printf("%s\n", var->name);
-        }
         ASTNode* validElseBlock = validateAST(node->_if.elseBlock, coerceType);
-        for (ListElem* elem = List_Begin(somethingSymbols); elem != List_End(somethingSymbols); elem = elem->next) {
-            SymbolNode* var = elem->data;
-            var->activeFieldName = NULL;
-        }
 
         node->_if.condition = validCondition;
         node->_if.bodyBlock = validBodyBlock;
@@ -1734,21 +1617,9 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
         ASTNode* validCondition = validateAST(node->_for.condition, BOOL_TYPE);
         ASTNode* validPost = validateAST(node->_for.post, NULL);
 
-        struct SAT assumeTrue = sat(validCondition, true);
-        List* somethingSymbols = List_Create();
-        reasonAboutSymbols(assumeTrue.trueExprs, AST_EQ, somethingSymbols);
-        reasonAboutSymbols(assumeTrue.falseExprs, AST_NEQ, somethingSymbols);
-        for (ListElem* elem = List_Begin(somethingSymbols); elem != List_End(somethingSymbols); elem = elem->next) {
-            SymbolNode* var = elem->data;
-            var->activeFieldName = "something";
-        }
         loops++;
         ASTNode* validBodyBlock = validateAST(node->_for.bodyBlock, coerceType);
         loops--;
-        for (ListElem* elem = List_Begin(somethingSymbols); elem != List_End(somethingSymbols); elem = elem->next) {
-            SymbolNode* var = elem->data;
-            var->activeFieldName = NULL;
-        }
 
         ASTNode* validElseBlock = validateAST(node->_for.elseBlock, coerceType);
 
@@ -1834,7 +1705,6 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
                 if (mappingIdent->astType != AST_IDENT) {
                     error(mappingIdent->pos, "expected identifier");
                 }
-                var->activeFieldName = mappingIdent->ident.data;
             }
             validMapping = validateAST(mapping, coerceType);
             if (validMapping->fieldMapping.exprs->size > 1) {
@@ -1857,7 +1727,6 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
                 error(validMapping->pos, "the field '%s' is not found in union", validMappingIdent->ident.data);
             }
             List_Append(validMappings, validMapping);
-            var->activeFieldName = NULL;
         }
 
         // only one 'else' mapping
@@ -2075,16 +1944,7 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
             retval = AST_Create_unionLiteral(0, NULL, node->scope, node->pos);
             retval->type = left;
             break;
-        } else if (node->dot.symbol->activeFieldName) {
-            ASTNode* right = AST_Create_ident(node->dot.symbol->activeFieldName, node->scope, node->pos);
-            ASTNode* dot = AST_Create_dot(node, right, node->scope, node->pos);
-            retval = dot;
-            break;
         } else if (leftType->astType == AST_UNIONSET) {
-            // check with symbol if field is allowed to be activated
-            if (!leftVar->activeFieldName || strcmp(leftVar->activeFieldName, node->dot.right->ident.data)) {
-                error(node->dot.right->pos, "union field '%s' is not active", node->dot.right->ident.data, leftVar->activeFieldName);
-            }
             if (dotType->astType == AST_VOID) {
                 return NOTHING_AST;
             } else {
