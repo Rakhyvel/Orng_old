@@ -375,6 +375,22 @@ ASTNode* AST_Create_lte(struct astNode* left, struct astNode* right, struct symb
     return retval;
 }
 
+ASTNode* AST_Create_isTag(struct astNode* expr, int tag, struct symbolNode* scope, struct position pos)
+{
+    ASTNode* retval = AST_Create(AST_IS_TAG, scope, pos);
+    retval->unionLiteral.expr = expr;
+    retval->unionLiteral.tag = tag;
+    return retval;
+}
+
+ASTNode* AST_Create_isntTag(struct astNode* expr, int tag, struct symbolNode* scope, struct position pos)
+{
+    ASTNode* retval = AST_Create(AST_ISNT_TAG, scope, pos);
+    retval->unionLiteral.expr = expr;
+    retval->unionLiteral.tag = tag;
+    return retval;
+}
+
 ASTNode* AST_Create_bitNot(struct astNode* expr, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_BIT_NOT, scope, pos);

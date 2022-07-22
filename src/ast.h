@@ -54,6 +54,8 @@ enum astType {
     AST_GTE,
     AST_LSR,
     AST_LTE,
+	AST_IS_TAG,
+	AST_ISNT_TAG,
     // Bitwise
     AST_BIT_NOT,
     AST_BIT_OR,
@@ -246,11 +248,12 @@ typedef struct astNode {
     enum astType astType; // The type of the AST node
     struct symbolNode* scope; // The scope that this AST is constrained within
     struct position pos;
+    int tag; // Tag of a specific type for enums
 
     bool visited;
-    bool isValid; // TODO: Remove?
+    bool isValid;
 
-    bool isConst; // TODO: remove and put into type asts
+    bool isConst;
 
     // if subtree contains any of these
     bool containsReturn;
@@ -349,6 +352,8 @@ ASTNode* AST_Create_gtr(struct astNode* left, struct astNode* right, struct symb
 ASTNode* AST_Create_gte(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_lsr(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_lte(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_isTag(struct astNode* expr, int tag, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_isntTag(struct astNode* expr, int tag, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_bitNot(struct astNode* expr, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_bitOr(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_bitXor(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);

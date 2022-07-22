@@ -10,6 +10,7 @@
 #include <string.h>
 
 static const List* structDepenGraph = NULL;
+static const Map* tags = NULL; // Map(name:String, Set(type))
 static const Map* includes = NULL;
 static const List* verbatims = NULL;
 static const SymbolNode* mainFunction = NULL;
@@ -562,6 +563,8 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
     case AST_GTE:
     case AST_LSR:
     case AST_LTE:
+    case AST_IS_TAG:
+    case AST_ISNT_TAG:
     case AST_TRUE:
     case AST_FALSE: {
         type = CONST_BOOL_TYPE;
@@ -998,10 +1001,6 @@ bool typesAreEquivalent(ASTNode* a, ASTNode* b)
             retval = allEquiv;
             break;
         }
-        case AST_VOID: {
-            retval = true;
-            break;
-        }
         }
     }
     aExpand->visited = false;
@@ -1045,6 +1044,37 @@ static void validateNoLoops(DGraph* graphNode)
 
 static struct graph* addGraphNode(List* depenGraph, ASTNode* structType)
 {
+    // Check if type is enum, if so, collect tags
+    static int tagID = 0;
+    if (structType->astType == AST_UNIONSET) {
+        forall(elem, structType->unionset.defines)
+        {
+            ASTNode* define = elem->data;
+            SymbolNode* symbol = define->define.symbol;
+            // Check if there is a set created in the map, if not create it
+            List* typeSet = Map_Get(tags, symbol->name);
+            if (!typeSet) {
+                typeSet = List_Create();
+                Map_Put(tags, symbol->name, typeSet);
+            }
+
+            // Add the type to the set using type equality, not equivalence
+            bool typeSetContainsType = false;
+            forall(elem2, typeSet)
+            {
+                ASTNode* type = elem2->data;
+                if (typesAreEquivalent(symbol->type, type) && typesAreEquivalent(type, symbol->type)) {
+                    typeSetContainsType = true;
+                    break;
+                }
+            }
+            if (!typeSetContainsType) {
+                symbol->type->tag = tagID++;
+                List_Append(typeSet, symbol->type);
+            }
+        }
+    }
+
     // Check list to see if any graph node has paramlist type
     // If does, return that graph node
     // If not, create new grpahnode, append to list of dependencies, return new graph node
@@ -1190,6 +1220,20 @@ bool typeIsMaybe(ASTNode* type)
     return !strcmp(firstVar->name, "nothing");
 }
 
+int getTag(char* fieldName, ASTNode* fieldType)
+{
+    List* set = Map_Get(tags, fieldName);
+    forall(elem, set)
+    {
+        ASTNode* type = elem->data;
+        // Types are completely equal
+        if (typesAreEquivalent(type, fieldType) && typesAreEquivalent(fieldType, type)) {
+            return type->tag;
+        }
+    }
+    PANIC("couldn't find tag");
+}
+
 ASTNode* tryCoerceToUnion(ASTNode* unionType, ASTNode* member)
 {
     validateType(unionType, true);
@@ -1201,7 +1245,7 @@ ASTNode* tryCoerceToUnion(ASTNode* unionType, ASTNode* member)
         ASTNode* firstDefine = List_Get(unionType->unionset.defines, 0);
         SymbolNode* firstVar = firstDefine->define.symbol;
         if (!strcmp(firstVar->name, "nothing")) {
-            ASTNode* retval = AST_Create_unionLiteral(0, member, member->scope, member->pos);
+            ASTNode* retval = AST_Create_unionLiteral(getTag("nothing", VOID_TYPE), NULL, member->scope, member->pos);
             retval->type = expandedUnionType;
             return retval;
         } else {
@@ -1209,14 +1253,13 @@ ASTNode* tryCoerceToUnion(ASTNode* unionType, ASTNode* member)
         }
     } else {
         ASTNode* memberType = getType(member, false, false);
-        ListElem* elem = List_Begin(expandedUnionType->unionset.defines);
-        int i = 0;
-        for (; elem != List_End(expandedUnionType->unionset.defines); elem = elem->next, i++) {
+        forall(elem, expandedUnionType->unionset.defines)
+        {
             ASTNode* define = elem->data;
             SymbolNode* var = define->define.symbol;
             ASTNode* defineType = var->type;
             if (typesAreEquivalent(memberType, defineType)) {
-                ASTNode* retval = AST_Create_unionLiteral(i, member, member->scope, member->pos);
+                ASTNode* retval = AST_Create_unionLiteral(getTag(var->name, var->type), NULL, member->scope, member->pos);
                 retval->type = expandedUnionType;
                 return retval;
             }
@@ -1531,7 +1574,7 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
         }
         retval = node;
         break;
-    } 
+    }
     case AST_ARRAY_LITERAL: {
         if (node->arrayLiteral.members->size <= 0) {
             error(node->pos, "array literal is empty");
@@ -1558,7 +1601,9 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
         break;
     }
     case AST_UNION_LITERAL: {
-        node->unionLiteral.expr = validateAST(node->unionLiteral.expr, NULL);
+        if (node->unionLiteral.expr) {
+            node->unionLiteral.expr = validateAST(node->unionLiteral.expr, NULL);
+        }
         retval = node;
         break;
     }
@@ -1941,9 +1986,17 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
         if (node->dot.symbol == NULL) {
             error(node->pos, "not an l-value");
         } else if (left->astType == AST_UNIONSET) {
-            retval = AST_Create_unionLiteral(0, NULL, node->scope, node->pos);
-            retval->type = left;
-            break;
+            forall(elem, left->unionset.defines)
+            {
+                ASTNode* define = elem->data;
+                SymbolNode* var = define->define.symbol;
+                ASTNode* defineType = var->type;
+                if (!strcmp(var->name, node->dot.right->ident.data)) {
+                    retval = AST_Create_unionLiteral(getTag(var->name, var->type), NULL, node->scope, node->pos);
+                    retval->type = left;
+                    break;
+                }
+            }
         } else if (leftType->astType == AST_UNIONSET) {
             if (dotType->astType == AST_VOID) {
                 return NOTHING_AST;
@@ -1983,8 +2036,20 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
         node->binop.left = left;
         node->binop.right = right;
 
-        if (isTypeMaybe(leftType) && left->astType == AST_IDENT && right->astType == AST_NOTHING) {
-            retval = node;
+        if (leftType->astType == AST_UNIONSET) {
+            if (right->astType != AST_UNION_LITERAL) {
+                ASTNode* coerce = tryCoerceToUnion(leftType, right);
+                if (coerce) {
+                    right = coerce;
+                } else {
+                    typeMismatchError(right->pos, leftType, rightType);
+                }
+            }
+            if (node->astType == AST_EQ) {
+                retval = AST_Create_isTag(left, right->unionLiteral.tag, node->scope, node->pos);
+            } else {
+                retval = AST_Create_isntTag(left, right->unionLiteral.tag, node->scope, node->pos);
+            }
             break;
         } else if (!typesAreEquivalent(rightType, leftType)) {
             incompatibleTypesError(node->pos, leftType, rightType);
@@ -2345,6 +2410,7 @@ Program Validator_Validate(SymbolNode* symbol)
         structDepenGraph = List_Create();
         includes = Map_Create();
         verbatims = List_Create();
+        tags = Map_Create();
 
         validateType(CONST_STRING_TYPE, true);
         validateType(STRING_ARR_TYPE, true);
@@ -2470,10 +2536,13 @@ Program Validator_Validate(SymbolNode* symbol)
                 if (!typesAreEquivalent(newDef->type, retType)) {
                     ASTNode* coerced = tryCoerceToUnion(retType, newDef);
                     if (coerced) {
+                        symbol->def = coerced;
                         newDef = coerced;
                     } else {
                         typeMismatchError(symbol->pos, newDef->type, retType);
                     }
+                } else {
+                    symbol->def = newDef;
                 }
             } else if (!allReturnPath(newDef)) {
                 error(symbol->pos, "not all paths return a value in '%s'", symbol->name);

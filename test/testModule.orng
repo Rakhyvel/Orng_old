@@ -1,6 +1,18 @@
 testModule::Module = (
+	Enum::Type = (|
+		a
+		b
+		c
+	)
+
+	testFn::()->Enum = Enum.a
+
 	main::(args:[]String)->Int = {
-		leetcode.test_all()
-		0
+		lol:Enum = testFn()
+		if lol != Enum.b {
+			5
+		} else {
+			0
+		}
 	}
 )
