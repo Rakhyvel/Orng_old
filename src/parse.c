@@ -452,7 +452,7 @@ static ASTNode* parsePostfix(SymbolNode* scope)
         } else if ((token = accept(TOKEN_QMARK)) != NULL) {
             child = AST_Create_maybe(child, scope, token->pos);
         } else if ((token = accept(TOKEN_ORELSE)) != NULL) {
-            child = AST_Create_orelse(child, parseStatement(scope), scope, token->pos);
+            child = AST_Create_orelse(-1, child, parseStatement(scope), scope, token->pos);
         } else {
             break;
         }

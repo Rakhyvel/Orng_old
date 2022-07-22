@@ -483,9 +483,9 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
         break;
     }
     case AST_ORELSE: {
-        ASTNode* left = validateAST(node->binop.left, NULL);
+        ASTNode* left = validateAST(node->orelse.left, NULL);
         ASTNode* leftType = getType(left, false, false);
-        ASTNode* right = validateAST(node->binop.right, NULL);
+        ASTNode* right = validateAST(node->orelse.right, NULL);
         ASTNode* rightType = getType(right, false, false);
 
         ASTNode* innerType = NULL;
@@ -600,10 +600,6 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
         }
         break;
     }
-    case AST_FOR: {
-        type = getType(node->_for.bodyBlock, false, false);
-        break;
-    }
     case AST_FIELD_MAPPING:
     case AST_MAPPING: {
         type = getType(node->mapping.expr, false, false);
@@ -648,7 +644,8 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
     case AST_BIT_XOR_ASSIGN:
     case AST_BIT_AND_ASSIGN:
     case AST_LSHIFT_ASSIGN:
-    case AST_RSHIFT_ASSIGN: {
+    case AST_RSHIFT_ASSIGN:
+    case AST_FOR: {
         type = UNDEF_TYPE;
         break;
     }
@@ -1234,6 +1231,19 @@ int getTag(char* fieldName, ASTNode* fieldType)
     PANIC("couldn't find tag");
 }
 
+int getTagEnum(char* fieldName, ASTNode* enumType)
+{
+    forall(elem, enumType->unionset.defines)
+    {
+        ASTNode* define = elem->data;
+        SymbolNode* var = define->define.symbol;
+        if (!strcmp(var->name, fieldName)) {
+            return getTag(fieldName, var->type);
+        }
+    }
+    PANIC("couldn't find tag enum");
+}
+
 ASTNode* tryCoerceToUnion(ASTNode* unionType, ASTNode* member)
 {
     validateType(unionType, true);
@@ -1259,7 +1269,7 @@ ASTNode* tryCoerceToUnion(ASTNode* unionType, ASTNode* member)
             SymbolNode* var = define->define.symbol;
             ASTNode* defineType = var->type;
             if (typesAreEquivalent(memberType, defineType)) {
-                ASTNode* retval = AST_Create_unionLiteral(getTag(var->name, var->type), NULL, member->scope, member->pos);
+                ASTNode* retval = AST_Create_unionLiteral(getTag(var->name, var->type), member, member->scope, member->pos);
                 retval->type = expandedUnionType;
                 return retval;
             }
@@ -1755,14 +1765,10 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
             ASTNode* mapping = elem->data;
             ASTNode* validMapping = NULL;
             SymbolNode* var = NULL;
-            if (node->_case.expr->astType == AST_IDENT) {
-                var = Symbol_Find(node->_case.expr->ident.data, node->scope);
-            } else {
-                error(node->pos, "cannot resolve case expression to symbol");
-            }
             // TODO: change syntax so that only one field mapping is parsed
+            ASTNode* mappingIdent = NULL;
             if (mapping->fieldMapping.exprs->size == 1) {
-                ASTNode* mappingIdent = List_Get(mapping->fieldMapping.exprs, 0);
+                mappingIdent = List_Get(mapping->fieldMapping.exprs, 0);
                 if (mappingIdent->astType != AST_IDENT) {
                     error(mappingIdent->pos, "expected identifier");
                 }
@@ -1771,22 +1777,7 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
             if (validMapping->fieldMapping.exprs->size > 1) {
                 error(validMapping->pos, "field mapping with too many expressions");
             }
-            ASTNode* validMappingIdent = List_Get(validMapping->fieldMapping.exprs, 0);
-            bool found = false;
-            int i = 0;
-            for (ListElem* elem = List_Begin(elementType->unionset.defines); elem != List_End(elementType->unionset.defines); elem = elem->next) {
-                ASTNode* unionDefine = elem->data;
-                SymbolNode* var = unionDefine->define.symbol;
-                if (!strcmp(var->name, validMappingIdent->ident.data)) {
-                    found = true;
-                    validMapping->fieldMapping.tag = i;
-                    break;
-                }
-                i++;
-            }
-            if (!found) {
-                error(validMapping->pos, "the field '%s' is not found in union", validMappingIdent->ident.data);
-            }
+            validMapping->fieldMapping.tag = getTagEnum(mappingIdent->ident.data, elementType);
             List_Append(validMappings, validMapping);
         }
 
@@ -1802,8 +1793,6 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
                 }
             }
         }
-        // TODO: all cases have different numbers
-        // TODO: all cases must be comptime integer exprs
         node->_case.expr = validExpr;
         node->_case.mappings = validMappings;
         retval = node;
@@ -2002,17 +1991,8 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
         if (node->dot.symbol == NULL) {
             error(node->pos, "not an l-value");
         } else if (left->astType == AST_UNIONSET) {
-            forall(elem, left->unionset.defines)
-            {
-                ASTNode* define = elem->data;
-                SymbolNode* var = define->define.symbol;
-                ASTNode* defineType = var->type;
-                if (!strcmp(var->name, node->dot.right->ident.data)) {
-                    retval = AST_Create_unionLiteral(getTag(var->name, var->type), NULL, node->scope, node->pos);
-                    retval->type = left;
-                    break;
-                }
-            }
+            retval = AST_Create_unionLiteral(getTagEnum(node->dot.right->ident.data, left), NULL, node->scope, node->pos);
+            retval->type = left;
         } else if (leftType->astType == AST_UNIONSET) {
             if (dotType->astType == AST_VOID) {
                 return NOTHING_AST;
@@ -2308,10 +2288,14 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
         break;
     }
     case AST_ORELSE: {
-        ASTNode* left = validateAST(node->binop.left, NULL);
+        ASTNode* left = validateAST(node->orelse.left, NULL);
         ASTNode* leftType = getType(left, false, false);
-        ASTNode* right = validateAST(node->binop.right, NULL);
+        ASTNode* right = validateAST(node->orelse.right, NULL);
         ASTNode* rightType = getType(right, false, false);
+
+        if (leftType->astType != AST_UNIONSET) {
+            error(left->pos, "left side of orelse must be enum type");
+        }
 
         ASTNode* innerType = NULL;
         ListElem* elem = List_Begin(leftType->unionset.defines);
@@ -2327,8 +2311,9 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
             incompatibleTypesError(node->pos, innerType, rightType);
         }
 
-        node->binop.left = left;
-        node->binop.right = right;
+        node->orelse.tag = getTagEnum("nothing", leftType);
+        node->orelse.left = left;
+        node->orelse.right = right;
         retval = node;
         break;
     }

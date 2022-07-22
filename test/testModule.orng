@@ -1,6 +1,6 @@
 testModule::Module = (
 	main::(args:[]String)->Int = {
-		leetcode.test_addTwoNumbers()
+		leetcode.test_all()
 		0
 	}
 )

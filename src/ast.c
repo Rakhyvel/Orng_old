@@ -257,11 +257,12 @@ ASTNode* AST_Create_modulus(struct astNode* left, struct astNode* right, struct 
     return retval;
 }
 
-ASTNode* AST_Create_orelse(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos)
+ASTNode* AST_Create_orelse(int tag, struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_ORELSE, scope, pos);
-    retval->binop.left = left;
-    retval->binop.right = right;
+    retval->orelse.left = left;
+    retval->orelse.right = right;
+    retval->orelse.tag = tag;
     return retval;
 }
 

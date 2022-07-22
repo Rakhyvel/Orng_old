@@ -151,6 +151,12 @@ typedef struct astNode_unionLiteral {
     struct astNode* expr;
 } astNode_unionLiteral;
 
+typedef struct astNode_orelse {
+    int tag;
+    struct astNode* left;
+    struct astNode* right;
+} astNode_orelse;
+
 typedef struct astNode_unop {
     struct astNode* expr;
 } astNode_unop;
@@ -272,6 +278,7 @@ typedef struct astNode {
         astNode_namedArg namedArg;
         astNode_arrayLiteral arrayLiteral;
         astNode_unionLiteral unionLiteral;
+        astNode_orelse orelse;
         astNode_unop unop;
         astNode_binop binop;
         astNode_call call;
@@ -338,7 +345,7 @@ ASTNode* AST_Create_subtract(struct astNode* left, struct astNode* right, struct
 ASTNode* AST_Create_multiply(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_divide(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_modulus(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
-ASTNode* AST_Create_orelse(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_orelse(int tag, struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_paren(struct astNode* expr, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_deref(struct astNode* expr, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_index(struct astNode* arrayExpr, struct astNode* subscript, struct symbolNode* scope, struct position pos);

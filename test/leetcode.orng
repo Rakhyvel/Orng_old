@@ -3,16 +3,16 @@
 leetcode::Module = (
     test_all::()->() = {
         test_twoSum()
-        --test_addTwoNumbers()
+        test_addTwoNumbers()
         test_lengthOfLongestSubstring()
         test_findMedianSortedArrays()
         test_longestPalindrome()
         test_convert()
-        --test_reverse()
-        --test_myAtoi()
-        --test_isPalindrome()
-        --test_isMatch()
-        --test_maxArea()
+        test_reverse()
+        test_myAtoi()
+        test_isPalindrome()
+        test_isMatch()
+        test_maxArea()
     }
 
 
@@ -461,13 +461,14 @@ leetcode::Module = (
     -- Find two lines that together with the x-axis form a container, such that
     -- the container contains the most water.
     -- Return the maximum amount of water a container can store.
-    maxArea::(height:[]Int, max:Int=0)->Int =
+    maxArea::(height:[]Int, max:Int=0)->Int = {
         for i := 0; i < height.length - 1; i += 1 {
             for j := i + 1; j < height.length; j += 1 {
                 max = std.math.max(max, std.math.abs(i - j) * std.math.min(height[i], height[j])):Int
-                max
             }
         }
+        return max
+    }
 
     test_maxArea::()->() = {
         height := [1,8,6,2,5,4,8,3,7] 

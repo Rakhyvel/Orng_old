@@ -841,6 +841,69 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
         appendInstruction(cfg, endLabel);
         return var;
     }
+    case AST_FIELD_CASE: {
+        SymbolVersion* var = NULL;
+        IR* phony = NULL;
+        if (node->type->astType != AST_UNDEF) {
+            var = tempSymbolVersion(cfg, node->type);
+            phony = createIR(IR_PHONY, var, NULL, NULL, node->pos);
+            phony->listData = List_Create();
+            var->def = phony; // Done just so that it is considered live, I think. Has no real "def", since it's run-time dependent
+            appendInstruction(cfg, phony);
+        }
+        SymbolVersion* caseExpr = flattenAST(cfg, node->_case.expr, returnLabel, breakLabel, continueLabel, false);
+        SymbolVersion* enumDot = tempSymbolVersion(cfg, INT64_TYPE);
+        IR* enumIR = createIR(IR_DOT, enumDot, caseExpr, NULL, node->pos);
+        enumIR->strData = "tag";
+        enumDot->def = enumIR;
+        appendInstruction(cfg, enumIR);
+
+        // Generate a list of labels for each mapping, and an else label if there is one
+        List* mappingLabels = List_Create();
+        for (int i = 0; i < node->_case.mappings->size; i++) {
+            List_Append(mappingLabels, createIR_label(node->pos));
+        }
+        IR* endLabel = createIR_label(node->pos);
+
+        // For each expr in each mapping, branch if false to the mapping's label if caseExpr does not equal mapping expr
+        int i = 0;
+        forall(elem, node->_case.mappings)
+        {
+            ASTNode* mapping = elem->data;
+            IR* mappingLabel = List_Get(mappingLabels, i);
+
+            SymbolVersion* right = tempSymbolVersion(cfg, INT64_TYPE);
+            IR* tagIR = createIR_int(IR_LOAD_INT, right, NULL, NULL, mapping->fieldMapping.tag, node->pos);
+            right->def = tagIR;
+            appendInstruction(cfg, tagIR);
+
+            SymbolVersion* notEqualSymbol = tempSymbolVersion(cfg, BOOL_TYPE);
+            IR* notEqualIR = createIR(IR_NEQ, notEqualSymbol, enumDot, right, node->pos);
+            notEqualSymbol->def = notEqualIR;
+            appendInstruction(cfg, notEqualIR);
+            appendInstruction(cfg, createIR_branch(IR_BRANCH_IF_FALSE, NULL, notEqualSymbol, NULL, mappingLabel, node->pos));
+            i++;
+        }
+        // For each mapping, append mapping label and flatten mapping code, with a jump to the end label
+        i = 0;
+        forall(elem, node->_case.mappings)
+        {
+            ASTNode* mapping = elem->data;
+            IR* mappingLabel = List_Get(mappingLabels, i);
+            appendInstruction(cfg, mappingLabel);
+            SymbolVersion* bodySymbver = flattenAST(cfg, mapping->fieldMapping.expr, returnLabel, endLabel, continueLabel, false);
+            if (var && bodySymbver) {
+                IR* copy = createIR(IR_COPY, var, bodySymbver, NULL, node->pos);
+                List_Append(phony->listData, copy);
+                appendInstruction(cfg, copy);
+            }
+            appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, endLabel, node->pos));
+            i++;
+        }
+        // Append end label
+        appendInstruction(cfg, endLabel);
+        return var;
+    }
     case AST_RETURN: {
         SymbolVersion* retval = flattenAST(cfg, node->unop.expr, returnLabel, breakLabel, continueLabel, false);
         SymbolVersion* var = unversionedSymbolVersion(cfg, cfg->returnSymbol, cfg->symbol->type->function.codomainType);
@@ -1339,6 +1402,65 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
         appendInstruction(cfg, ir);
         return temp;
     }
+    case AST_ORELSE: {
+        // temp = phony
+        // dot = left.tag
+        // condition = dot != 0
+        // branch if false (condition, else)
+        // temp = left.something
+        // goto end
+        // else:
+        // temp = right
+        // end:
+
+        SymbolVersion* var = tempSymbolVersion(cfg, node->type);
+        IR* phony = createIR(IR_PHONY, var, NULL, NULL, node->pos);
+        phony->listData = List_Create();
+        var->def = phony; // Done just so that it is considered live, I think. Has no real "def", since it's run-time dependent
+        appendInstruction(cfg, phony);
+
+        SymbolVersion* left = flattenAST(cfg, node->orelse.left, returnLabel, breakLabel, continueLabel, false);
+        SymbolVersion* enumDot = tempSymbolVersion(cfg, INT64_TYPE);
+        IR* enumIR = createIR(IR_DOT, enumDot, left, NULL, node->pos);
+        enumIR->strData = "tag";
+        enumDot->def = enumIR;
+        appendInstruction(cfg, enumIR);
+
+        SymbolVersion* tag = tempSymbolVersion(cfg, INT64_TYPE);
+        IR* tagIR = createIR_int(IR_LOAD_INT, tag, NULL, NULL, node->orelse.tag, node->pos);
+        tag->def = tagIR;
+        appendInstruction(cfg, tagIR);
+
+        SymbolVersion* condition = tempSymbolVersion(cfg, BOOL_TYPE);
+        IR* conditionIR = createIR(IR_NEQ, condition, enumDot, tag, node->pos);
+        condition->def = conditionIR;
+        appendInstruction(cfg, conditionIR);
+
+        IR* elseLabel = createIR_label(node->pos);
+        IR* endLabel = createIR_label(node->pos);
+
+        appendInstruction(cfg, createIR_branch(IR_BRANCH_IF_FALSE, NULL, condition, NULL, elseLabel, node->pos));
+        SymbolVersion* somethingDot = tempSymbolVersion(cfg, INT64_TYPE);
+        IR* somethingIR = createIR(IR_DOT, somethingDot, left, NULL, node->pos);
+        somethingIR->strData = "something";
+        somethingDot->def = somethingIR;
+        appendInstruction(cfg, somethingIR);
+
+        IR* copy = createIR(IR_COPY, var, somethingDot, NULL, node->pos);
+        List_Append(phony->listData, copy);
+        appendInstruction(cfg, copy);
+
+        appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, endLabel, node->pos));
+        appendInstruction(cfg, elseLabel);
+        SymbolVersion* elseSymbver = flattenAST(cfg, node->orelse.right, returnLabel, breakLabel, continueLabel, false);
+        if (elseSymbver) {
+            IR* copy = createIR(IR_COPY, var, elseSymbver, NULL, node->pos);
+            List_Append(phony->listData, copy);
+            appendInstruction(cfg, copy);
+        }
+        appendInstruction(cfg, endLabel);
+        return var;
+    }
     case AST_NEW: {
         SymbolVersion* addr = tempSymbolVersion(cfg, node->type);
         SymbolVersion* init = NULL;
@@ -1446,8 +1568,9 @@ BasicBlock* convertToBasicBlock(CFG* cfg, IR* ir, BasicBlock* predecessor)
             } else if (ir->irType == IR_BRANCH_IF_FALSE) {
                 // if you find a branch, end this block, start both blocks
                 retval->hasBranch = true;
+                IR* branchNext = ir->branch->next; // Since ir->branch->next may get nullified by calling convertToBasicBlock on ir->next
                 retval->next = convertToBasicBlock(cfg, ir->next, retval);
-                retval->branch = convertToBasicBlock(cfg, ir->branch->next, retval);
+                retval->branch = convertToBasicBlock(cfg, branchNext, retval);
                 retval->condition = ir->src1;
                 if (ir->next) {
                     ir->next->prev = NULL;
@@ -2538,7 +2661,7 @@ List* createCFG(SymbolNode* functionSymbol, CFG* caller)
         appendInstruction(cfg, createIR(IR_COPY, returnVersion, eval, NULL, invalid_pos));
         appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, NULL, invalid_pos));
     }
-    printInstructionList(cfg);
+    //printInstructionList(cfg);
 
     // Convert quadruple list to CFG of basic blocks, find versions!
     cfg->blockGraph = convertToBasicBlock(cfg, cfg->head, NULL);

@@ -486,6 +486,40 @@ x Generate C code from IR
 		retval := try alloc.new(Whatever, ("This is the default\n", 34, 535.5))
 		
 	}
+- implement == and != for struct types (field equality conjunction)
+	- Vector::Type = (x:Int, y:Int)
+	myPos:Vector = (0, 10)
+	yourPost:Vector = (0, 10)
+	if myPos == yourPos {
+		-- do something
+	}
+- cases should be able to operate on any types that have == and != defined
+	Col::Type = (|A, B, C, D, E, F, G, H)
+	ChessSquare::Type = (col:Col, row:Int)
+	queenPos:ChessSquare = (Col.A, 4)
+	pawnPos:ChessSquare = (Col.B, 3)
+	case queenPos {
+		pawnPos -> std.system.println("Queen captures pawn")
+		else    -> std.system.println("Queen doesn't capture pawn")
+	}
+- remove field cases, should compare with enum equality
+	x:?Int = 4
+	case x {
+		nothing -> std.system.println("nothing here")
+		else    -> std.system.println("something here")
+	}
+
+	Suit::Type = (|Hearts, Diamonds, Clubs, Spades)
+	Card::Type = (suit:Suit, value:Char)
+	myCard:Card = (Suit.Hearts, '3')
+	suitRepr:Char = case myCard.suit { -- an enum comparison, like doing myCard.suit == Suit.Hearts
+		Suit.Hearts   -> 'H'
+		Suit.Diamonds -> 'D'
+		Suit.Clubs    -> 'C'
+		Suit.Spades   -> 'S'
+	}
+- for's with else clause, evaluates to type
+- if's and for's with no else case evaluate to a maybe type
 - parametric types
 	- you would need a function that 'returns' a type
 		- this would require a unification of type and value syntax
@@ -665,3 +699,16 @@ Maybe?
 	- would be cool if Orange was compatible with C both ways, especially if you were to switch to Orange in a C codebase
 	- finds types and functions, adds them as external with the name of the header file being the name of the module automatically and everything with externs happening automatically
 	- would be tricky with macros
+	
+- wildcards to be used for case pattern matching
+	Suit::Type = (|Hearts, Diamonds, Clubs, Spades)
+	Card::Type = (suit:Suit, value:Char)
+	myCard:Card = (Suit.Hearts, '3')
+	case myCard {
+		(Suit.Hearts, _)   -> 'H'
+		(Suit.Diamonds, _) -> 'D'
+		(Suit.Clubs, 4)    -> std.system.println("error state or something idk")
+		(Suit.Clubs, _)    -> 'C'
+		(Suit.Spades, _)   -> 'S'
+	}
+	-- Perhaps does the default value if ever generated, but if used for a comparison the comparison will be skipped/always result in true
