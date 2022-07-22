@@ -807,7 +807,7 @@ ASTNode* parseDefine(SymbolNode* scope)
     return define;
 }
 
-ASTNode* parseUnionDefine(SymbolNode* scope)
+ASTNode* parseEnumDefine(SymbolNode* scope)
 {
     struct token* name = expect(TOKEN_IDENT);
     SymbolNode* symbol = Symbol_Create(name->data, SYMBOL_VARIABLE, scope, name->pos);
@@ -861,10 +861,10 @@ ASTNode* parseTypeAtom(SymbolNode* scope)
         if (child->paramlist.defines->size == 0) {
             child->astType = AST_VOID;
         }
-    } else if ((token = accept(TOKEN_UNION)) != NULL) {
-        child = AST_Create_unionset(scope, token->pos);
+    } else if ((token = accept(TOKEN_ENUM)) != NULL) {
+        child = AST_Create_enum(scope, token->pos);
         while (!accept(TOKEN_RPAREN)) {
-            List_Append(child->unionset.defines, parseUnionDefine(scope));
+            List_Append(child->_enum.defines, parseEnumDefine(scope));
             if (accept(TOKEN_COMMA)) {
                 if (nextTokenMaybeNewline()->type == TOKEN_NEWLINE) {
                     error(nextTokenMaybeNewline()->pos, "unexpected newline");
@@ -872,8 +872,8 @@ ASTNode* parseTypeAtom(SymbolNode* scope)
             }
         }
         child->pos = merge(child->pos, token->pos);
-        if (child->unionset.defines->size == 0) {
-            error(token->pos, "empty union set");
+        if (child->_enum.defines->size == 0) {
+            error(token->pos, "empty enum");
         }
     } else {
         error(prevToken->pos, "expected type, got '%s'", Token_GetErrorMsgRepr(nextToken()->type));
@@ -924,21 +924,21 @@ ASTNode* parseTypeNonConst(SymbolNode* scope)
         ASTNode* type = AST_Create_addr(parseType(scope), scope, token->pos);
         return AST_Create_addr(type, scope, token->pos);
     } else if ((token = accept(TOKEN_QMARK)) != NULL) {
-        ASTNode* maybeUnion = AST_Create_unionset(scope, token->pos);
+        ASTNode* maybeEnum = AST_Create_enum(scope, token->pos);
 
-        SymbolNode* nothingSymbol = Symbol_Create("nothing", SYMBOL_VARIABLE, NULL, maybeUnion->pos);
+        SymbolNode* nothingSymbol = Symbol_Create("nothing", SYMBOL_VARIABLE, NULL, maybeEnum->pos);
         ASTNode* nothingDefine = AST_Create_define(nothingSymbol, scope, token->pos);
         ASTNode* nothingType = AST_Create_void(scope, token->pos);
         nothingSymbol->type = nothingType;
 
-        SymbolNode* somethingSymbol = Symbol_Create("something", SYMBOL_VARIABLE, NULL, maybeUnion->pos);
+        SymbolNode* somethingSymbol = Symbol_Create("something", SYMBOL_VARIABLE, NULL, maybeEnum->pos);
         ASTNode* somethingDefine = AST_Create_define(somethingSymbol, scope, token->pos);
         ASTNode* somethingType = parseType(scope);
         somethingSymbol->type = somethingType;
 
-        List_Append(maybeUnion->unionset.defines, nothingDefine);
-        List_Append(maybeUnion->unionset.defines, somethingDefine);
-        return maybeUnion;
+        List_Append(maybeEnum->_enum.defines, nothingDefine);
+        List_Append(maybeEnum->_enum.defines, somethingDefine);
+        return maybeEnum;
     } else if ((token = accept(TOKEN_LSQUARE)) != NULL) {
         ASTNode* arrStruct = AST_Create_array(scope, token->pos);
 

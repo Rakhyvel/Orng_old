@@ -97,8 +97,8 @@ int64_t test_leetcode_maxArea(struct struct_3 _height, int64_t _max);
 int64_t std_math_abs(int64_t _x);
 double std_math_min(double _x, double _y);
 
-#ifndef ORANGE_PROGRAM_30633
-#define ORANGE_PROGRAM_30633
+#ifndef ORANGE_PROGRAM_4011
+#define ORANGE_PROGRAM_4011
 
 int64_t test_testModule_main(struct struct_2 _args)
 {

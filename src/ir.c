@@ -635,15 +635,15 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
         appendInstruction(cfg, ir);
         return temp;
     }
-    case AST_UNION_LITERAL: {
+    case AST_ENUM_LITERAL: {
         SymbolVersion* tag = tempSymbolVersion(cfg, INT64_TYPE);
-        IR* tagIR = createIR_int(IR_LOAD_INT, tag, NULL, NULL, node->unionLiteral.tag, node->pos);
+        IR* tagIR = createIR_int(IR_LOAD_INT, tag, NULL, NULL, node->enumLiteral.tag, node->pos);
         tag->def = tagIR;
         appendInstruction(cfg, tagIR);
 
         SymbolVersion* expr = NULL;
-        if (node->unionLiteral.expr) {
-            expr = flattenAST(cfg, node->unionLiteral.expr, returnLabel, breakLabel, continueLabel, false);
+        if (node->enumLiteral.expr) {
+            expr = flattenAST(cfg, node->enumLiteral.expr, returnLabel, breakLabel, continueLabel, false);
         }
 
         SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
@@ -1205,7 +1205,7 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
         return temp;
     }
     case AST_IS_TAG: {
-        SymbolVersion* left = flattenAST(cfg, node->unionLiteral.expr, returnLabel, breakLabel, continueLabel, false);
+        SymbolVersion* left = flattenAST(cfg, node->enumLiteral.expr, returnLabel, breakLabel, continueLabel, false);
         SymbolVersion* enumDot = tempSymbolVersion(cfg, INT64_TYPE);
         IR* enumIR = createIR(IR_DOT, enumDot, left, NULL, node->pos);
         enumIR->strData = "tag";
@@ -1213,7 +1213,7 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
         appendInstruction(cfg, enumIR);
 
         SymbolVersion* right = tempSymbolVersion(cfg, INT64_TYPE);
-        IR* tagIR = createIR_int(IR_LOAD_INT, right, NULL, NULL, node->unionLiteral.tag, node->pos);
+        IR* tagIR = createIR_int(IR_LOAD_INT, right, NULL, NULL, node->enumLiteral.tag, node->pos);
         right->def = tagIR;
         appendInstruction(cfg, tagIR);
 
@@ -1224,7 +1224,7 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
         return temp;
     }
     case AST_ISNT_TAG: {
-        SymbolVersion* left = flattenAST(cfg, node->unionLiteral.expr, returnLabel, breakLabel, continueLabel, false);
+        SymbolVersion* left = flattenAST(cfg, node->enumLiteral.expr, returnLabel, breakLabel, continueLabel, false);
         SymbolVersion* enumDot = tempSymbolVersion(cfg, INT64_TYPE);
         IR* enumIR = createIR(IR_DOT, enumDot, left, NULL, node->pos);
         enumIR->strData = "tag";
@@ -1232,7 +1232,7 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
         appendInstruction(cfg, enumIR);
 
         SymbolVersion* right = tempSymbolVersion(cfg, INT64_TYPE);
-        IR* tagIR = createIR_int(IR_LOAD_INT, right, NULL, NULL, node->unionLiteral.tag, node->pos);
+        IR* tagIR = createIR_int(IR_LOAD_INT, right, NULL, NULL, node->enumLiteral.tag, node->pos);
         right->def = tagIR;
         appendInstruction(cfg, tagIR);
 

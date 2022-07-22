@@ -178,11 +178,11 @@ ASTNode* AST_Create_arrayLiteral(struct symbolNode* scope, struct position pos)
     return retval;
 }
 
-ASTNode* AST_Create_unionLiteral(int tag, struct astNode* expr, struct symbolNode* scope, struct position pos)
+ASTNode* AST_Create_enumLiteral(int tag, struct astNode* expr, struct symbolNode* scope, struct position pos)
 {
-    ASTNode* retval = AST_Create(AST_UNION_LITERAL, scope, pos);
-    retval->unionLiteral.tag = tag;
-    retval->unionLiteral.expr = expr;
+    ASTNode* retval = AST_Create(AST_ENUM_LITERAL, scope, pos);
+    retval->enumLiteral.tag = tag;
+    retval->enumLiteral.expr = expr;
     return retval;
 }
 
@@ -379,16 +379,16 @@ ASTNode* AST_Create_lte(struct astNode* left, struct astNode* right, struct symb
 ASTNode* AST_Create_isTag(struct astNode* expr, int tag, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_IS_TAG, scope, pos);
-    retval->unionLiteral.expr = expr;
-    retval->unionLiteral.tag = tag;
+    retval->enumLiteral.expr = expr;
+    retval->enumLiteral.tag = tag;
     return retval;
 }
 
 ASTNode* AST_Create_isntTag(struct astNode* expr, int tag, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_ISNT_TAG, scope, pos);
-    retval->unionLiteral.expr = expr;
-    retval->unionLiteral.tag = tag;
+    retval->enumLiteral.expr = expr;
+    retval->enumLiteral.tag = tag;
     return retval;
 }
 
@@ -688,9 +688,9 @@ ASTNode* AST_Create_paramlist(struct symbolNode* scope, struct position pos)
     return retval;
 }
 
-ASTNode* AST_Create_unionset(struct symbolNode* scope, struct position pos)
+ASTNode* AST_Create_enum(struct symbolNode* scope, struct position pos)
 {
-    ASTNode* retval = AST_Create(AST_UNIONSET, scope, pos);
+    ASTNode* retval = AST_Create(AST_ENUM, scope, pos);
     retval->paramlist.defines = List_Create();
     return retval;
 }
@@ -801,12 +801,12 @@ int AST_TypeRepr(char* str, ASTNode* type)
             }
         }
         break;
-    case AST_UNIONSET:
+    case AST_ENUM:
         str += sprintf(str, "(|");
-        for (struct listElem* elem = List_Begin(type->unionset.defines); elem != List_End(type->unionset.defines); elem = elem->next) {
+        for (struct listElem* elem = List_Begin(type->_enum.defines); elem != List_End(type->_enum.defines); elem = elem->next) {
             ASTNode* param = elem->data;
             str += AST_TypeRepr(str, param);
-            if (elem->next == List_End(type->unionset.defines)) {
+            if (elem->next == List_End(type->_enum.defines)) {
                 str += sprintf(str, ")");
             } else {
                 str += sprintf(str, ", ");

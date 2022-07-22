@@ -287,7 +287,7 @@ const char* Token_GetRepr(_TokenType type)
         return "]";
     case TOKEN_RESTRICT:
         return "-[";
-    case TOKEN_UNION:
+    case TOKEN_ENUM:
         return "(|";
     case TOKEN_IF:
         return "if";

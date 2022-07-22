@@ -26,7 +26,7 @@ enum astType {
     AST_ARGLIST,
     AST_NAMED_ARG,
     AST_ARRAY_LITERAL,
-    AST_UNION_LITERAL,
+    AST_ENUM_LITERAL,
     AST_UNDEF,
     AST_DOC,
     // Math
@@ -100,7 +100,7 @@ enum astType {
     AST_VOID,
     AST_CAST,
     AST_PARAMLIST,
-    AST_UNIONSET,
+    AST_ENUM,
     AST_FUNCTION,
     AST_ADDR,
     AST_ARRAY,
@@ -146,10 +146,10 @@ typedef struct astNode_arrayLiteral {
     List* members; // members in the array literal, all of which are the same type
 } astNode_arrayLiteral;
 
-typedef struct astNode_unionLiteral {
+typedef struct astNode_enumLiteral {
     int tag;
     struct astNode* expr;
-} astNode_unionLiteral;
+} astNode_enumLiteral;
 
 typedef struct astNode_orelse {
     int tag;
@@ -229,14 +229,14 @@ typedef struct astNode_fieldMapping {
     int tag;
 } astNode_fieldMapping;
 
-// for parameter lists, modules, structs, arrays, unions, a lot!
+// for parameter lists, modules, structs, arrays, enums, a lot!
 typedef struct astNode_paramlist {
     List* defines;
 } astNode_paramlist;
 
-typedef struct astNode_unionset {
+typedef struct astNode_enum {
     List* defines;
-} astNode_unionset;
+} astNode_enum;
 
 typedef struct astNode_function {
     struct astNode* domainType;
@@ -277,7 +277,7 @@ typedef struct astNode {
         astNode_arglist arglist;
         astNode_namedArg namedArg;
         astNode_arrayLiteral arrayLiteral;
-        astNode_unionLiteral unionLiteral;
+        astNode_enumLiteral enumLiteral;
         astNode_orelse orelse;
         astNode_unop unop;
         astNode_binop binop;
@@ -293,7 +293,7 @@ typedef struct astNode {
         astNode_mapping mapping;
         astNode_fieldMapping fieldMapping;
         astNode_paramlist paramlist;
-        astNode_paramlist unionset;
+        astNode_paramlist _enum;
         astNode_function function;
         astNode_extern _extern;
     };
@@ -332,7 +332,7 @@ ASTNode* AST_Create_real(double data, struct symbolNode* scope, struct position 
 ASTNode* AST_Create_arglist(struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_namedArg(char* name, struct astNode* expr, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_arrayLiteral(struct symbolNode* scope, struct position pos);
-ASTNode* AST_Create_unionLiteral(int tag, struct astNode* expr, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_enumLiteral(int tag, struct astNode* expr, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_true(struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_false(struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_nothing(struct symbolNode* scope, struct position pos);
@@ -397,7 +397,7 @@ ASTNode* AST_Create_sizeof(struct astNode* type, struct symbolNode* scope, struc
 ASTNode* AST_Create_void(struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_cast(struct astNode* expr, struct astNode* type, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_paramlist(struct symbolNode* scope, struct position pos);
-ASTNode* AST_Create_unionset(struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_enum(struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_array(struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_function(struct astNode* domain, struct astNode* codomain, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_addr(struct astNode* type, struct symbolNode* scope, struct position pos);

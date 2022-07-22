@@ -13,7 +13,7 @@
 Program program;
 
 static void generateDefine(FILE* out, SymbolNode* var, bool param);
-static void generateUnion(FILE* out, DGraph* graphNode);
+static void generateEnum(FILE* out, DGraph* graphNode);
 
 static void generateIncludes(FILE* out, Map* includes)
 {
@@ -84,7 +84,7 @@ static void printType(FILE* out, ASTNode* type)
         break;
     case AST_ARRAY:
     case AST_PARAMLIST:
-    case AST_UNIONSET: {
+    case AST_ENUM: {
         fprintf(out, "struct ");
         printStructOrd(out, type);
     } break;
@@ -185,8 +185,8 @@ static void generateStruct(FILE* out, DGraph* graphNode)
     ListElem* elem = List_Begin(graphNode->dependencies);
     for (; elem != List_End(graphNode->dependencies); elem = elem->next) {
         DGraph* child = elem->data;
-        if (child->structDef->astType == AST_UNIONSET) {
-            generateUnion(out, child);
+        if (child->structDef->astType == AST_ENUM) {
+            generateEnum(out, child);
         } else {
             generateStruct(out, child);
         }
@@ -210,7 +210,7 @@ static void generateStruct(FILE* out, DGraph* graphNode)
     fprintf(out, "};\n\n");
 }
 
-static void generateUnion(FILE* out, DGraph* graphNode)
+static void generateEnum(FILE* out, DGraph* graphNode)
 {
     if (graphNode->visited) {
         return;
@@ -222,20 +222,20 @@ static void generateUnion(FILE* out, DGraph* graphNode)
     ListElem* elem = List_Begin(graphNode->dependencies);
     for (; elem != List_End(graphNode->dependencies); elem = elem->next) {
         DGraph* child = elem->data;
-        if (child->structDef->astType == AST_UNIONSET) {
-            generateUnion(out, child);
+        if (child->structDef->astType == AST_ENUM) {
+            generateEnum(out, child);
         } else {
             generateStruct(out, child);
         }
     }
 
-    ASTNode* _union = graphNode->structDef;
+    ASTNode* _enum = graphNode->structDef;
     char* structOrdStr = myItoa(graphNode->ordinal + 1);
     fprintf(out, "struct struct_%s {\n\tint64_t tag;\n", structOrdStr);
 
     int numOfNonVoidMembers = 0;
-    ListElem* paramElem = List_Begin(_union->unionset.defines);
-    for (; paramElem != List_End(_union->unionset.defines); paramElem = paramElem->next) {
+    ListElem* paramElem = List_Begin(_enum->_enum.defines);
+    for (; paramElem != List_End(_enum->_enum.defines); paramElem = paramElem->next) {
         ASTNode* define = paramElem->data;
         SymbolNode* var = define->define.symbol;
         if (var->type->astType != AST_VOID) {
@@ -247,9 +247,9 @@ static void generateUnion(FILE* out, DGraph* graphNode)
     if (numOfNonVoidMembers > 0) {
         fprintf(out, "\tunion {\n");
 
-        paramElem = List_Begin(_union->unionset.defines);
+        paramElem = List_Begin(_enum->_enum.defines);
         // For each parameter in the procedure's parameter list, print it out
-        for (; paramElem != List_End(_union->unionset.defines); paramElem = paramElem->next) {
+        for (; paramElem != List_End(_enum->_enum.defines); paramElem = paramElem->next) {
             ASTNode* define = paramElem->data;
             SymbolNode* var = define->define.symbol;
             if (!(var->symbolType == SYMBOL_FUNCTION && var->type->isConst) && var->type->astType != AST_VOID) {
@@ -269,8 +269,8 @@ static void generateStructDefinitions(FILE* out, List* depenGraph)
     ListElem* elem = List_Begin(depenGraph);
     for (; elem != List_End(depenGraph); elem = elem->next) {
         DGraph* graphNode = elem->data;
-        if (graphNode->structDef->astType == AST_UNIONSET) {
-            generateUnion(out, graphNode);
+        if (graphNode->structDef->astType == AST_ENUM) {
+            generateEnum(out, graphNode);
         } else {
             generateStruct(out, graphNode);
         }

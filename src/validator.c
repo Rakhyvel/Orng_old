@@ -71,9 +71,9 @@ int getTypeSize(ASTNode* type)
         }
         return size;
     }
-    case AST_UNIONSET: {
+    case AST_ENUM: {
         int maxMemberSize = 0;
-        for (ListElem* elem = List_Begin(type->paramlist.defines); elem != List_End(type->paramlist.defines); elem = elem->next) {
+        for (ListElem* elem = List_Begin(type->_enum.defines); elem != List_End(type->_enum.defines); elem = elem->next) {
             ASTNode* memberDefine = elem->data;
             SymbolNode* memberSymbol = memberDefine->define.symbol;
             int typeSize = getTypeSize(memberSymbol->type);
@@ -152,7 +152,7 @@ static SymbolNode* getDotSymbol(ASTNode* type)
             }
         }
         // Resolved, will iterate through paramlist
-        else if (newLeft->astType == AST_PARAMLIST || newLeft->astType == AST_ARRAY || newLeft->astType == AST_UNIONSET) {
+        else if (newLeft->astType == AST_PARAMLIST || newLeft->astType == AST_ARRAY || newLeft->astType == AST_ENUM) {
             resolved = true;
         }
         // newLeft is in the first child
@@ -207,7 +207,7 @@ static SymbolNode* getDotSymbol(ASTNode* type)
     SymbolNode* rightSymbol = NULL;
     if (!newLeft) {
         error(left->pos, "left side could not be resolved to a container");
-    } else if (newLeft->astType == AST_PARAMLIST || newLeft->astType == AST_ARRAY || newLeft->astType == AST_UNIONSET) {
+    } else if (newLeft->astType == AST_PARAMLIST || newLeft->astType == AST_ARRAY || newLeft->astType == AST_ENUM) {
         // Search paramlists' defines for a symbol that matches
         ListElem* elem = List_Begin(newLeft->paramlist.defines);
         for (; rightSymbol == NULL && elem != List_End(newLeft->paramlist.defines); elem = elem->next) {
@@ -221,7 +221,7 @@ static SymbolNode* getDotSymbol(ASTNode* type)
         if (rightSymbol == NULL) {
             error(type->pos, "symbol '%s' is not a member of expression", right->ident.data);
         }
-    } else { // ERROR! NOT A PARAM LIST NOR UNION SET!
+    } else { // ERROR! NOT A PARAM LIST NOR ENUM!
         // Search symbol for a symbol that matches
         rightSymbol = Map_Get(leftSymbol->children, right->ident.data);
         if (rightSymbol == NULL) {
@@ -364,9 +364,9 @@ static ASTNode* expandTypeIdent(ASTNode* type, bool reassigning)
             SymbolNode* symbol = define->define.symbol;
             Validator_Validate(symbol);
         }
-    } else if (expanded->astType == AST_UNIONSET) {
-        ListElem* elem = List_Begin(expanded->unionset.defines);
-        for (; elem != List_End(expanded->unionset.defines); elem = elem->next) {
+    } else if (expanded->astType == AST_ENUM) {
+        ListElem* elem = List_Begin(expanded->_enum.defines);
+        for (; elem != List_End(expanded->_enum.defines); elem = elem->next) {
             ASTNode* define = elem->data;
             SymbolNode* symbol = define->define.symbol;
             Validator_Validate(symbol);
@@ -489,8 +489,8 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
         ASTNode* rightType = getType(right, false, false);
 
         ASTNode* innerType = NULL;
-        ListElem* elem = List_Begin(leftType->unionset.defines);
-        for (; elem != List_End(leftType->unionset.defines); elem = elem->next) {
+        ListElem* elem = List_Begin(leftType->_enum.defines);
+        for (; elem != List_End(leftType->_enum.defines); elem = elem->next) {
             ASTNode* define = elem->data;
             if (!strcmp(define->define.symbol->name, "something")) {
                 innerType = define->define.symbol->type;
@@ -695,7 +695,7 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
         } else if (leftType->astType == AST_EXTERN) {
             SymbolNode* leftSymbol = leftType->_extern.symbol;
             paramlist = leftSymbol->def;
-        } else if (leftType->astType == AST_UNIONSET) {
+        } else if (leftType->astType == AST_ENUM) {
             paramlist = leftType;
         } else {
             error(left->pos, "left side of dot must be container");
@@ -739,13 +739,13 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
         break;
     }
     case AST_PARAMLIST:
-    case AST_UNIONSET:
+    case AST_ENUM:
     case AST_FUNCTION:
     case AST_ARRAY: {
         type = TYPE_TYPE;
         break;
     }
-    case AST_UNION_LITERAL: {
+    case AST_ENUM_LITERAL: {
         type = node->type;
         break;
     }
@@ -835,7 +835,7 @@ static int typesAreCompatible(ASTNode* a, ASTNode* b)
 
 /*
 checks whether A <= B, that is "is A a subtype of B"
-Note that there is no subtype polymorphism other than T <: :T and union sets
+Note that there is no subtype polymorphism other than T <: :T and enum sets
 All other types are distinct
 */
 bool typesAreEquivalent(ASTNode* a, ASTNode* b)
@@ -922,15 +922,15 @@ bool typesAreEquivalent(ASTNode* a, ASTNode* b)
             }
             break;
         }
-        case AST_UNIONSET: {
-            if (aExpand->unionset.defines->size != bExpand->unionset.defines->size) {
+        case AST_ENUM: {
+            if (aExpand->_enum.defines->size != bExpand->_enum.defines->size) {
                 retval = false;
                 break;
             }
-            ListElem* aElem = List_Begin(aExpand->unionset.defines);
-            ListElem* bElem = List_Begin(bExpand->unionset.defines);
+            ListElem* aElem = List_Begin(aExpand->_enum.defines);
+            ListElem* bElem = List_Begin(bExpand->_enum.defines);
             bool allEquiv = true;
-            for (; aElem != List_End(aExpand->unionset.defines); aElem = aElem->next, bElem = bElem->next) {
+            for (; aElem != List_End(aExpand->_enum.defines); aElem = aElem->next, bElem = bElem->next) {
                 ASTNode* aDefine = aElem->data;
                 SymbolNode* aSymbol = aDefine->define.symbol;
                 ASTNode* aType = aSymbol->type;
@@ -1043,8 +1043,8 @@ static struct graph* addGraphNode(List* depenGraph, ASTNode* structType)
 {
     // Check if type is enum, if so, collect tags
     static int tagID = 0;
-    if (structType->astType == AST_UNIONSET) {
-        forall(elem, structType->unionset.defines)
+    if (structType->astType == AST_ENUM) {
+        forall(elem, structType->_enum.defines)
         {
             ASTNode* define = elem->data;
             SymbolNode* symbol = define->define.symbol;
@@ -1133,7 +1133,7 @@ void validateType(ASTNode* node, bool collectThisType)
         validateAST(node, NULL);
         break;
     }
-    case AST_UNIONSET: {
+    case AST_ENUM: {
         validateAST(node, NULL);
         break;
     }
@@ -1188,7 +1188,7 @@ void validateType(ASTNode* node, bool collectThisType)
     node->isValid = true;
 
     // Collect structs
-    if (collectThisType && (node->astType == AST_PARAMLIST || node->astType == AST_ARRAY || node->astType == AST_UNIONSET) && node->paramlist.defines->size > 0) {
+    if (collectThisType && (node->astType == AST_PARAMLIST || node->astType == AST_ARRAY || node->astType == AST_ENUM) && node->paramlist.defines->size > 0) {
         DGraph* graphNode = addGraphNode(structDepenGraph, node);
 
         // go through fields, if field is a parameter list, add to dependencies
@@ -1197,7 +1197,7 @@ void validateType(ASTNode* node, bool collectThisType)
             ASTNode* fieldDefine = paramElem->data;
             SymbolNode* fieldVar = fieldDefine->define.symbol;
             ASTNode* fieldType = expandTypeIdent(fieldVar->type, true);
-            if (fieldType->astType == AST_PARAMLIST || fieldType->astType == AST_ARRAY || fieldType->astType == AST_UNIONSET) {
+            if (fieldType->astType == AST_PARAMLIST || fieldType->astType == AST_ARRAY || fieldType->astType == AST_ENUM) {
                 DGraph* dependency = addGraphNode(structDepenGraph, fieldType);
                 List_Append(graphNode->dependencies, dependency);
             }
@@ -1209,10 +1209,10 @@ void validateType(ASTNode* node, bool collectThisType)
 
 bool typeIsMaybe(ASTNode* type)
 {
-    if (type->astType != AST_UNIONSET) {
+    if (type->astType != AST_ENUM) {
         return false;
     }
-    ASTNode* firstDefine = List_Get(type->unionset.defines, 0);
+    ASTNode* firstDefine = List_Get(type->_enum.defines, 0);
     SymbolNode* firstVar = firstDefine->define.symbol;
     return !strcmp(firstVar->name, "nothing");
 }
@@ -1233,7 +1233,7 @@ int getTag(char* fieldName, ASTNode* fieldType)
 
 int getTagEnum(char* fieldName, ASTNode* enumType)
 {
-    forall(elem, enumType->unionset.defines)
+    forall(elem, enumType->_enum.defines)
     {
         ASTNode* define = elem->data;
         SymbolNode* var = define->define.symbol;
@@ -1244,33 +1244,33 @@ int getTagEnum(char* fieldName, ASTNode* enumType)
     PANIC("couldn't find tag enum");
 }
 
-ASTNode* tryCoerceToUnion(ASTNode* unionType, ASTNode* member)
+ASTNode* tryCoerceToEnum(ASTNode* enumType, ASTNode* member)
 {
-    validateType(unionType, true);
+    validateType(enumType, true);
 
-    ASTNode* expandedUnionType = expandTypeIdent(unionType, false);
-    if (expandedUnionType->astType != AST_UNIONSET) {
+    ASTNode* expandedEnumType = expandTypeIdent(enumType, false);
+    if (expandedEnumType->astType != AST_ENUM) {
         return NULL;
     } else if (member->astType == AST_NOTHING) {
-        ASTNode* firstDefine = List_Get(unionType->unionset.defines, 0);
+        ASTNode* firstDefine = List_Get(enumType->_enum.defines, 0);
         SymbolNode* firstVar = firstDefine->define.symbol;
         if (!strcmp(firstVar->name, "nothing")) {
-            ASTNode* retval = AST_Create_unionLiteral(getTag("nothing", VOID_TYPE), NULL, member->scope, member->pos);
-            retval->type = expandedUnionType;
+            ASTNode* retval = AST_Create_enumLiteral(getTag("nothing", VOID_TYPE), NULL, member->scope, member->pos);
+            retval->type = expandedEnumType;
             return retval;
         } else {
             return NULL;
         }
     } else {
         ASTNode* memberType = getType(member, false, false);
-        forall(elem, expandedUnionType->unionset.defines)
+        forall(elem, expandedEnumType->_enum.defines)
         {
             ASTNode* define = elem->data;
             SymbolNode* var = define->define.symbol;
             ASTNode* defineType = var->type;
             if (typesAreEquivalent(memberType, defineType)) {
-                ASTNode* retval = AST_Create_unionLiteral(getTag(var->name, var->type), member, member->scope, member->pos);
-                retval->type = expandedUnionType;
+                ASTNode* retval = AST_Create_enumLiteral(getTag(var->name, var->type), member, member->scope, member->pos);
+                retval->type = expandedEnumType;
                 return retval;
             }
         }
@@ -1311,7 +1311,7 @@ void inferTypes(SymbolNode* var)
             if (defType && (defType->astType != AST_UNDEF || var->def->astType != AST_UNDEF) && !typesEquivalent) {
                 // Type annot.'d, types disagree
                 ASTNode* coerced = NULL;
-                if (coerced = tryCoerceToUnion(var->type, var->def)) {
+                if (coerced = tryCoerceToEnum(var->type, var->def)) {
                     var->def = coerced;
                 } else {
                     typeMismatchError(var->pos, var->type, defType);
@@ -1379,7 +1379,7 @@ void namedArgsMatch(ASTNode* expr, ASTNode* args, ASTNode* params)
             ASTNode* argType = getType(argExpr, false, false);
             if (!typesAreEquivalent(argType, symbol->type)) {
                 ASTNode* coerced = NULL;
-                if (coerced = tryCoerceToUnion(symbol->type, argExpr)) {
+                if (coerced = tryCoerceToEnum(symbol->type, argExpr)) {
                     Map_Put(argNames, symbol->name, coerced);
                 } else if (expr && expr->astType == AST_IDENT) {
                     SymbolNode* var = Symbol_Find(expr->ident.data, expr->scope);
@@ -1452,7 +1452,7 @@ void positionalArgsMatch(ASTNode* expr, ASTNode* args, ASTNode* params)
         ASTNode* argType = getType(arg, false, false);
         if (!typesAreEquivalent(argType, paramType)) {
             ASTNode* coerced = NULL;
-            if (coerced = tryCoerceToUnion(paramType, arg)) {
+            if (coerced = tryCoerceToEnum(paramType, arg)) {
                 argElem->data = coerced;
             } else if (expr && expr->astType == AST_IDENT) {
                 SymbolNode* var = Symbol_Find(expr->ident.data, expr->scope);
@@ -1504,8 +1504,8 @@ void argsMatchParams(ASTNode* expr, ASTNode* args, ASTNode* params)
 
 bool isTypeMaybe(ASTNode* type)
 {
-    if (type->astType == AST_UNIONSET) {
-        ASTNode* define = List_Get(type->unionset.defines, 0);
+    if (type->astType == AST_ENUM) {
+        ASTNode* define = List_Get(type->_enum.defines, 0);
         return !strcmp(define->define.symbol->name, "nothing");
     } else {
         return false;
@@ -1626,9 +1626,9 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
         retval = node;
         break;
     }
-    case AST_UNION_LITERAL: {
-        if (node->unionLiteral.expr) {
-            node->unionLiteral.expr = validateAST(node->unionLiteral.expr, NULL);
+    case AST_ENUM_LITERAL: {
+        if (node->enumLiteral.expr) {
+            node->enumLiteral.expr = validateAST(node->enumLiteral.expr, NULL);
         }
         retval = node;
         break;
@@ -1713,17 +1713,7 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
     }
     case AST_CASE: {
         ASTNode* validExpr = validateAST(node->_case.expr, INT64_TYPE);
-
-        // switch expression must be integral
         ASTNode* elementType = getType(validExpr, false, false);
-        bool isUnionCase = false;
-        if (!typesAreEquivalent(elementType, INT64_TYPE)) {
-            if (elementType->astType == AST_UNIONSET) {
-                isUnionCase = true;
-            } else {
-                typeMismatchError(validExpr->pos, INT64_TYPE, elementType);
-            }
-        }
 
         List* validMappings = List_Create();
         for (ListElem* elem = List_Begin(node->_case.mappings); elem != List_End(node->_case.mappings); elem = elem->next) {
@@ -1753,11 +1743,11 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
     case AST_FIELD_CASE: {
         ASTNode* validExpr = validateAST(node->_case.expr, NULL); // TODO: what goes here?
 
-        // switch expression must be a union set
+        // switch expression must be a enum set
         ASTNode* elementType = getType(validExpr, false, false);
-        bool isUnionCase = false;
-        if (elementType->astType != AST_UNIONSET) {
-            error(node->pos, "must be a union set type");
+        bool isEnumCase = false;
+        if (elementType->astType != AST_ENUM) {
+            error(node->pos, "must be a enum type");
         }
 
         List* validMappings = List_Create();
@@ -1837,7 +1827,7 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
         }
         if (!typesAreEquivalent(retType, functionRetType)) {
             ASTNode* coerced = NULL;
-            if (coerced = tryCoerceToUnion(functionRetType, validRetval)) {
+            if (coerced = tryCoerceToEnum(functionRetType, validRetval)) {
                 validRetval = coerced;
             } else {
                 typeMismatchError(node->pos, functionRetType, retType);
@@ -1990,10 +1980,10 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
         getDotSymbol(node); // TODO: comptime collapse
         if (node->dot.symbol == NULL) {
             error(node->pos, "not an l-value");
-        } else if (left->astType == AST_UNIONSET) {
-            retval = AST_Create_unionLiteral(getTagEnum(node->dot.right->ident.data, left), NULL, node->scope, node->pos);
+        } else if (left->astType == AST_ENUM) {
+            retval = AST_Create_enumLiteral(getTagEnum(node->dot.right->ident.data, left), NULL, node->scope, node->pos);
             retval->type = left;
-        } else if (leftType->astType == AST_UNIONSET) {
+        } else if (leftType->astType == AST_ENUM) {
             if (dotType->astType == AST_VOID) {
                 return NOTHING_AST;
             } else {
@@ -2032,9 +2022,9 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
         node->binop.left = left;
         node->binop.right = right;
 
-        if (leftType->astType == AST_UNIONSET) {
-            if (right->astType != AST_UNION_LITERAL) {
-                ASTNode* coerce = tryCoerceToUnion(leftType, right);
+        if (leftType->astType == AST_ENUM) {
+            if (right->astType != AST_ENUM) {
+                ASTNode* coerce = tryCoerceToEnum(leftType, right);
                 if (coerce) {
                     right = coerce;
                 } else {
@@ -2042,9 +2032,9 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
                 }
             }
             if (node->astType == AST_EQ) {
-                retval = AST_Create_isTag(left, right->unionLiteral.tag, node->scope, node->pos);
+                retval = AST_Create_isTag(left, right->enumLiteral.tag, node->scope, node->pos);
             } else {
-                retval = AST_Create_isntTag(left, right->unionLiteral.tag, node->scope, node->pos);
+                retval = AST_Create_isntTag(left, right->enumLiteral.tag, node->scope, node->pos);
             }
             break;
         } else if (!typesAreEquivalent(rightType, leftType)) {
@@ -2092,9 +2082,9 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
         ASTNode* leftType = getType(left, false, true);
         ASTNode* rightType = getType(right, false, true);
         if (!typesAreEquivalent(rightType, leftType)) {
-            // check if can coerce to union given leftType, if so, set right to it, else give error
+            // check if can coerce to enum given leftType, if so, set right to it, else give error
             ASTNode* coerced = NULL;
-            if (coerced = tryCoerceToUnion(leftType, right)) {
+            if (coerced = tryCoerceToEnum(leftType, right)) {
                 right = coerced;
                 right->type = leftType;
             } else {
@@ -2278,9 +2268,9 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
         retval = UNDEF_TYPE;
         break;
     }
-    case AST_UNIONSET: {
-        ListElem* elem = List_Begin(node->unionset.defines);
-        for (; elem != List_End(node->unionset.defines); elem = elem->next) {
+    case AST_ENUM: {
+        ListElem* elem = List_Begin(node->_enum.defines);
+        for (; elem != List_End(node->_enum.defines); elem = elem->next) {
             ASTNode* define = elem->data;
             validateAST(define, NULL);
         }
@@ -2293,13 +2283,13 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
         ASTNode* right = validateAST(node->orelse.right, NULL);
         ASTNode* rightType = getType(right, false, false);
 
-        if (leftType->astType != AST_UNIONSET) {
+        if (leftType->astType != AST_ENUM) {
             error(left->pos, "left side of orelse must be enum type");
         }
 
         ASTNode* innerType = NULL;
-        ListElem* elem = List_Begin(leftType->unionset.defines);
-        for (; elem != List_End(leftType->unionset.defines); elem = elem->next) {
+        ListElem* elem = List_Begin(leftType->_enum.defines);
+        for (; elem != List_End(leftType->_enum.defines); elem = elem->next) {
             ASTNode* define = elem->data;
             if (!strcmp(define->define.symbol->name, "something")) {
                 innerType = define->define.symbol->type;
@@ -2332,9 +2322,9 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
     if (retval) {
         retval->type = getType(retval, false, true);
         if (coerceType && coerceType->astType != AST_UNDEF && retval->astType != AST_UNDEF && retval->type->astType != AST_UNDEF && !typesAreEquivalent(retval->type, coerceType)) {
-            ASTNode* coercedUnion = NULL;
-            if (coercedUnion = tryCoerceToUnion(coerceType, retval)) {
-                retval = coercedUnion;
+            ASTNode* coercedEnum = NULL;
+            if (coercedEnum = tryCoerceToEnum(coerceType, retval)) {
+                retval = coercedEnum;
             } else {
                 typeMismatchError(retval->pos, coerceType, retval->type);
             }
@@ -2535,7 +2525,7 @@ Program Validator_Validate(SymbolNode* symbol)
         if (!symbol->isExtern && retType->astType != AST_VOID) {
             if (newDef->astType != AST_UNDEF && newDef->type->astType != AST_UNDEF) {
                 if (!typesAreEquivalent(newDef->type, retType)) {
-                    ASTNode* coerced = tryCoerceToUnion(retType, newDef);
+                    ASTNode* coerced = tryCoerceToEnum(retType, newDef);
                     if (coerced) {
                         symbol->def = coerced;
                         newDef = coerced;
@@ -2575,7 +2565,7 @@ Program Validator_Validate(SymbolNode* symbol)
         // validate valid type def
         validateType(symbol->def, true);
         // if def ast type is param list then for all define in paramlist children, define symbol is not extern
-        if (symbol->def->astType == AST_PARAMLIST || symbol->def->astType == AST_UNIONSET) {
+        if (symbol->def->astType == AST_PARAMLIST || symbol->def->astType == AST_ENUM) {
             for (ListElem* elem = List_Begin(symbol->def->paramlist.defines); elem != List_End(symbol->def->paramlist.defines); elem = elem->next) {
                 ASTNode* define = elem->data;
                 SymbolNode* var = define->define.symbol;

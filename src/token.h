@@ -72,7 +72,7 @@ typedef enum {
     TOKEN_LSQUARE,
     TOKEN_RSQUARE,
     TOKEN_RESTRICT,
-	TOKEN_UNION,
+	TOKEN_ENUM,
     // Keywords
     TOKEN_IF,
     TOKEN_ELSE,

@@ -391,12 +391,12 @@ x Generate C code from IR
 		x don't phi function parameters that aren't used
 		x make an IR_LOAD_STRING
 	x cases
-	- union literals & default union literals
-		- unique compile-global tag for each unique name/type combo
-		- Map(name:String, Set(type:&ASTNode))
-	- orelse, field cases (possibly for optimizations, too!)
-		- ? operator should require a maybe type
-		- change syntax so that only one field mapping can have one codomain thingy
+	x union literals & default union literals
+		x unique compile-global tag for each unique name/type combo
+		x Map(name:String, Set(type:&ASTNode))
+	x orelse, field cases (possibly for optimizations, too!)
+		x ? operator should require a maybe type
+		x change syntax so that only one field mapping can have one codomain thingy
 - Go back to adding errors and union type unions
 	- runtime errors
 		- || type operator that operates on any union sets
