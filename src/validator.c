@@ -1439,7 +1439,23 @@ void positionalArgsMatch(ASTNode* expr, ASTNode* args, ASTNode* params)
         if (arg->astType == AST_NAMED_ARG) {
             error(arg->pos, "named argument specified in positional argument list");
         }
-        argElem->data = arg;
+        ASTNode* argType = getType(arg, false, false);
+        if (!typesAreEquivalent(argType, paramType)) {
+            ASTNode* coerced = NULL;
+            if (coerced = tryCoerceToUnion(paramType, arg)) {
+                argElem->data = coerced;
+            } else if (expr && expr->astType == AST_IDENT) {
+                SymbolNode* var = Symbol_Find(expr->ident.data, expr->scope);
+                typeMismatchError2(arg->pos, var->pos, paramType, argType);
+            } else if (expr && expr->astType == AST_DOT) {
+                SymbolNode* var = expr->dot.symbol;
+                typeMismatchError2(arg->pos, var->pos, paramType, argType);
+            } else {
+                typeMismatchError(arg->pos, paramType, argType);
+            }
+        } else {
+            argElem->data = arg;
+        }
     }
     if (paramElem != List_End(params->paramlist.defines)) {
         for (; paramElem != List_End(params->paramlist.defines); paramElem = paramElem->next) {
