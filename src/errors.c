@@ -1,6 +1,13 @@
 #include "errors.h"
 #include "./main.h"
 
+void printType(ASTNode* type)
+{
+    char typeStr[255];
+    AST_TypeRepr(typeStr, type);
+    printf("%s\n", typeStr);
+}
+
 void typeMismatchError(struct position pos, struct astNode* expectedType, struct astNode* actualType)
 {
     char expectedStr[255];

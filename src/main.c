@@ -546,3 +546,21 @@ void error2(Position pos1, Position pos2, const char* message, ...)
     system("pause");
     exit(1);
 }
+
+void error3(Position pos1, Position pos2, Position pos3, const char* message, ...)
+{
+    va_list args;
+    fprintf(stderr, "error: ");
+
+    va_start(args, message);
+    vfprintf(stderr, message, args);
+    va_end(args);
+    fprintf(stderr, "\n");
+
+    printPos(pos1);
+    printPos(pos2);
+    printPos(pos3);
+
+    system("pause");
+    exit(1);
+}

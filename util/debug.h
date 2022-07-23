@@ -14,6 +14,8 @@
 
 #define PANIC(...) debug_panic(__FILE__, __LINE__, __func__, __VA_ARGS__)
 
+//#define DEBUG
+
 #ifdef DEBUG
 #define LOG(...) debug_log(__FILE__, __LINE__, __func__, __VA_ARGS__)
 #else 

@@ -54,8 +54,6 @@ enum astType {
     AST_GTE,
     AST_LSR,
     AST_LTE,
-	AST_IS_TAG,
-	AST_ISNT_TAG,
     // Bitwise
     AST_BIT_NOT,
     AST_BIT_OR,
@@ -101,6 +99,7 @@ enum astType {
     AST_CAST,
     AST_PARAMLIST,
     AST_ENUM,
+	AST_UNION,
     AST_FUNCTION,
     AST_ADDR,
     AST_ARRAY,
@@ -318,6 +317,7 @@ const ASTNode* PACKAGE_TYPE;
 const ASTNode* UNDEF_TYPE;
 const ASTNode* VOID_ADDR_TYPE;
 const ASTNode* VOID_TYPE;
+const ASTNode* MAYBE_VOID_TYPE;
 
 const ASTNode* TRUE_AST;
 const ASTNode* FALSE_AST;
@@ -359,8 +359,6 @@ ASTNode* AST_Create_gtr(struct astNode* left, struct astNode* right, struct symb
 ASTNode* AST_Create_gte(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_lsr(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_lte(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
-ASTNode* AST_Create_isTag(struct astNode* expr, int tag, struct symbolNode* scope, struct position pos);
-ASTNode* AST_Create_isntTag(struct astNode* expr, int tag, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_bitNot(struct astNode* expr, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_bitOr(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_bitXor(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
@@ -398,6 +396,7 @@ ASTNode* AST_Create_void(struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_cast(struct astNode* expr, struct astNode* type, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_paramlist(struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_enum(struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_union(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_array(struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_function(struct astNode* domain, struct astNode* codomain, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_addr(struct astNode* type, struct symbolNode* scope, struct position pos);

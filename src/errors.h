@@ -1,6 +1,8 @@
 #ifndef ERRORS_H
 #define ERRORS_H
 
+void printType(struct astNode* type);
+
 void typeMismatchError(struct position pos, struct astNode* expectedType, struct astNode* actualType);
 
 void typeMismatchError2(struct position pos, struct position pos2, struct astNode* expectedType, struct astNode* actualType);

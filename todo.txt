@@ -430,12 +430,12 @@ x Generate C code from IR
 		- can case on an error union just like any other union set
 			-- uses if-def idiom, very useful! implement it now!!!
 			file = case fileErr := openFile("filename.txt"); fileErr {
-				.Success -> fileErr
-				.FileNotFound -> {
+				.success -> fileErr
+				.fileNotFound -> {
 					std.system.println("could not find the file")
 					return fileErr
 				}
-				.FileInUse -> {
+				.fileInUse -> {
 					std.system.println("file is in use by another program")
 					return fileErr
 				}
@@ -470,6 +470,7 @@ x Generate C code from IR
 	- rework to be in "c++"
 		- use std::vector and std::map instead of my list and map
 		- some structures could be better represented as classes
+	- rename "expandTypeIdent" to just "expandType"
 - 'default' keyword which takes in a type and gives its default value
 	if x == default Int64 {
 		std.system.println("x is 0")

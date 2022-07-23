@@ -23,8 +23,7 @@ struct struct_2 {
 };
 
 struct struct_3 {
-	int64_t length;
-	int64_t* data;
+	int64_t tag;
 };
 
 struct struct_4 {
@@ -33,30 +32,35 @@ struct struct_4 {
 };
 
 struct struct_5 {
-	int64_t length;
-	int8_t* data;
-};
-
-struct struct_6 {
 	int64_t tag;
 	union {
-		struct struct_7* something;
+		struct struct_6* something;
 	};
 };
 
-struct struct_7 {
+struct struct_6 {
 	int64_t val;
-	struct struct_6 next;
+	struct struct_5 next;
 };
 
-struct struct_8 {
+struct struct_7 {
 	int64_t length;
 	bool* data;
 };
 
+struct struct_8 {
+	int64_t tag;
+	union {
+		int64_t c;
+	};
+};
+
 struct struct_9 {
-	int64_t length;
-	int64_t* data;
+	int64_t tag;
+	union {
+		int64_t success;
+		int64_t c;
+	};
 };
 
 /* Verbatim code */
@@ -65,18 +69,18 @@ int std_system_println(struct struct_1 _format, ...) {va_list _25_args;va_start(
 int64_t test_testModule_main(struct struct_2 _args);
 void test_leetcode_test_all();
 void test_leetcode_test_twoSum();
-struct struct_3 test_leetcode_twoSum(struct struct_3 _nums, int64_t _target);
+struct struct_4 test_leetcode_twoSum(struct struct_4 _nums, int64_t _target);
 void test_leetcode_test_addTwoNumbers();
-struct struct_7* test_leetcode_addTwoNumbers(struct struct_7* _l1, struct struct_7* _l2);
-struct struct_7* test_leetcode_convertToList(int64_t _i);
-int64_t test_leetcode_convertToInt(struct struct_6 _l);
-bool test_leetcode_hasValue(struct struct_6 _node, struct struct_3 _x);
+struct struct_6* test_leetcode_addTwoNumbers(struct struct_6* _l1, struct struct_6* _l2);
+struct struct_6* test_leetcode_convertToList(int64_t _i);
+int64_t test_leetcode_convertToInt(struct struct_5 _l);
+bool test_leetcode_hasValue(struct struct_5 _node, struct struct_4 _x);
 void test_leetcode_test_lengthOfLongestSubstring();
 int64_t test_leetcode_lengthOfLongestSubstring(struct struct_1 _str);
 bool test_leetcode_areDistinct(struct struct_1 _str, int64_t _i, int64_t _j);
 double std_math_max(double _x, double _y);
 void test_leetcode_test_findMedianSortedArrays();
-float test_leetcode_findMedianSortedArrays(struct struct_3 _nums1, struct struct_3 _nums2);
+float test_leetcode_findMedianSortedArrays(struct struct_4 _nums1, struct struct_4 _nums2);
 void test_leetcode_test_longestPalindrome();
 struct struct_1 test_leetcode_longestPalindrome(struct struct_1 _s);
 int64_t test_leetcode_expandAroundCenter(struct struct_1 _s, int64_t _left, int64_t _right);
@@ -85,7 +89,7 @@ void test_leetcode_test_convert();
 struct struct_1 test_leetcode_convert(struct struct_1 _s, int64_t _numRows);
 void test_leetcode_test_reverse();
 int64_t test_leetcode_reverse(int64_t _x);
-struct struct_7* test_leetcode_reverseList(struct struct_7* _list);
+struct struct_6* test_leetcode_reverseList(struct struct_6* _list);
 void test_leetcode_test_myAtoi();
 int64_t test_leetcode_myAtoi(struct struct_1 _s);
 void test_leetcode_test_isPalindrome();
@@ -93,24 +97,77 @@ bool test_leetcode_isPalindrome(int64_t _x);
 void test_leetcode_test_isMatch();
 bool test_leetcode_isMatch(struct struct_1 _s, struct struct_1 _p);
 void test_leetcode_test_maxArea();
-int64_t test_leetcode_maxArea(struct struct_3 _height, int64_t _max);
+int64_t test_leetcode_maxArea(struct struct_4 _height, int64_t _max);
 int64_t std_math_abs(int64_t _x);
 double std_math_min(double _x, double _y);
+struct struct_8 test_testModule_testFn(int64_t _x);
+struct struct_9 test_testModule_ope(struct struct_1 _filename);
 
-#ifndef ORANGE_PROGRAM_4011
-#define ORANGE_PROGRAM_4011
+#ifndef ORANGE_PROGRAM_3320
+#define ORANGE_PROGRAM_3320
 
 int64_t test_testModule_main(struct struct_2 _args)
 {
 	int64_t retval;
 	void (*_0) ();
+	struct struct_8 (*_2) (int64_t _x);
+	int64_t _4;
+	struct struct_8 _3;
+	struct struct_8 _157_x_0;
+	int64_t _5;
+	int64_t _7;
+	int64_t _8;
+	struct struct_8 _9;
+	int64_t _10;
+	bool _6;
 	struct struct_2 _args_0;
+	int64_t (*_11) (struct struct_1 _format, ...);
+	struct struct_1 _13;
+	int64_t _12;
+	struct struct_9 (*_19) (struct struct_1 _filename);
+	struct struct_1 _21;
+	struct struct_9 _20;
+	int64_t _22;
+	int64_t (*_15) (struct struct_1 _format, ...);
+	struct struct_1 _17;
+	int64_t _16;
 	_args_0 = _args;
-L366:; // incoming:1
+L373:; // incoming:1
 	_0 = test_leetcode_test_all;
 	_0();
-	retval = 0;
+	_2 = test_testModule_testFn;
+	_4 = _args_0.length;
+	_3 = _2(_4);
+	_157_x_0 = _3;
+	_7 = _157_x_0.tag;
+	_8 = 5;
+	_9 = (struct struct_8) {_8};
+	_10 = _9.tag;
+	_6 = _7 == _10;
+	if (!_6) {
+		goto L378;
+	} else {
+		goto L374;
+	}
+L374:; // incoming:1
+	_11 = std_system_println;
+	_13 = (struct struct_1) {7, "was B.c"};
+	_12 = _11(_13);
+	_5 = _12;
+	goto L376;
+L376:; // incoming:2
+	_19 = test_testModule_ope;
+	_21 = (struct struct_1) {5, "hello"};
+	_20 = _19(_21);
+	_22 = _20.success;
+	retval = _22;
 	goto end;
+L378:; // incoming:1
+	_15 = std_system_println;
+	_17 = (struct struct_1) {10, "wasn't B.c"};
+	_16 = _15(_17);
+	_5 = _16;
+	goto L376;
 end:;
 	return retval;
 }
@@ -162,20 +219,20 @@ void test_leetcode_test_twoSum()
 	int64_t _2;
 	int64_t _3;
 	int64_t _4;
-	struct struct_3 _43_nums_0;
+	struct struct_4 _43_nums_0;
 	int64_t _43_target_0;
-	struct struct_3 (*_6) (struct struct_3 _nums, int64_t _target);
-	struct struct_3 _7;
-	struct struct_3 _43_ans_0;
+	struct struct_4 (*_6) (struct struct_4 _nums, int64_t _target);
+	struct struct_4 _7;
+	struct struct_4 _43_ans_0;
 	int64_t _8;
-	int64_t _9;
 	int64_t _10;
 	int64_t _11;
 	int64_t _12;
 	int64_t _13;
 	int64_t _14;
 	int64_t _15;
-	bool _16;
+	int64_t _16;
+	bool _9;
 	int64_t (*_17) (struct struct_1 _format, ...);
 	struct struct_1 _19;
 	int64_t _18;
@@ -188,26 +245,26 @@ void test_leetcode_test_twoSum()
 	int64_t _28;
 	int32_t _29;
 	int64_t _22;
-	struct struct_3 _43_ans_1;
+	struct struct_4 _43_ans_1;
 L14:; // incoming:1
 	_1 = 2;
 	_2 = 7;
 	_3 = 11;
 	_4 = 15;
-	_43_nums_0 = (struct struct_3) {4, (int64_t[]){_1, _2, _3, _4}};
+	_43_nums_0 = (struct struct_4) {4, (int64_t[]){_1, _2, _3, _4}};
 	_43_target_0 = 9;
 	_6 = test_leetcode_twoSum;
 	_7 = _6(_43_nums_0, _43_target_0);
 	_43_ans_0 = _7;
-	_9 = 0;
-	_10 = _43_ans_0.data[_9];
-	_11 = _43_nums_0.data[_10];
-	_12 = 1;
-	_13 = _43_ans_0.data[_12];
-	_14 = _43_nums_0.data[_13];
-	_15 = _11 + _14;
-	_16 = _15 == _43_target_0;
-	if (!_16) {
+	_10 = 0;
+	_11 = _43_ans_0.data[_10];
+	_12 = _43_nums_0.data[_11];
+	_13 = 1;
+	_14 = _43_ans_0.data[_13];
+	_15 = _43_nums_0.data[_14];
+	_16 = _12 + _15;
+	_9 = _16 == _43_target_0;
+	if (!_9) {
 		_43_ans_1 = _43_ans_0;
 		goto L19;
 	} else {
@@ -237,62 +294,62 @@ end:;
 	return;
 }
 
-struct struct_3 test_leetcode_twoSum(struct struct_3 _nums, int64_t _target)
+struct struct_4 test_leetcode_twoSum(struct struct_4 _nums, int64_t _target)
 {
-	struct struct_3 retval;
+	struct struct_4 retval;
 	int64_t _38_i_0;
-	struct struct_3 _nums_0;
+	struct struct_4 _nums_0;
 	int64_t _target_0;
 	int64_t _1;
 	int64_t _2;
 	int64_t _3;
 	bool _4;
-	struct struct_3 _nums_1;
+	struct struct_4 _nums_1;
 	int64_t _38_i_2;
 	int64_t _target_1;
 	int64_t _5;
 	int64_t _6;
 	int64_t _40_j_0;
 	int64_t _38_i_3;
-	struct struct_3 _nums_2;
+	struct struct_4 _nums_2;
 	int64_t _target_2;
 	int64_t _7;
 	bool _8;
-	struct struct_3 _nums_3;
+	struct struct_4 _nums_3;
 	int64_t _40_j_2;
 	int64_t _38_i_4;
 	int64_t _target_3;
-	int64_t _9;
 	int64_t _10;
 	int64_t _11;
-	bool _12;
-	struct struct_3 _nums_4;
+	int64_t _12;
+	bool _9;
+	struct struct_4 _nums_4;
 	int64_t _38_i_5;
 	int64_t _40_j_3;
 	int64_t _target_4;
 	int64_t _14;
-	struct struct_3 _15;
-	struct struct_3 _13;
+	struct struct_4 _15;
+	struct struct_4 _13;
 	int64_t _38_i_6;
 	int64_t _40_j_4;
 	int64_t _16;
 	int64_t _17;
 	int64_t _40_j_1;
 	int64_t _40_j_5;
-	struct struct_3 _nums_5;
+	struct struct_4 _nums_5;
 	int64_t _38_i_7;
 	int64_t _target_5;
 	int64_t _18;
 	int64_t _19;
 	int64_t _38_i_1;
 	int64_t _38_i_8;
-	struct struct_3 _nums_6;
+	struct struct_4 _nums_6;
 	int64_t _target_6;
 	int64_t _21;
 	int64_t _23;
 	int64_t _24;
-	struct struct_3 _22;
-	struct struct_3 _20;
+	struct struct_4 _22;
+	struct struct_4 _20;
 	_nums_0 = _nums;
 	_target_0 = _target;
 L0:; // incoming:1
@@ -339,11 +396,11 @@ L3:; // incoming:2
 		goto L4;
 	}
 L4:; // incoming:1
-	_9 = _nums_4.data[_38_i_5];
-	_10 = _nums_4.data[_40_j_3];
-	_11 = _9 + _10;
-	_12 = _11 == _target_4;
-	if (!_12) {
+	_10 = _nums_4.data[_38_i_5];
+	_11 = _nums_4.data[_40_j_3];
+	_12 = _10 + _11;
+	_9 = _12 == _target_4;
+	if (!_9) {
 		_40_j_5 = _40_j_3;
 		_nums_5 = _nums_4;
 		_38_i_7 = _38_i_5;
@@ -356,8 +413,8 @@ L4:; // incoming:1
 	}
 L5:; // incoming:1
 	_14 = 2;
-	_15 = (struct struct_3) {2, (int64_t[]){_38_i_6, _40_j_4}};
-	_13 = (struct struct_3) {_14, malloc(sizeof(int64_t) * _14)}; for (int i_14 = 0; i_14 < _14; i_14++) {_13.data[i_14] = _15.data[i_14];}
+	_15 = (struct struct_4) {2, (int64_t[]){_38_i_6, _40_j_4}};
+	_13 = (struct struct_4) {_14, malloc(sizeof(int64_t) * _14)}; for (int i_14 = 0; i_14 < _14; i_14++) {_13.data[i_14] = _15.data[i_14];}
 	retval = _13;
 	goto end;
 L9:; // incoming:1
@@ -381,8 +438,8 @@ L13:; // incoming:1
 	_21 = 2;
 	_23 = -1;
 	_24 = -2;
-	_22 = (struct struct_3) {2, (int64_t[]){_23, _24}};
-	_20 = (struct struct_3) {_21, malloc(sizeof(int64_t) * _21)}; for (int i_21 = 0; i_21 < _21; i_21++) {_20.data[i_21] = _22.data[i_21];}
+	_22 = (struct struct_4) {2, (int64_t[]){_23, _24}};
+	_20 = (struct struct_4) {_21, malloc(sizeof(int64_t) * _21)}; for (int i_21 = 0; i_21 < _21; i_21++) {_20.data[i_21] = _22.data[i_21];}
 	retval = _20;
 	goto end;
 end:;
@@ -393,51 +450,51 @@ void test_leetcode_test_addTwoNumbers()
 {
 	int64_t _2;
 	int64_t _3;
-	struct struct_6 _4;
-	struct struct_7 _1;
-	struct struct_7* _0;
-	struct struct_7* _48_l1_c_0;
+	struct struct_5 _4;
+	struct struct_6 _1;
+	struct struct_6* _0;
+	struct struct_6* _48_l1_c_0;
 	int64_t _7;
 	int64_t _8;
-	struct struct_6 _9;
-	struct struct_7 _6;
-	struct struct_7* _5;
-	struct struct_7* _48_l1_b_0;
+	struct struct_5 _9;
+	struct struct_6 _6;
+	struct struct_6* _5;
+	struct struct_6* _48_l1_b_0;
 	int64_t _12;
 	int64_t _13;
-	struct struct_6 _14;
-	struct struct_7 _11;
-	struct struct_7* _10;
-	struct struct_7* _48_l1_0;
+	struct struct_5 _14;
+	struct struct_6 _11;
+	struct struct_6* _10;
+	struct struct_6* _48_l1_0;
 	int64_t _17;
 	int64_t _18;
-	struct struct_6 _19;
-	struct struct_7 _16;
-	struct struct_7* _15;
-	struct struct_7* _48_l2_c_0;
+	struct struct_5 _19;
+	struct struct_6 _16;
+	struct struct_6* _15;
+	struct struct_6* _48_l2_c_0;
 	int64_t _22;
 	int64_t _23;
-	struct struct_6 _24;
-	struct struct_7 _21;
-	struct struct_7* _20;
-	struct struct_7* _48_l2_b_0;
+	struct struct_5 _24;
+	struct struct_6 _21;
+	struct struct_6* _20;
+	struct struct_6* _48_l2_b_0;
 	int64_t _27;
 	int64_t _28;
-	struct struct_6 _29;
-	struct struct_7 _26;
-	struct struct_7* _25;
-	struct struct_7* _48_l2_0;
-	struct struct_7* (*_30) (struct struct_7* _l1, struct struct_7* _l2);
-	struct struct_7* _31;
-	struct struct_7* _48_ans_0;
+	struct struct_5 _29;
+	struct struct_6 _26;
+	struct struct_6* _25;
+	struct struct_6* _48_l2_0;
+	struct struct_6* (*_30) (struct struct_6* _l1, struct struct_6* _l2);
+	struct struct_6* _31;
+	struct struct_6* _48_ans_0;
 	int64_t _32;
-	bool (*_33) (struct struct_6 _node, struct struct_3 _x);
+	bool (*_33) (struct struct_5 _node, struct struct_4 _x);
 	int64_t _35;
-	struct struct_6 _36;
+	struct struct_5 _36;
 	int64_t _38;
 	int64_t _39;
 	int64_t _40;
-	struct struct_3 _37;
+	struct struct_4 _37;
 	bool _34;
 	int64_t (*_41) (struct struct_1 _format, ...);
 	struct struct_1 _43;
@@ -448,56 +505,56 @@ void test_leetcode_test_addTwoNumbers()
 L43:; // incoming:1
 	_2 = 3;
 	_3 = 0;
-	_4 = (struct struct_6) {_3};
-	_1 = (struct struct_7) {_2, _4};
-	_0 = calloc(sizeof(struct struct_7), 1);
+	_4 = (struct struct_5) {_3};
+	_1 = (struct struct_6) {_2, _4};
+	_0 = calloc(sizeof(struct struct_6), 1);
 	*_0 = _1;
 	_48_l1_c_0 = _0;
 	_7 = 4;
-	_8 = 1;
-	_9 = (struct struct_6) {_8, _48_l1_c_0};
-	_6 = (struct struct_7) {_7, _9};
-	_5 = calloc(sizeof(struct struct_7), 1);
+	_8 = 2;
+	_9 = (struct struct_5) {_8, _48_l1_c_0};
+	_6 = (struct struct_6) {_7, _9};
+	_5 = calloc(sizeof(struct struct_6), 1);
 	*_5 = _6;
 	_48_l1_b_0 = _5;
 	_12 = 2;
-	_13 = 1;
-	_14 = (struct struct_6) {_13, _48_l1_b_0};
-	_11 = (struct struct_7) {_12, _14};
-	_10 = calloc(sizeof(struct struct_7), 1);
+	_13 = 2;
+	_14 = (struct struct_5) {_13, _48_l1_b_0};
+	_11 = (struct struct_6) {_12, _14};
+	_10 = calloc(sizeof(struct struct_6), 1);
 	*_10 = _11;
 	_48_l1_0 = _10;
 	_17 = 4;
 	_18 = 0;
-	_19 = (struct struct_6) {_18};
-	_16 = (struct struct_7) {_17, _19};
-	_15 = calloc(sizeof(struct struct_7), 1);
+	_19 = (struct struct_5) {_18};
+	_16 = (struct struct_6) {_17, _19};
+	_15 = calloc(sizeof(struct struct_6), 1);
 	*_15 = _16;
 	_48_l2_c_0 = _15;
 	_22 = 6;
-	_23 = 1;
-	_24 = (struct struct_6) {_23, _48_l2_c_0};
-	_21 = (struct struct_7) {_22, _24};
-	_20 = calloc(sizeof(struct struct_7), 1);
+	_23 = 2;
+	_24 = (struct struct_5) {_23, _48_l2_c_0};
+	_21 = (struct struct_6) {_22, _24};
+	_20 = calloc(sizeof(struct struct_6), 1);
 	*_20 = _21;
 	_48_l2_b_0 = _20;
 	_27 = 5;
-	_28 = 1;
-	_29 = (struct struct_6) {_28, _48_l2_b_0};
-	_26 = (struct struct_7) {_27, _29};
-	_25 = calloc(sizeof(struct struct_7), 1);
+	_28 = 2;
+	_29 = (struct struct_5) {_28, _48_l2_b_0};
+	_26 = (struct struct_6) {_27, _29};
+	_25 = calloc(sizeof(struct struct_6), 1);
 	*_25 = _26;
 	_48_l2_0 = _25;
 	_30 = test_leetcode_addTwoNumbers;
 	_31 = _30(_48_l1_0, _48_l2_0);
 	_48_ans_0 = _31;
 	_33 = test_leetcode_hasValue;
-	_35 = 1;
-	_36 = (struct struct_6) {_35, _48_ans_0};
+	_35 = 2;
+	_36 = (struct struct_5) {_35, _48_ans_0};
 	_38 = 7;
 	_39 = 0;
 	_40 = 8;
-	_37 = (struct struct_3) {3, (int64_t[]){_38, _39, _40}};
+	_37 = (struct struct_4) {3, (int64_t[]){_38, _39, _40}};
 	_34 = _33(_36, _37);
 	if (!_34) {
 		goto L48;
@@ -522,33 +579,33 @@ end:;
 	return;
 }
 
-struct struct_7* test_leetcode_addTwoNumbers(struct struct_7* _l1, struct struct_7* _l2)
+struct struct_6* test_leetcode_addTwoNumbers(struct struct_6* _l1, struct struct_6* _l2)
 {
-	struct struct_7* retval;
-	struct struct_7* (*_0) (int64_t _i);
-	int64_t (*_2) (struct struct_6 _l);
+	struct struct_6* retval;
+	struct struct_6* (*_0) (int64_t _i);
+	int64_t (*_2) (struct struct_5 _l);
 	int64_t _4;
-	struct struct_6 _5;
+	struct struct_5 _5;
 	int64_t _3;
-	int64_t (*_6) (struct struct_6 _l);
+	int64_t (*_6) (struct struct_5 _l);
 	int64_t _8;
-	struct struct_6 _9;
+	struct struct_5 _9;
 	int64_t _7;
 	int64_t _10;
-	struct struct_7* _1;
-	struct struct_7* _l1_0;
-	struct struct_7* _l2_0;
+	struct struct_6* _1;
+	struct struct_6* _l1_0;
+	struct struct_6* _l2_0;
 	_l1_0 = _l1;
 	_l2_0 = _l2;
 L33:; // incoming:1
 	_0 = test_leetcode_convertToList;
 	_2 = test_leetcode_convertToInt;
-	_4 = 1;
-	_5 = (struct struct_6) {_4, _l1_0};
+	_4 = 2;
+	_5 = (struct struct_5) {_4, _l1_0};
 	_3 = _2(_5);
 	_6 = test_leetcode_convertToInt;
-	_8 = 1;
-	_9 = (struct struct_6) {_8, _l2_0};
+	_8 = 2;
+	_9 = (struct struct_5) {_8, _l2_0};
 	_7 = _6(_9);
 	_10 = _3 + _7;
 	_1 = _0(_10);
@@ -558,28 +615,28 @@ end:;
 	return retval;
 }
 
-struct struct_7* test_leetcode_convertToList(int64_t _i)
+struct struct_6* test_leetcode_convertToList(int64_t _i)
 {
-	struct struct_7* retval;
-	struct struct_7* _0;
+	struct struct_6* retval;
+	struct struct_6* _0;
 	int64_t _1;
 	bool _2;
 	int64_t _i_0;
 	int64_t _5;
-	struct struct_6 _6;
-	struct struct_7 _4;
-	struct struct_7* _3;
+	struct struct_5 _6;
+	struct struct_6 _4;
+	struct struct_6* _3;
 	int64_t _i_1;
 	int64_t _10;
 	int64_t _11;
 	int64_t _12;
-	struct struct_7* (*_13) (int64_t _i);
+	struct struct_6* (*_13) (int64_t _i);
 	int64_t _15;
 	int64_t _16;
-	struct struct_7* _14;
-	struct struct_6 _17;
-	struct struct_7 _9;
-	struct struct_7* _8;
+	struct struct_6* _14;
+	struct struct_5 _17;
+	struct struct_6 _9;
+	struct struct_6* _8;
 	int64_t _i_2;
 	_i_0 = _i;
 L21:; // incoming:1
@@ -594,9 +651,9 @@ L21:; // incoming:1
 	}
 L22:; // incoming:1
 	_5 = 0;
-	_6 = (struct struct_6) {_5};
-	_4 = (struct struct_7) {_i_1, _6};
-	_3 = calloc(sizeof(struct struct_7), 1);
+	_6 = (struct struct_5) {_5};
+	_4 = (struct struct_6) {_i_1, _6};
+	_3 = calloc(sizeof(struct struct_6), 1);
 	*_3 = _4;
 	_0 = _3;
 	goto L24;
@@ -606,14 +663,14 @@ L24:; // incoming:2
 L25:; // incoming:1
 	_10 = 10;
 	_11 = _i_2 % _10;
-	_12 = 1;
+	_12 = 2;
 	_13 = test_leetcode_convertToList;
 	_15 = 10;
 	_16 = _i_2 / _15;
 	_14 = _13(_16);
-	_17 = (struct struct_6) {_12, _14};
-	_9 = (struct struct_7) {_11, _17};
-	_8 = calloc(sizeof(struct struct_7), 1);
+	_17 = (struct struct_5) {_12, _14};
+	_9 = (struct struct_6) {_11, _17};
+	_8 = calloc(sizeof(struct struct_6), 1);
 	*_8 = _9;
 	_0 = _8;
 	goto L24;
@@ -621,29 +678,29 @@ end:;
 	return retval;
 }
 
-int64_t test_leetcode_convertToInt(struct struct_6 _l)
+int64_t test_leetcode_convertToInt(struct struct_5 _l)
 {
 	int64_t retval;
 	int64_t _0;
 	int64_t _1;
 	int64_t _2;
 	bool _3;
-	struct struct_6 _l_0;
+	struct struct_5 _l_0;
 	int64_t _4;
 	bool _5;
-	struct struct_6 _l_1;
-	struct struct_7* _7;
-	struct struct_7 _8;
+	struct struct_5 _l_1;
+	struct struct_6* _7;
+	struct struct_6 _8;
 	int64_t _9;
-	int64_t (*_10) (struct struct_6 _l);
-	struct struct_7* _12;
-	struct struct_7 _13;
-	struct struct_6 _14;
+	int64_t (*_10) (struct struct_5 _l);
+	struct struct_6* _12;
+	struct struct_6 _13;
+	struct struct_5 _14;
 	int64_t _11;
 	int64_t _15;
 	int64_t _16;
 	int64_t _17;
-	struct struct_6 _l_2;
+	struct struct_5 _l_2;
 	_l_0 = _l;
 L27:; // incoming:1
 	_1 = _l_0.tag;
@@ -656,7 +713,7 @@ L27:; // incoming:1
 		goto L28;
 	}
 L28:; // incoming:1
-	_4 = 1;
+	_4 = 2;
 	_5 = _1 != _4;
 	if (!_5) {
 		_l_2 = _l_1;
@@ -688,44 +745,48 @@ end:;
 	return retval;
 }
 
-bool test_leetcode_hasValue(struct struct_6 _node, struct struct_3 _x)
+bool test_leetcode_hasValue(struct struct_5 _node, struct struct_4 _x)
 {
 	bool retval;
 	bool _0;
-	int64_t _1;
 	int64_t _2;
-	bool _3;
-	struct struct_6 _node_0;
-	struct struct_3 _x_0;
-	int8_t _4;
-	struct struct_7* _5;
-	struct struct_7 _6;
-	int64_t _7;
-	int64_t _8;
-	int64_t _9;
-	bool _10;
-	struct struct_6 _node_1;
-	struct struct_3 _x_1;
-	bool (*_11) (struct struct_6 _node, struct struct_3 _x);
-	struct struct_7* _13;
-	struct struct_7 _14;
-	struct struct_6 _15;
-	int64_t _16;
-	int64_t _17;
+	int64_t _3;
+	struct struct_3 _4;
+	int64_t _5;
+	bool _1;
+	struct struct_5 _node_0;
+	struct struct_4 _x_0;
+	int8_t _6;
+	struct struct_6* _8;
+	struct struct_6 _9;
+	int64_t _10;
+	int64_t _11;
+	int64_t _12;
+	bool _7;
+	struct struct_5 _node_1;
+	struct struct_4 _x_1;
+	bool (*_13) (struct struct_5 _node, struct struct_4 _x);
+	struct struct_6* _15;
+	struct struct_6 _16;
+	struct struct_5 _17;
 	int64_t _18;
-	int64_t* _19;
-	int64_t* _20;
-	struct struct_3 _21;
-	bool _12;
-	struct struct_6 _node_2;
-	struct struct_3 _x_2;
+	int64_t _19;
+	int64_t _20;
+	int64_t* _21;
+	int64_t* _22;
+	struct struct_4 _23;
+	bool _14;
+	struct struct_5 _node_2;
+	struct struct_4 _x_2;
 	_node_0 = _node;
 	_x_0 = _x;
 L34:; // incoming:1
-	_1 = _node_0.tag;
-	_2 = 0;
-	_3 = _1 == _2;
-	if (!_3) {
+	_2 = _node_0.tag;
+	_3 = 0;
+	_4 = (struct struct_3) {_3};
+	_5 = _4.tag;
+	_1 = _2 == _5;
+	if (!_1) {
 		goto L42;
 	} else {
 		_node_1 = _node_0;
@@ -733,13 +794,13 @@ L34:; // incoming:1
 		goto L35;
 	}
 L35:; // incoming:1
-	_5 = _node_1.something;
-	_6 = *_5;
-	_7 = _6.val;
-	_8 = 0;
-	_9 = _x_1.data[_8];
-	_10 = _7 == _9;
-	if (!_10) {
+	_8 = _node_1.something;
+	_9 = *_8;
+	_10 = _9.val;
+	_11 = 0;
+	_12 = _x_1.data[_11];
+	_7 = _10 == _12;
+	if (!_7) {
 		goto L40;
 	} else {
 		_node_2 = _node_1;
@@ -747,27 +808,27 @@ L35:; // incoming:1
 		goto L36;
 	}
 L36:; // incoming:1
-	_11 = test_leetcode_hasValue;
-	_13 = _node_2.something;
-	_14 = *_13;
-	_15 = _14.next;
-	_16 = 1;
-	_17 = _x_2.length;
-	_18 = _17 - _16;
-	_19 = _x_2.data;
-	_20 = _19 + _16;
-	_21 = (struct struct_3) {_18, _20};
-	_12 = _11(_15, _21);
-	_4 = _12;
+	_13 = test_leetcode_hasValue;
+	_15 = _node_2.something;
+	_16 = *_15;
+	_17 = _16.next;
+	_18 = 1;
+	_19 = _x_2.length;
+	_20 = _19 - _18;
+	_21 = _x_2.data;
+	_22 = _21 + _18;
+	_23 = (struct struct_4) {_20, _22};
+	_14 = _13(_17, _23);
+	_6 = _14;
 	goto L38;
 L38:; // incoming:2
-	_0 = _4;
+	_0 = _6;
 	goto L39;
 L39:; // incoming:2
 	retval = _0;
 	goto end;
 L40:; // incoming:1
-	_4 = 0;
+	_6 = 0;
 	goto L38;
 L42:; // incoming:1
 	_0 = 1;
@@ -784,8 +845,8 @@ void test_leetcode_test_lengthOfLongestSubstring()
 	int64_t _2;
 	int64_t _63_ans_0;
 	int64_t _3;
-	int64_t _4;
-	bool _5;
+	int64_t _5;
+	bool _4;
 	int64_t (*_6) (struct struct_1 _format, ...);
 	struct struct_1 _8;
 	int64_t _7;
@@ -799,9 +860,9 @@ L80:; // incoming:1
 	_1 = test_leetcode_lengthOfLongestSubstring;
 	_2 = _1(_63_s_0);
 	_63_ans_0 = _2;
-	_4 = 3;
-	_5 = _63_ans_0 == _4;
-	if (!_5) {
+	_5 = 3;
+	_4 = _63_ans_0 == _5;
+	if (!_4) {
 		_63_ans_1 = _63_ans_0;
 		goto L85;
 	} else {
@@ -993,7 +1054,7 @@ bool test_leetcode_areDistinct(struct struct_1 _str, int64_t _i, int64_t _j)
 {
 	bool retval;
 	bool _1;
-	struct struct_8 _54_visited_0;
+	struct struct_7 _54_visited_0;
 	int64_t _55_k_0;
 	int64_t _i_0;
 	struct struct_1 _str_0;
@@ -1002,20 +1063,20 @@ bool test_leetcode_areDistinct(struct struct_1 _str, int64_t _i, int64_t _j)
 	int64_t _55_k_2;
 	int64_t _j_1;
 	struct struct_1 _str_1;
-	struct struct_8 _54_visited_1;
+	struct struct_7 _54_visited_1;
 	int8_t _3;
 	int64_t _4;
 	int64_t _56_charCode_0;
 	bool _5;
 	struct struct_1 _str_2;
 	int64_t _55_k_3;
-	struct struct_8 _54_visited_2;
+	struct struct_7 _54_visited_2;
 	int64_t _j_2;
 	bool _7;
 	int64_t _8;
 	int64_t _9;
 	int64_t _55_k_1;
-	struct struct_8 _54_visited_3;
+	struct struct_7 _54_visited_3;
 	int64_t _56_charCode_1;
 	int64_t _55_k_4;
 	int64_t _j_3;
@@ -1025,7 +1086,7 @@ bool test_leetcode_areDistinct(struct struct_1 _str, int64_t _i, int64_t _j)
 	_j_0 = _j;
 L50:; // incoming:1
 	_1 = 0;
-	_54_visited_0 = (struct struct_8) {256, (bool[]){_1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1}};
+	_54_visited_0 = (struct struct_7) {256, (bool[]){_1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1}};
 	_55_k_0 = _i_0;
 	_55_k_2 = _55_k_0;
 	_j_1 = _j_0;
@@ -1116,15 +1177,15 @@ void test_leetcode_test_findMedianSortedArrays()
 {
 	int64_t _1;
 	int64_t _2;
-	struct struct_3 _77_nums1_0;
+	struct struct_4 _77_nums1_0;
 	int64_t _4;
-	struct struct_3 _77_nums2_0;
-	float (*_5) (struct struct_3 _nums1, struct struct_3 _nums2);
+	struct struct_4 _77_nums2_0;
+	float (*_5) (struct struct_4 _nums1, struct struct_4 _nums2);
 	float _6;
 	float _77_ans_0;
 	int64_t _7;
-	float _8;
-	bool _9;
+	float _9;
+	bool _8;
 	int64_t (*_10) (struct struct_1 _format, ...);
 	struct struct_1 _12;
 	int64_t _11;
@@ -1135,15 +1196,15 @@ void test_leetcode_test_findMedianSortedArrays()
 L121:; // incoming:1
 	_1 = 1;
 	_2 = 3;
-	_77_nums1_0 = (struct struct_3) {2, (int64_t[]){_1, _2}};
+	_77_nums1_0 = (struct struct_4) {2, (int64_t[]){_1, _2}};
 	_4 = 2;
-	_77_nums2_0 = (struct struct_3) {1, (int64_t[]){_4}};
+	_77_nums2_0 = (struct struct_4) {1, (int64_t[]){_4}};
 	_5 = test_leetcode_findMedianSortedArrays;
 	_6 = _5(_77_nums1_0, _77_nums2_0);
 	_77_ans_0 = _6;
-	_8 = 2.000000;
-	_9 = _77_ans_0 == _8;
-	if (!_9) {
+	_9 = 2.000000;
+	_8 = _77_ans_0 == _9;
+	if (!_8) {
 		_77_ans_1 = _77_ans_0;
 		goto L126;
 	} else {
@@ -1167,55 +1228,55 @@ end:;
 	return;
 }
 
-float test_leetcode_findMedianSortedArrays(struct struct_3 _nums1, struct struct_3 _nums2)
+float test_leetcode_findMedianSortedArrays(struct struct_4 _nums1, struct struct_4 _nums2)
 {
 	float retval;
 	int64_t _1;
 	int64_t _2;
 	int64_t _3;
 	int64_t _4;
-	struct struct_3 _0;
-	struct struct_3 _66_merged_0;
+	struct struct_4 _0;
+	struct struct_4 _66_merged_0;
 	int64_t _66_i_0;
 	int64_t _66_j_0;
-	struct struct_3 _nums1_0;
-	struct struct_3 _nums2_0;
+	struct struct_4 _nums1_0;
+	struct struct_4 _nums2_0;
 	int64_t _7;
 	int64_t _8;
 	bool _9;
 	int64_t _66_i_8;
 	int64_t _66_j_7;
-	struct struct_3 _66_merged_1;
-	struct struct_3 _nums1_1;
-	struct struct_3 _nums2_1;
+	struct struct_4 _66_merged_1;
+	struct struct_4 _nums1_1;
+	struct struct_4 _nums2_1;
 	int8_t _10;
 	int64_t _11;
 	bool _12;
-	struct struct_3 _nums1_2;
+	struct struct_4 _nums1_2;
 	int64_t _66_i_9;
-	struct struct_3 _nums2_2;
+	struct struct_4 _nums2_2;
 	int64_t _66_j_8;
-	struct struct_3 _66_merged_2;
+	struct struct_4 _66_merged_2;
 	int64_t _13;
 	bool _14;
-	struct struct_3 _nums2_3;
+	struct struct_4 _nums2_3;
 	int64_t _66_j_9;
-	struct struct_3 _nums1_3;
+	struct struct_4 _nums1_3;
 	int64_t _66_i_10;
-	struct struct_3 _66_merged_3;
-	struct struct_3 _nums1_4;
+	struct struct_4 _66_merged_3;
+	struct struct_4 _nums1_4;
 	int64_t _66_i_11;
-	struct struct_3 _nums2_4;
+	struct struct_4 _nums2_4;
 	int64_t _66_j_10;
-	struct struct_3 _66_merged_4;
+	struct struct_4 _66_merged_4;
 	int64_t _15;
 	int64_t _16;
 	bool _17;
-	struct struct_3 _nums1_5;
+	struct struct_4 _nums1_5;
 	int64_t _66_i_12;
-	struct struct_3 _nums2_5;
+	struct struct_4 _nums2_5;
 	int64_t _66_j_11;
-	struct struct_3 _66_merged_5;
+	struct struct_4 _66_merged_5;
 	int64_t _18;
 	int64_t _19;
 	int64_t _20;
@@ -1223,9 +1284,9 @@ float test_leetcode_findMedianSortedArrays(struct struct_3 _nums1, struct struct
 	int64_t _66_i_5;
 	int64_t _66_i_13;
 	int64_t _66_j_12;
-	struct struct_3 _nums1_6;
-	struct struct_3 _66_merged_6;
-	struct struct_3 _nums2_6;
+	struct struct_4 _nums1_6;
+	struct struct_4 _66_merged_6;
+	struct struct_4 _nums2_6;
 	int64_t _22;
 	int64_t _23;
 	int64_t _24;
@@ -1233,16 +1294,16 @@ float test_leetcode_findMedianSortedArrays(struct struct_3 _nums1, struct struct
 	int64_t _66_j_5;
 	int64_t _66_i_14;
 	int64_t _66_j_13;
-	struct struct_3 _nums2_7;
-	struct struct_3 _66_merged_7;
-	struct struct_3 _nums1_7;
+	struct struct_4 _nums2_7;
+	struct struct_4 _66_merged_7;
+	struct struct_4 _nums1_7;
 	int64_t _26;
 	bool _27;
-	struct struct_3 _nums1_8;
+	struct struct_4 _nums1_8;
 	int64_t _66_i_15;
 	int64_t _66_j_14;
-	struct struct_3 _66_merged_8;
-	struct struct_3 _nums2_8;
+	struct struct_4 _66_merged_8;
+	struct struct_4 _nums2_8;
 	int64_t _28;
 	int64_t _29;
 	int64_t _30;
@@ -1250,16 +1311,16 @@ float test_leetcode_findMedianSortedArrays(struct struct_3 _nums1, struct struct
 	int64_t _66_i_7;
 	int64_t _66_i_16;
 	int64_t _66_j_15;
-	struct struct_3 _nums1_9;
-	struct struct_3 _66_merged_9;
-	struct struct_3 _nums2_9;
+	struct struct_4 _nums1_9;
+	struct struct_4 _66_merged_9;
+	struct struct_4 _nums2_9;
 	int64_t _32;
 	bool _33;
-	struct struct_3 _nums2_10;
+	struct struct_4 _nums2_10;
 	int64_t _66_j_16;
 	int64_t _66_i_17;
-	struct struct_3 _66_merged_10;
-	struct struct_3 _nums1_10;
+	struct struct_4 _66_merged_10;
+	struct struct_4 _nums1_10;
 	int64_t _34;
 	int64_t _35;
 	int64_t _36;
@@ -1267,21 +1328,21 @@ float test_leetcode_findMedianSortedArrays(struct struct_3 _nums1, struct struct
 	int64_t _66_j_6;
 	int64_t _66_i_18;
 	int64_t _66_j_17;
-	struct struct_3 _nums2_11;
-	struct struct_3 _66_merged_11;
-	struct struct_3 _nums1_11;
-	struct struct_3 _nums1_12;
+	struct struct_4 _nums2_11;
+	struct struct_4 _66_merged_11;
+	struct struct_4 _nums1_11;
+	struct struct_4 _nums1_12;
 	int64_t _66_i_19;
-	struct struct_3 _nums2_12;
+	struct struct_4 _nums2_12;
 	int64_t _66_j_18;
-	struct struct_3 _66_merged_12;
+	struct struct_4 _66_merged_12;
 	float _38;
-	int64_t _39;
 	int64_t _40;
 	int64_t _41;
 	int64_t _42;
-	bool _43;
-	struct struct_3 _66_merged_13;
+	int64_t _43;
+	bool _39;
+	struct struct_4 _66_merged_13;
 	int64_t _44;
 	int64_t _45;
 	int64_t _46;
@@ -1296,15 +1357,15 @@ float test_leetcode_findMedianSortedArrays(struct struct_3 _nums1, struct struct
 	int64_t _55;
 	float _56;
 	float _57;
-	struct struct_3 _66_merged_14;
+	struct struct_4 _66_merged_14;
 	int64_t* _66;
-	struct struct_3 _66_merged_15;
+	struct struct_4 _66_merged_15;
 	int64_t _59;
 	int64_t _60;
 	int64_t _61;
 	int64_t _62;
 	float _63;
-	struct struct_3 _66_merged_16;
+	struct struct_4 _66_merged_16;
 	_nums1_0 = _nums1;
 	_nums2_0 = _nums2;
 L87:; // incoming:1
@@ -1312,7 +1373,7 @@ L87:; // incoming:1
 	_2 = _nums2_0.length;
 	_3 = _1 + _2;
 	_4 = 0;
-	_0 = (struct struct_3) {_3, malloc(sizeof(int64_t) * _3)}; for (int i_3 = 0; i_3 < _3; i_3++) {_0.data[i_3] = _4;}
+	_0 = (struct struct_4) {_3, malloc(sizeof(int64_t) * _3)}; for (int i_3 = 0; i_3 < _3; i_3++) {_0.data[i_3] = _4;}
 	_66_merged_0 = _0;
 	_66_i_0 = 0;
 	_66_j_0 = 0;
@@ -1497,12 +1558,12 @@ L111:; // incoming:1
 	_66_merged_4 = _66_merged_12;
 	goto L91;
 L112:; // incoming:1
-	_39 = _66_merged_13.length;
-	_40 = 2;
-	_41 = _39 % _40;
-	_42 = 0;
-	_43 = _41 == _42;
-	if (!_43) {
+	_40 = _66_merged_13.length;
+	_41 = 2;
+	_42 = _40 % _41;
+	_43 = 0;
+	_39 = _42 == _43;
+	if (!_39) {
 		_66_merged_16 = _66_merged_13;
 		goto L119;
 	} else {
@@ -1794,9 +1855,9 @@ int64_t test_leetcode_expandAroundCenter(struct struct_1 _s, int64_t _left, int6
 	struct struct_1 _s_2;
 	int64_t _left_5;
 	int64_t _right_5;
-	int8_t _6;
 	int8_t _7;
-	bool _8;
+	int8_t _8;
+	bool _6;
 	struct struct_1 _s_3;
 	int64_t _left_6;
 	int64_t _right_6;
@@ -1861,10 +1922,10 @@ L131:; // incoming:2
 		goto L132;
 	}
 L132:; // incoming:1
-	_6 = _s_3.data[_left_6];
-	_7 = _s_3.data[_right_6];
-	_8 = _6 == _7;
-	_0 = _8;
+	_7 = _s_3.data[_left_6];
+	_8 = _s_3.data[_right_6];
+	_6 = _7 == _8;
+	_0 = _6;
 	_left_7 = _left_6;
 	_right_7 = _right_6;
 	_s_4 = _s_3;
@@ -1917,9 +1978,9 @@ bool std_string_equals(struct struct_1 _a, struct struct_1 _b)
 {
 	bool retval;
 	bool _0;
-	int64_t _1;
 	int64_t _2;
-	bool _3;
+	int64_t _3;
+	bool _1;
 	struct struct_1 _a_0;
 	struct struct_1 _b_0;
 	int64_t _19_i_0;
@@ -1930,9 +1991,9 @@ bool std_string_equals(struct struct_1 _a, struct struct_1 _b)
 	struct struct_1 _a_2;
 	int64_t _19_i_2;
 	struct struct_1 _b_2;
-	int8_t _8;
 	int8_t _9;
-	bool _10;
+	int8_t _10;
+	bool _8;
 	struct struct_1 _a_3;
 	int64_t _19_i_3;
 	struct struct_1 _b_3;
@@ -1945,10 +2006,10 @@ bool std_string_equals(struct struct_1 _a, struct struct_1 _b)
 	_a_0 = _a;
 	_b_0 = _b;
 L153:; // incoming:1
-	_1 = _a_0.length;
-	_2 = _b_0.length;
-	_3 = _1 != _2;
-	if (!_3) {
+	_2 = _a_0.length;
+	_3 = _b_0.length;
+	_1 = _2 != _3;
+	if (!_1) {
 		_a_1 = _a_0;
 		_b_1 = _b_0;
 		goto L155;
@@ -1976,10 +2037,10 @@ L156:; // incoming:2
 		goto L157;
 	}
 L157:; // incoming:1
-	_8 = _a_3.data[_19_i_3];
-	_9 = _b_3.data[_19_i_3];
-	_10 = _8 != _9;
-	if (!_10) {
+	_9 = _a_3.data[_19_i_3];
+	_10 = _b_3.data[_19_i_3];
+	_8 = _9 != _10;
+	if (!_8) {
 		_19_i_4 = _19_i_3;
 		_a_4 = _a_3;
 		_b_4 = _b_3;
@@ -2091,8 +2152,8 @@ struct struct_1 test_leetcode_convert(struct struct_1 _s, int64_t _numRows)
 	int64_t _13;
 	int64_t _14;
 	int64_t _91_x_1;
-	int64_t _15;
-	bool _16;
+	int64_t _16;
+	bool _15;
 	int64_t _91_y_7;
 	int64_t _91_x_6;
 	int64_t _95_i_4;
@@ -2173,10 +2234,10 @@ struct struct_1 test_leetcode_convert(struct struct_1 _s, int64_t _numRows)
 	struct struct_1 _91_retval_3;
 	int64_t _91_k_5;
 	int64_t _numRows_11;
-	struct struct_1 _37;
-	int8_t _38;
+	struct struct_1 _38;
 	int8_t _39;
-	bool _40;
+	int8_t _40;
+	bool _37;
 	struct struct_2 _91_board_12;
 	int64_t _103_i_3;
 	int64_t _101_j_5;
@@ -2296,9 +2357,9 @@ L177:; // incoming:1
 	_13 = 1;
 	_14 = _91_x_6 + _13;
 	_91_x_1 = _14;
-	_15 = 0;
-	_16 = _91_y_1 == _15;
-	if (!_16) {
+	_16 = 0;
+	_15 = _91_y_1 == _16;
+	if (!_15) {
 		_95_i_6 = _95_i_4;
 		_s_5 = _s_3;
 		_91_board_5 = _91_board_3;
@@ -2438,11 +2499,11 @@ L195:; // incoming:2
 		goto L196;
 	}
 L196:; // incoming:1
-	_37 = _91_board_12.data[_103_i_3];
-	_38 = _37.data[_101_j_5];
-	_39 = 0;
-	_40 = _38 != _39;
-	if (!_40) {
+	_38 = _91_board_12.data[_103_i_3];
+	_39 = _38.data[_101_j_5];
+	_40 = 0;
+	_37 = _39 != _40;
+	if (!_37) {
 		_103_i_5 = _103_i_3;
 		_s_14 = _s_12;
 		_91_board_14 = _91_board_12;
@@ -2539,8 +2600,8 @@ void test_leetcode_test_reverse()
 	int64_t _1;
 	int64_t _112_ans_0;
 	int64_t _3;
-	int64_t _4;
-	bool _5;
+	int64_t _5;
+	bool _4;
 	int64_t (*_6) (struct struct_1 _format, ...);
 	struct struct_1 _8;
 	int64_t _7;
@@ -2552,9 +2613,9 @@ L228:; // incoming:1
 	_2 = 123;
 	_1 = _0(_2);
 	_112_ans_0 = _1;
-	_4 = 321;
-	_5 = _112_ans_0 == _4;
-	if (!_5) {
+	_5 = 321;
+	_4 = _112_ans_0 == _5;
+	if (!_4) {
 		goto L233;
 	} else {
 		goto L229;
@@ -2580,24 +2641,24 @@ end:;
 int64_t test_leetcode_reverse(int64_t _x)
 {
 	int64_t retval;
-	int64_t (*_0) (struct struct_6 _l);
+	int64_t (*_0) (struct struct_5 _l);
 	int64_t _2;
-	struct struct_7* (*_3) (struct struct_7* _list);
-	struct struct_7* (*_5) (int64_t _i);
-	struct struct_7* _6;
-	struct struct_7* _4;
-	struct struct_6 _7;
+	struct struct_6* (*_3) (struct struct_6* _list);
+	struct struct_6* (*_5) (int64_t _i);
+	struct struct_6* _6;
+	struct struct_6* _4;
+	struct struct_5 _7;
 	int64_t _1;
 	int64_t _x_0;
 	_x_0 = _x;
 L227:; // incoming:1
 	_0 = test_leetcode_convertToInt;
-	_2 = 1;
+	_2 = 2;
 	_3 = test_leetcode_reverseList;
 	_5 = test_leetcode_convertToList;
 	_6 = _5(_x_0);
 	_4 = _3(_6);
-	_7 = (struct struct_6) {_2, _4};
+	_7 = (struct struct_5) {_2, _4};
 	_1 = _0(_7);
 	retval = _1;
 	goto end;
@@ -2605,38 +2666,42 @@ end:;
 	return retval;
 }
 
-struct struct_7* test_leetcode_reverseList(struct struct_7* _list)
+struct struct_6* test_leetcode_reverseList(struct struct_6* _list)
 {
-	struct struct_7* retval;
-	struct struct_7 _1;
-	struct struct_6 _2;
-	struct struct_6 _109_next_0;
-	int64_t _3;
+	struct struct_6* retval;
+	struct struct_6 _1;
+	struct struct_5 _2;
+	struct struct_5 _109_next_0;
 	int64_t _4;
-	bool _5;
-	struct struct_7* _list_0;
-	struct struct_7* _list_1;
-	struct struct_7* (*_6) (struct struct_7* _list);
-	struct struct_7* _8;
-	struct struct_7* _7;
-	struct struct_7* _9;
-	struct struct_7 _10;
-	int64_t _11;
+	int64_t _5;
+	struct struct_3 _6;
+	int64_t _7;
+	bool _3;
+	struct struct_6* _list_0;
+	struct struct_6* _list_1;
+	struct struct_6* (*_8) (struct struct_6* _list);
+	struct struct_6* _10;
+	struct struct_6* _9;
+	struct struct_6* _11;
 	struct struct_6 _12;
-	struct struct_7 _14;
-	int64_t _15;
+	int64_t _13;
+	struct struct_5 _14;
 	struct struct_6 _16;
-	struct struct_6 _109_next_1;
-	struct struct_7* _list_2;
+	int64_t _17;
+	struct struct_5 _18;
+	struct struct_5 _109_next_1;
+	struct struct_6* _list_2;
 	_list_0 = _list;
 L222:; // incoming:1
 	_1 = *_list_0;
 	_2 = _1.next;
 	_109_next_0 = _2;
-	_3 = _109_next_0.tag;
-	_4 = 0;
-	_5 = _3 == _4;
-	if (!_5) {
+	_4 = _109_next_0.tag;
+	_5 = 0;
+	_6 = (struct struct_3) {_5};
+	_7 = _6.tag;
+	_3 = _4 == _7;
+	if (!_3) {
 		_109_next_1 = _109_next_0;
 		_list_2 = _list_0;
 		goto L224;
@@ -2648,17 +2713,17 @@ L223:; // incoming:1
 	retval = _list_1;
 	goto end;
 L224:; // incoming:1
-	_6 = test_leetcode_reverseList;
-	_8 = _109_next_1.something;
-	_7 = _6(_8);
-	_9 = _109_next_1.something;
-	_11 = 1;
-	_12 = (struct struct_6) {_11, _list_2};
-	(*_9).next = _12;
-	_15 = 0;
-	_16 = (struct struct_6) {_15};
-	(*_list_2).next = _16;
-	retval = _7;
+	_8 = test_leetcode_reverseList;
+	_10 = _109_next_1.something;
+	_9 = _8(_10);
+	_11 = _109_next_1.something;
+	_13 = 2;
+	_14 = (struct struct_5) {_13, _list_2};
+	(*_11).next = _14;
+	_17 = 0;
+	_18 = (struct struct_5) {_17};
+	(*_list_2).next = _18;
+	retval = _9;
 	goto end;
 end:;
 	return retval;
@@ -2672,8 +2737,8 @@ void test_leetcode_test_myAtoi()
 	int64_t _2;
 	int64_t _125_ans_0;
 	int64_t _3;
-	int64_t _4;
-	bool _5;
+	int64_t _5;
+	bool _4;
 	int64_t (*_6) (struct struct_1 _format, ...);
 	struct struct_1 _8;
 	int64_t _7;
@@ -2686,9 +2751,9 @@ L269:; // incoming:1
 	_1 = test_leetcode_myAtoi;
 	_2 = _1(_125_s_0);
 	_125_ans_0 = _2;
-	_4 = 42;
-	_5 = _125_ans_0 == _4;
-	if (!_5) {
+	_5 = 42;
+	_4 = _125_ans_0 == _5;
+	if (!_4) {
 		goto L274;
 	} else {
 		goto L270;
@@ -2725,9 +2790,9 @@ int64_t test_leetcode_myAtoi(struct struct_1 _s)
 	int64_t _115_i_10;
 	int64_t _115_x_4;
 	bool _115_sign_6;
-	int8_t _6;
 	int8_t _7;
-	bool _8;
+	int8_t _8;
+	bool _6;
 	struct struct_1 _s_2;
 	int64_t _115_i_11;
 	int64_t _115_x_5;
@@ -2743,15 +2808,15 @@ int64_t test_leetcode_myAtoi(struct struct_1 _s)
 	struct struct_1 _s_4;
 	int64_t _115_x_7;
 	bool _115_sign_9;
-	int64_t _11;
-	bool _12;
+	int64_t _12;
+	bool _11;
 	struct struct_1 _s_5;
 	int64_t _115_i_14;
 	int64_t _115_x_8;
 	bool _115_sign_10;
-	int8_t _14;
 	int8_t _15;
-	bool _16;
+	int8_t _16;
+	bool _14;
 	struct struct_1 _s_6;
 	int64_t _115_i_15;
 	int64_t _115_x_9;
@@ -2807,9 +2872,9 @@ int64_t test_leetcode_myAtoi(struct struct_1 _s)
 	struct struct_1 _s_12;
 	int64_t _115_i_21;
 	bool _115_sign_17;
-	int8_t _20;
 	int8_t _21;
-	bool _22;
+	int8_t _22;
+	bool _20;
 	struct struct_1 _s_13;
 	int64_t _115_i_22;
 	int64_t _115_x_19;
@@ -2852,10 +2917,10 @@ L236:; // incoming:2
 		goto L237;
 	}
 L237:; // incoming:1
-	_6 = _s_2.data[_115_i_11];
-	_7 = 32;
-	_8 = _6 == _7;
-	_3 = _8;
+	_7 = _s_2.data[_115_i_11];
+	_8 = 32;
+	_6 = _7 == _8;
+	_3 = _6;
 	_115_i_12 = _115_i_11;
 	_s_3 = _s_2;
 	_115_x_6 = _115_x_5;
@@ -2885,9 +2950,9 @@ L239:; // incoming:1
 	_115_sign_6 = _115_sign_9;
 	goto L236;
 L242:; // incoming:1
-	_11 = _s_5.length;
-	_12 = _115_i_14 == _11;
-	if (!_12) {
+	_12 = _s_5.length;
+	_11 = _115_i_14 == _12;
+	if (!_11) {
 		_s_6 = _s_5;
 		_115_i_15 = _115_i_14;
 		_115_x_9 = _115_x_8;
@@ -2900,10 +2965,10 @@ L243:; // incoming:1
 	retval = 0;
 	goto end;
 L244:; // incoming:1
-	_14 = _s_6.data[_115_i_15];
-	_15 = 43;
-	_16 = _14 == _15;
-	if (!_16) {
+	_15 = _s_6.data[_115_i_15];
+	_16 = 43;
+	_14 = _15 == _16;
+	if (!_14) {
 		_s_13 = _s_6;
 		_115_i_22 = _115_i_15;
 		_115_x_19 = _115_x_9;
@@ -3007,10 +3072,10 @@ L262:; // incoming:1
 	_115_sign_14 = _115_sign_17;
 	goto L251;
 L263:; // incoming:1
-	_20 = _s_13.data[_115_i_22];
-	_21 = 45;
-	_22 = _20 == _21;
-	if (!_22) {
+	_21 = _s_13.data[_115_i_22];
+	_22 = 45;
+	_20 = _21 == _22;
+	if (!_20) {
 		_s_8 = _s_13;
 		_115_i_17 = _115_i_22;
 		_115_x_11 = _115_x_19;
@@ -3087,40 +3152,40 @@ end:;
 bool test_leetcode_isPalindrome(int64_t _x)
 {
 	bool retval;
-	struct struct_7* (*_0) (int64_t _i);
-	struct struct_7* _1;
-	struct struct_7* _128_list_0;
-	struct struct_7* (*_2) (struct struct_7* _list);
-	struct struct_7* (*_4) (int64_t _i);
-	struct struct_7* _5;
-	struct struct_7* _3;
-	struct struct_7* _128_reversedList_0;
+	struct struct_6* (*_0) (int64_t _i);
+	struct struct_6* _1;
+	struct struct_6* _128_list_0;
+	struct struct_6* (*_2) (struct struct_6* _list);
+	struct struct_6* (*_4) (int64_t _i);
+	struct struct_6* _5;
+	struct struct_6* _3;
+	struct struct_6* _128_reversedList_0;
 	int64_t _x_0;
-	struct struct_7 _7;
-	int64_t _8;
-	struct struct_7 _9;
-	int64_t _10;
-	bool _11;
-	struct struct_7* _128_list_2;
-	struct struct_7* _128_reversedList_7;
-	struct struct_7 _14;
-	struct struct_6 _15;
+	struct struct_6 _8;
+	int64_t _9;
+	struct struct_6 _10;
+	int64_t _11;
+	bool _7;
+	struct struct_6* _128_list_2;
+	struct struct_6* _128_reversedList_7;
+	struct struct_6 _14;
+	struct struct_5 _15;
 	int64_t _16;
 	int64_t _17;
 	bool _18;
-	struct struct_7* _128_list_3;
-	struct struct_7* _128_reversedList_8;
+	struct struct_6* _128_list_3;
+	struct struct_6* _128_reversedList_8;
 	int64_t _19;
-	struct struct_7* _128_list_1;
-	struct struct_7 _21;
-	struct struct_6 _22;
+	struct struct_6* _128_list_1;
+	struct struct_6 _21;
+	struct struct_5 _22;
 	int64_t _23;
 	int64_t _24;
 	bool _25;
-	struct struct_7* _128_reversedList_9;
+	struct struct_6* _128_reversedList_9;
 	int64_t _26;
-	struct struct_7* _128_reversedList_6;
-	struct struct_7* _128_list_4;
+	struct struct_6* _128_reversedList_6;
+	struct struct_6* _128_list_4;
 	_x_0 = _x;
 L276:; // incoming:1
 	_0 = test_leetcode_convertToList;
@@ -3135,12 +3200,12 @@ L276:; // incoming:1
 	_128_reversedList_7 = _128_reversedList_0;
 	goto L278;
 L278:; // incoming:2
-	_7 = *_128_list_2;
-	_8 = _7.val;
-	_9 = *_128_reversedList_7;
-	_10 = _9.val;
-	_11 = _8 != _10;
-	if (!_11) {
+	_8 = *_128_list_2;
+	_9 = _8.val;
+	_10 = *_128_reversedList_7;
+	_11 = _10.val;
+	_7 = _9 != _11;
+	if (!_7) {
 		_128_list_3 = _128_list_2;
 		_128_reversedList_8 = _128_reversedList_7;
 		goto L280;
@@ -3250,10 +3315,10 @@ bool test_leetcode_isMatch(struct struct_1 _s, struct struct_1 _p)
 	int64_t _136_j_8;
 	struct struct_1 _p_1;
 	bool _4;
-	int64_t _5;
 	int64_t _6;
 	int64_t _7;
-	bool _8;
+	int64_t _8;
+	bool _5;
 	int64_t _136_j_9;
 	struct struct_1 _p_2;
 	struct struct_1 _s_2;
@@ -3264,16 +3329,16 @@ bool test_leetcode_isMatch(struct struct_1 _s, struct struct_1 _p)
 	int64_t _136_i_4;
 	bool _138_repeat_0;
 	int8_t _17;
-	int8_t _18;
 	int8_t _19;
-	bool _20;
+	int8_t _20;
+	bool _18;
 	struct struct_1 _p_4;
 	int64_t _136_j_11;
 	struct struct_1 _s_4;
 	int64_t _136_i_5;
-	int8_t _21;
 	int8_t _22;
-	bool _23;
+	int8_t _23;
+	bool _21;
 	struct struct_1 _s_5;
 	int64_t _136_i_6;
 	struct struct_1 _p_5;
@@ -3317,11 +3382,11 @@ bool test_leetcode_isMatch(struct struct_1 _s, struct struct_1 _p)
 	struct struct_1 _s_11;
 	int64_t _136_i_12;
 	struct struct_1 _p_11;
-	int64_t _11;
 	int64_t _12;
-	int8_t _13;
+	int64_t _13;
 	int8_t _14;
-	bool _15;
+	int8_t _15;
+	bool _11;
 	int64_t _136_j_19;
 	struct struct_1 _p_12;
 	struct struct_1 _s_12;
@@ -3349,11 +3414,11 @@ L300:; // incoming:4
 		goto L301;
 	}
 L301:; // incoming:1
-	_5 = 1;
-	_6 = _136_j_9 + _5;
-	_7 = _p_2.length;
-	_8 = _6 == _7;
-	if (!_8) {
+	_6 = 1;
+	_7 = _136_j_9 + _6;
+	_8 = _p_2.length;
+	_5 = _7 == _8;
+	if (!_5) {
 		_136_j_19 = _136_j_9;
 		_p_12 = _p_2;
 		_s_12 = _s_2;
@@ -3375,10 +3440,10 @@ L303:; // incoming:1
 	goto L304;
 L304:; // incoming:2
 	_138_repeat_0 = _4;
-	_18 = _p_4.data[_136_j_11];
-	_19 = 46;
-	_20 = _18 != _19;
-	if (!_20) {
+	_19 = _p_4.data[_136_j_11];
+	_20 = 46;
+	_18 = _19 != _20;
+	if (!_18) {
 		_138_repeat_5 = _138_repeat_0;
 		_136_j_18 = _136_j_11;
 		_s_11 = _s_4;
@@ -3394,10 +3459,10 @@ L304:; // incoming:2
 		goto L305;
 	}
 L305:; // incoming:1
-	_21 = _s_5.data[_136_i_6];
-	_22 = _p_5.data[_136_j_12];
-	_23 = _21 != _22;
-	_17 = _23;
+	_22 = _s_5.data[_136_i_6];
+	_23 = _p_5.data[_136_j_12];
+	_21 = _22 != _23;
+	_17 = _21;
 	_138_repeat_2 = _138_repeat_1;
 	_136_j_13 = _136_j_12;
 	_s_6 = _s_5;
@@ -3478,12 +3543,12 @@ L322:; // incoming:1
 	_p_6 = _p_11;
 	goto L306;
 L323:; // incoming:1
-	_11 = 1;
-	_12 = _136_j_19 + _11;
-	_13 = _p_12.data[_12];
-	_14 = 42;
-	_15 = _13 == _14;
-	_4 = _15;
+	_12 = 1;
+	_13 = _136_j_19 + _12;
+	_14 = _p_12.data[_13];
+	_15 = 42;
+	_11 = _14 == _15;
+	_4 = _11;
 	_p_4 = _p_12;
 	_136_j_11 = _136_j_19;
 	_s_4 = _s_12;
@@ -3507,14 +3572,14 @@ void test_leetcode_test_maxArea()
 	int64_t _7;
 	int64_t _8;
 	int64_t _9;
-	struct struct_3 _154_height_0;
-	int64_t (*_10) (struct struct_3 _height, int64_t _max);
+	struct struct_4 _154_height_0;
+	int64_t (*_10) (struct struct_4 _height, int64_t _max);
 	int64_t _12;
 	int64_t _11;
 	int64_t _154_ans_0;
 	int64_t _13;
-	int64_t _14;
-	bool _15;
+	int64_t _15;
+	bool _14;
 	int64_t (*_16) (struct struct_1 _format, ...);
 	struct struct_1 _18;
 	int64_t _17;
@@ -3532,14 +3597,14 @@ L357:; // incoming:1
 	_7 = 8;
 	_8 = 3;
 	_9 = 7;
-	_154_height_0 = (struct struct_3) {9, (int64_t[]){_1, _2, _3, _4, _5, _6, _7, _8, _9}};
+	_154_height_0 = (struct struct_4) {9, (int64_t[]){_1, _2, _3, _4, _5, _6, _7, _8, _9}};
 	_10 = test_leetcode_maxArea;
 	_12 = 0;
 	_11 = _10(_154_height_0, _12);
 	_154_ans_0 = _11;
-	_14 = 49;
-	_15 = _154_ans_0 == _14;
-	if (!_15) {
+	_15 = 49;
+	_14 = _154_ans_0 == _15;
+	if (!_14) {
 		_154_ans_1 = _154_ans_0;
 		goto L362;
 	} else {
@@ -3563,28 +3628,28 @@ end:;
 	return;
 }
 
-int64_t test_leetcode_maxArea(struct struct_3 _height, int64_t _max)
+int64_t test_leetcode_maxArea(struct struct_4 _height, int64_t _max)
 {
 	int64_t retval;
 	int64_t _150_i_0;
-	struct struct_3 _height_0;
+	struct struct_4 _height_0;
 	int64_t _max_3;
 	int64_t _1;
 	int64_t _2;
 	int64_t _3;
 	bool _4;
-	struct struct_3 _height_1;
+	struct struct_4 _height_1;
 	int64_t _150_i_2;
 	int64_t _max_4;
 	int64_t _5;
 	int64_t _6;
 	int64_t _152_j_0;
 	int64_t _150_i_3;
-	struct struct_3 _height_2;
+	struct struct_4 _height_2;
 	int64_t _max_5;
 	int64_t _7;
 	bool _8;
-	struct struct_3 _height_3;
+	struct struct_4 _height_3;
 	int64_t _152_j_2;
 	int64_t _150_i_4;
 	int64_t _max_6;
@@ -3605,13 +3670,13 @@ int64_t test_leetcode_maxArea(struct struct_3 _height, int64_t _max)
 	int64_t _152_j_1;
 	int64_t _150_i_5;
 	int64_t _152_j_3;
-	struct struct_3 _height_4;
+	struct struct_4 _height_4;
 	int64_t _max_7;
 	int64_t _22;
 	int64_t _23;
 	int64_t _150_i_1;
 	int64_t _150_i_6;
-	struct struct_3 _height_5;
+	struct struct_4 _height_5;
 	int64_t _max_8;
 	int64_t _max_9;
 	_height_0 = _height;
@@ -3760,6 +3825,72 @@ L343:; // incoming:2
 L345:; // incoming:1
 	_0 = _y_1;
 	goto L343;
+end:;
+	return retval;
+}
+
+struct struct_8 test_testModule_testFn(int64_t _x)
+{
+	struct struct_8 retval;
+	struct struct_8 _0;
+	int64_t _1;
+	bool _2;
+	int64_t _x_0;
+	int64_t _3;
+	bool _4;
+	int64_t _x_1;
+	int64_t _5;
+	int64_t _9;
+	int64_t _7;
+	_x_0 = _x;
+L366:; // incoming:1
+	_1 = 0;
+	_2 = _x_0 != _1;
+	if (!_2) {
+		goto L371;
+	} else {
+		_x_1 = _x_0;
+		goto L367;
+	}
+L367:; // incoming:1
+	_3 = 1;
+	_4 = _x_1 != _3;
+	if (!_4) {
+		goto L370;
+	} else {
+		goto L368;
+	}
+L368:; // incoming:1
+	_5 = 5;
+	_0 = (struct struct_8) {_5};
+	goto L369;
+L369:; // incoming:3
+	retval = _0;
+	goto end;
+L370:; // incoming:1
+	_9 = 4;
+	_0 = (struct struct_8) {_9};
+	goto L369;
+L371:; // incoming:1
+	_7 = 3;
+	_0 = (struct struct_8) {_7};
+	goto L369;
+end:;
+	return retval;
+}
+
+struct struct_9 test_testModule_ope(struct struct_1 _filename)
+{
+	struct struct_9 retval;
+	int64_t _0;
+	int64_t _1;
+	struct struct_1 _filename_0;
+	_filename_0 = _filename;
+L372:; // incoming:1
+	_0 = 8;
+	_1 = 4;
+	retval = (struct struct_9) {_0, _1};
+	goto end;
 end:;
 	return retval;
 }

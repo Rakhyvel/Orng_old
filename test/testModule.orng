@@ -1,6 +1,26 @@
 testModule::Module = (
+	A::Type = (|a, b, c:Int)
+	B::Type = (|c:Int, d, e)
+
+	ope::(filename:String)->A||B!Int = 4
+
+	testFn::(x:Int)->B||A =
+		case x {
+			0 -> A.a
+			1 -> A.b
+			else -> A.c
+		}
+
 	main::(args:[]String)->Int = {
 		leetcode.test_all()
-		0
+
+		x:A||B = testFn(args.length)
+		if x == B.c {
+			std.system.println("was B.c")
+		} else {
+			std.system.println("wasn't B.c")
+		}
+
+		ope("hello").success
 	}
 )

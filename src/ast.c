@@ -30,6 +30,7 @@ const ASTNode* BOOL_TYPE = NULL;
 const ASTNode* TYPE_TYPE = NULL;
 const ASTNode* UNDEF_TYPE = NULL;
 const ASTNode* VOID_ADDR_TYPE = NULL;
+const ASTNode* MAYBE_VOID_TYPE = NULL;
 
 const ASTNode* TRUE_AST = NULL;
 const ASTNode* FALSE_AST = NULL;
@@ -68,6 +69,25 @@ ASTNode* createArrayTypeNode(ASTNode* baseType, int length)
     return array;
 }
 
+ASTNode* createMaybeType(ASTNode* somethingBaseType)
+{
+    ASTNode* maybe = AST_Create_enum(NULL, (Position) { NULL, 0, 0, 0 });
+
+    SymbolNode* nothingSymbol = Symbol_Create("nothing", SYMBOL_VARIABLE, NULL, (Position) { NULL, 0, 0, 0 });
+    ASTNode* nothingDefine = AST_Create_define(nothingSymbol, NULL, (Position) { NULL, 0, 0, 0 });
+    ASTNode* nothingType = VOID_TYPE;
+    nothingSymbol->type = nothingType;
+
+    SymbolNode* somethingSymbol = Symbol_Create("something", SYMBOL_VARIABLE, NULL, (Position) { NULL, 0, 0, 0 });
+    ASTNode* somethingDefine = AST_Create_define(somethingSymbol, NULL, (Position) { NULL, 0, 0, 0 });
+    somethingSymbol->type = somethingBaseType;
+
+    List_Append(maybe->_enum.defines, nothingDefine);
+    List_Append(maybe->_enum.defines, somethingDefine);
+
+    return maybe;
+}
+
 void AST_Init()
 {
     INT8_TYPE = AST_Create_ident("Int8", NULL, (Position) { NULL, 0, 0, 0 });
@@ -92,6 +112,8 @@ void AST_Init()
     TRUE_AST = AST_Create_true(NULL, (Position) { NULL, 0, 0, 0 });
     FALSE_AST = AST_Create_false(NULL, (Position) { NULL, 0, 0, 0 });
     NOTHING_AST = AST_Create_nothing(NULL, (Position) { NULL, 0, 0, 0 });
+
+    MAYBE_VOID_TYPE = createMaybeType(VOID_TYPE);
 }
 
 /*
@@ -373,22 +395,6 @@ ASTNode* AST_Create_lte(struct astNode* left, struct astNode* right, struct symb
     ASTNode* retval = AST_Create(AST_LTE, scope, pos);
     retval->binop.left = left;
     retval->binop.right = right;
-    return retval;
-}
-
-ASTNode* AST_Create_isTag(struct astNode* expr, int tag, struct symbolNode* scope, struct position pos)
-{
-    ASTNode* retval = AST_Create(AST_IS_TAG, scope, pos);
-    retval->enumLiteral.expr = expr;
-    retval->enumLiteral.tag = tag;
-    return retval;
-}
-
-ASTNode* AST_Create_isntTag(struct astNode* expr, int tag, struct symbolNode* scope, struct position pos)
-{
-    ASTNode* retval = AST_Create(AST_ISNT_TAG, scope, pos);
-    retval->enumLiteral.expr = expr;
-    retval->enumLiteral.tag = tag;
     return retval;
 }
 
@@ -692,6 +698,14 @@ ASTNode* AST_Create_enum(struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_ENUM, scope, pos);
     retval->paramlist.defines = List_Create();
+    return retval;
+}
+
+ASTNode* AST_Create_union(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos)
+{
+    ASTNode* retval = AST_Create(AST_UNION, scope, pos);
+    retval->binop.left = left;
+    retval->binop.right = right;
     return retval;
 }
 

@@ -508,6 +508,32 @@ SymbolVersion* defaultValue(CFG* cfg, ASTNode* type)
         appendInstruction(cfg, ir);
         return temp;
     }
+    case AST_ENUM: {
+        ASTNode* firstDefine = List_Get(type->_enum.defines, 0);
+        SymbolNode* firstVar = firstDefine->define.symbol;
+        int tagID = getTag(firstVar->name, firstVar->type);
+
+        SymbolVersion* tag = tempSymbolVersion(cfg, INT64_TYPE);
+        IR* tagIR = createIR_int(IR_LOAD_INT, tag, NULL, NULL, tagID, type->pos);
+        tag->def = tagIR;
+        appendInstruction(cfg, tagIR);
+
+        SymbolVersion* expr = defaultValue(cfg, firstVar->type);
+
+        SymbolVersion* temp = tempSymbolVersion(cfg, type);
+        IR* ir = createIR(IR_LOAD_ARGLIST, temp, NULL, NULL, type->pos);
+        temp->def = ir;
+        ir->listData = List_Create();
+        List_Append(ir->listData, tag);
+        if (expr) {
+            List_Append(ir->listData, expr);
+        }
+        appendInstruction(cfg, ir);
+        return temp;
+    }
+    case AST_VOID: {
+        return NULL;
+	}
     }
 }
 
@@ -657,6 +683,28 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
         appendInstruction(cfg, ir);
         return temp;
     }
+    case AST_NOTHING: {
+        SymbolVersion* tag = tempSymbolVersion(cfg, INT64_TYPE);
+        IR* tagIR = createIR_int(IR_LOAD_INT, tag, NULL, NULL, getTag("nothing", VOID_TYPE), node->pos);
+        tag->def = tagIR;
+        appendInstruction(cfg, tagIR);
+
+        SymbolVersion* expr = NULL;
+        if (node->enumLiteral.expr) {
+            expr = flattenAST(cfg, node->enumLiteral.expr, returnLabel, breakLabel, continueLabel, false);
+        }
+
+        SymbolVersion* temp = tempSymbolVersion(cfg, MAYBE_VOID_TYPE);
+        IR* ir = createIR(IR_LOAD_ARGLIST, temp, NULL, NULL, node->pos);
+        temp->def = ir;
+        ir->listData = List_Create();
+        List_Append(ir->listData, tag);
+        if (expr) {
+            List_Append(ir->listData, expr);
+        }
+        appendInstruction(cfg, ir);
+        return temp;
+    }
     case AST_STRING: {
         SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
 
@@ -778,7 +826,6 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
             var->def = phony; // Done just so that it is considered live, I think. Has no real "def", since it's run-time dependent
             appendInstruction(cfg, phony);
         }
-        SymbolVersion* caseExpr = flattenAST(cfg, node->_case.expr, returnLabel, breakLabel, continueLabel, false);
 
         // Generate a list of labels for each mapping, and an else label if there is one
         List* mappingLabels = List_Create();
@@ -797,6 +844,7 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
             {
                 SymbolVersion* mappingExpr = flattenAST(cfg, elem2->data, returnLabel, breakLabel, continueLabel, false);
                 SymbolVersion* notEqualSymbol = tempSymbolVersion(cfg, BOOL_TYPE);
+                SymbolVersion* caseExpr = flattenAST(cfg, node->_case.expr, returnLabel, breakLabel, continueLabel, false);
                 IR* notEqualIR = createIR(IR_NEQ, notEqualSymbol, caseExpr, mappingExpr, node->pos);
                 notEqualSymbol->def = notEqualIR;
                 appendInstruction(cfg, notEqualIR);
@@ -1145,9 +1193,28 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
         return temp;
     }
     case AST_EQ: {
-        SymbolVersion* left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel, false);
-        SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, false);
+        SymbolVersion* left = NULL;
+        SymbolVersion* right = NULL;
         SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
+
+        if (node->binop.left->type->astType == AST_ENUM) {
+            SymbolVersion* leftEnum = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel, false);
+            left = tempSymbolVersion(cfg, INT64_TYPE);
+            IR* leftIR = createIR(IR_DOT, left, leftEnum, NULL, node->pos);
+            leftIR->strData = "tag";
+            left->def = leftIR;
+            appendInstruction(cfg, leftIR);
+
+            SymbolVersion* rightEnum = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, false);
+            right = tempSymbolVersion(cfg, INT64_TYPE);
+            IR* rightIR = createIR(IR_DOT, right, rightEnum, NULL, node->pos);
+            rightIR->strData = "tag";
+            right->def = rightIR;
+            appendInstruction(cfg, rightIR);
+        } else {
+            left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel, false);
+            right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, false);
+        }
 
         IR* ir = createIR(IR_EQ, temp, left, right, node->pos);
         temp->def = ir;
@@ -1155,9 +1222,28 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
         return temp;
     }
     case AST_NEQ: {
-        SymbolVersion* left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel, false);
-        SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, false);
+        SymbolVersion* left = NULL;
+        SymbolVersion* right = NULL;
         SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
+
+        if (node->binop.left->type->astType == AST_ENUM) {
+            SymbolVersion* leftEnum = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel, false);
+            left = tempSymbolVersion(cfg, INT64_TYPE);
+            IR* leftIR = createIR(IR_DOT, left, leftEnum, NULL, node->pos);
+            leftIR->strData = "tag";
+            left->def = leftIR;
+            appendInstruction(cfg, leftIR);
+
+            SymbolVersion* rightEnum = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, false);
+            right = tempSymbolVersion(cfg, INT64_TYPE);
+            IR* rightIR = createIR(IR_DOT, right, rightEnum, NULL, node->pos);
+            rightIR->strData = "tag";
+            right->def = rightIR;
+            appendInstruction(cfg, rightIR);
+        } else {
+            left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel, false);
+            right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, false);
+        }
 
         IR* ir = createIR(IR_NEQ, temp, left, right, node->pos);
         temp->def = ir;
@@ -1200,44 +1286,6 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
         SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
 
         IR* ir = createIR(IR_LTE, temp, left, right, node->pos);
-        temp->def = ir;
-        appendInstruction(cfg, ir);
-        return temp;
-    }
-    case AST_IS_TAG: {
-        SymbolVersion* left = flattenAST(cfg, node->enumLiteral.expr, returnLabel, breakLabel, continueLabel, false);
-        SymbolVersion* enumDot = tempSymbolVersion(cfg, INT64_TYPE);
-        IR* enumIR = createIR(IR_DOT, enumDot, left, NULL, node->pos);
-        enumIR->strData = "tag";
-        enumDot->def = enumIR;
-        appendInstruction(cfg, enumIR);
-
-        SymbolVersion* right = tempSymbolVersion(cfg, INT64_TYPE);
-        IR* tagIR = createIR_int(IR_LOAD_INT, right, NULL, NULL, node->enumLiteral.tag, node->pos);
-        right->def = tagIR;
-        appendInstruction(cfg, tagIR);
-
-        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
-        IR* ir = createIR(IR_EQ, temp, enumDot, right, node->pos);
-        temp->def = ir;
-        appendInstruction(cfg, ir);
-        return temp;
-    }
-    case AST_ISNT_TAG: {
-        SymbolVersion* left = flattenAST(cfg, node->enumLiteral.expr, returnLabel, breakLabel, continueLabel, false);
-        SymbolVersion* enumDot = tempSymbolVersion(cfg, INT64_TYPE);
-        IR* enumIR = createIR(IR_DOT, enumDot, left, NULL, node->pos);
-        enumIR->strData = "tag";
-        enumDot->def = enumIR;
-        appendInstruction(cfg, enumIR);
-
-        SymbolVersion* right = tempSymbolVersion(cfg, INT64_TYPE);
-        IR* tagIR = createIR_int(IR_LOAD_INT, right, NULL, NULL, node->enumLiteral.tag, node->pos);
-        right->def = tagIR;
-        appendInstruction(cfg, tagIR);
-
-        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
-        IR* ir = createIR(IR_NEQ, temp, enumDot, right, node->pos);
         temp->def = ir;
         appendInstruction(cfg, ir);
         return temp;
@@ -1403,16 +1451,6 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
         return temp;
     }
     case AST_ORELSE: {
-        // temp = phony
-        // dot = left.tag
-        // condition = dot != 0
-        // branch if false (condition, else)
-        // temp = left.something
-        // goto end
-        // else:
-        // temp = right
-        // end:
-
         SymbolVersion* var = tempSymbolVersion(cfg, node->type);
         IR* phony = createIR(IR_PHONY, var, NULL, NULL, node->pos);
         phony->listData = List_Create();
@@ -2552,7 +2590,7 @@ bool deadCode(CFG* cfg)
         // Adopt basic blocks with only one incoming block
         if (bb->next && bb->entry && !bb->hasBranch && bb->next->incoming == 1) {
             IR* end = getTail(bb->entry);
-            LOG("block adoption\n");
+            LOG("block adoption of L%d\n", bb->next->id);
 
             // This is the cause of the infinite loop
             forall(elem, bb->nextArguments) // no need for branch args since !bb->hasBranch
@@ -2604,20 +2642,26 @@ bool deadCode(CFG* cfg)
                 bb->next = bb->branch;
             }
             retval = true;
-            LOG("false branch\n");
+            LOG("false branch L%d\n", bb->id);
         }
 
         // Remove jump chains
         if (bb->next && !bb->next->entry && !bb->next->hasBranch) {
             bb->next = bb->next->next;
             retval = true;
-            LOG("jump chain\n");
+            LOG("jump chain L%d\n", bb->id);
         }
 
         if (bb->branch && !bb->branch->entry && !bb->branch->hasBranch) {
             bb->branch = bb->branch->next;
             retval = true;
-            LOG("branch chain\n");
+            LOG("branch chain L%d\n", bb->id);
+        }
+
+        if (bb->hasBranch && bb->branch == bb->next) {
+            bb->hasBranch = false;
+            LOG("same branch L%d\n", bb->id);
+            retval = true;
         }
     }
 

@@ -82,9 +82,9 @@ static void printType(FILE* out, ASTNode* type)
         printType(out, type->unop.expr);
         fprintf(out, "*");
         break;
+    case AST_ENUM:
     case AST_ARRAY:
-    case AST_PARAMLIST:
-    case AST_ENUM: {
+    case AST_PARAMLIST: {
         fprintf(out, "struct ");
         printStructOrd(out, type);
     } break;
@@ -143,14 +143,14 @@ static void generateParamList(FILE* out, ASTNode* parameters)
     for (; paramElem != List_End(parameters->paramlist.defines); paramElem = paramElem->next) {
         ASTNode* define = paramElem->data;
         SymbolNode* var = define->define.symbol;
-        generateDefine(out, var, true);
+        generateDefine(out, var, true, false);
         if (paramElem != List_End(parameters->paramlist.defines)->prev) {
             fprintf(out, ", ");
         }
     }
 }
 
-static void generateDefine(FILE* out, SymbolNode* var, bool param)
+static void generateDefine(FILE* out, SymbolNode* var, bool param, bool field)
 {
     printType(out, var->type);
     fprintf(out, " ");
@@ -158,7 +158,11 @@ static void generateDefine(FILE* out, SymbolNode* var, bool param)
     if (functionPtr) {
         fprintf(out, "(*");
     }
-    printPath(out, var);
+    if (!field) {
+        printPath(out, var);
+    } else {
+        fprintf(out, "%s", var->name);
+    }
     if (functionPtr) {
         fprintf(out, ") (");
         ASTNode* params = var->type->function.domainType;
@@ -193,8 +197,7 @@ static void generateStruct(FILE* out, DGraph* graphNode)
     }
 
     ASTNode* _struct = graphNode->structDef;
-    char* structOrdStr = myItoa(graphNode->ordinal + 1);
-    fprintf(out, "struct struct_%s {\n", structOrdStr);
+    fprintf(out, "struct struct_%d {\n", graphNode->ordinal + 1);
 
     ListElem* paramElem = List_Begin(_struct->paramlist.defines);
     // For each parameter in the procedure's parameter list, print it out
@@ -203,7 +206,7 @@ static void generateStruct(FILE* out, DGraph* graphNode)
         SymbolNode* var = define->define.symbol;
         if (!(var->symbolType == SYMBOL_FUNCTION && var->type->isConst)) {
             fprintf(out, "\t");
-            generateDefine(out, var, true);
+            generateDefine(out, var, true, true);
             fprintf(out, ";\n");
         }
     }
@@ -230,8 +233,7 @@ static void generateEnum(FILE* out, DGraph* graphNode)
     }
 
     ASTNode* _enum = graphNode->structDef;
-    char* structOrdStr = myItoa(graphNode->ordinal + 1);
-    fprintf(out, "struct struct_%s {\n\tint64_t tag;\n", structOrdStr);
+    fprintf(out, "struct struct_%d {\n\tint64_t tag;\n", graphNode->ordinal + 1);
 
     int numOfNonVoidMembers = 0;
     ListElem* paramElem = List_Begin(_enum->_enum.defines);
@@ -244,6 +246,10 @@ static void generateEnum(FILE* out, DGraph* graphNode)
         }
     }
 
+    if (graphNode->ordinal + 1 == 13) {
+        printf("ha");
+    }
+
     if (numOfNonVoidMembers > 0) {
         fprintf(out, "\tunion {\n");
 
@@ -254,7 +260,7 @@ static void generateEnum(FILE* out, DGraph* graphNode)
             SymbolNode* var = define->define.symbol;
             if (!(var->symbolType == SYMBOL_FUNCTION && var->type->isConst) && var->type->astType != AST_VOID) {
                 fprintf(out, "\t\t");
-                generateDefine(out, var, true);
+                generateDefine(out, var, true, true);
                 fprintf(out, ";\n");
             }
         }
@@ -413,8 +419,8 @@ static void generateLValueIR(FILE* out, SymbolVersion* version)
 
 static void generateIR(FILE* out, CFG* cfg, IR* ir)
 {
-	// Don't generate L value IRs, UNLESS they are copies
-    if (ir->dest && ir->dest->lvalue && ir->irType != IR_COPY) {
+    // Don't generate L value IRs, UNLESS they are copies
+    if (ir->dest && ir->dest->lvalue && ir->irType != IR_COPY && ir->irType != IR_LOAD_ARGLIST && ir->irType != IR_LOAD_ARRAY_LITERAL && ir->irType != IR_LOAD_DEFAULT_ARRAY && ir->irType != IR_LOAD_STRING) {
         return;
     }
 

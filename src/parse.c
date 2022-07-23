@@ -895,9 +895,23 @@ static ASTNode* parseTypeDot(SymbolNode* scope)
     return factor;
 }
 
+static ASTNode* parseTypeUnion(SymbolNode* scope)
+{
+    ASTNode* factor = parseTypeDot(scope);
+    struct token* token = NULL;
+    while (true) {
+        if ((token = accept(TOKEN_DBAR)) != NULL) {
+            factor = AST_Create_union(factor, parseTypeDot(scope), scope, token->pos);
+        } else {
+            break;
+        }
+    }
+    return factor;
+}
+
 ASTNode* parseTypeFunction(SymbolNode* scope)
 {
-    ASTNode* child = parseTypeDot(scope);
+    ASTNode* child = parseTypeUnion(scope);
     struct token* token = NULL;
     while (true) {
         if ((token = accept(TOKEN_ARROW)) != NULL) {
