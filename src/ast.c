@@ -75,8 +75,7 @@ ASTNode* createMaybeType(ASTNode* somethingBaseType)
 
     SymbolNode* nothingSymbol = Symbol_Create("nothing", SYMBOL_VARIABLE, NULL, (Position) { NULL, 0, 0, 0 });
     ASTNode* nothingDefine = AST_Create_define(nothingSymbol, NULL, (Position) { NULL, 0, 0, 0 });
-    ASTNode* nothingType = VOID_TYPE;
-    nothingSymbol->type = nothingType;
+    nothingSymbol->type = VOID_TYPE;
 
     SymbolNode* somethingSymbol = Symbol_Create("something", SYMBOL_VARIABLE, NULL, (Position) { NULL, 0, 0, 0 });
     ASTNode* somethingDefine = AST_Create_define(somethingSymbol, NULL, (Position) { NULL, 0, 0, 0 });
@@ -279,12 +278,29 @@ ASTNode* AST_Create_modulus(struct astNode* left, struct astNode* right, struct 
     return retval;
 }
 
-ASTNode* AST_Create_orelse(int tag, struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos)
+ASTNode* AST_Create_orelse(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_ORELSE, scope, pos);
-    retval->orelse.left = left;
-    retval->orelse.right = right;
-    retval->orelse.tag = tag;
+    retval->taggedBinop.tag = -1;
+    retval->taggedBinop.left = left;
+    retval->taggedBinop.right = right;
+    return retval;
+}
+
+ASTNode* AST_Create_catch(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos)
+{
+    ASTNode* retval = AST_Create(AST_CATCH, scope, pos);
+    retval->taggedBinop.tag = -1;
+    retval->taggedBinop.left = left;
+    retval->taggedBinop.right = right;
+    return retval;
+}
+
+ASTNode* AST_Create_try(struct astNode* expr, struct symbolNode* scope, struct position pos)
+{
+    ASTNode* retval = AST_Create(AST_TRY, scope, pos);
+    retval->taggedUnop.tag = -1;
+    retval->taggedUnop.expr = expr;
     return retval;
 }
 
@@ -704,6 +720,14 @@ ASTNode* AST_Create_enum(struct symbolNode* scope, struct position pos)
 ASTNode* AST_Create_union(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_UNION, scope, pos);
+    retval->binop.left = left;
+    retval->binop.right = right;
+    return retval;
+}
+
+ASTNode* AST_Create_error(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos)
+{
+    ASTNode* retval = AST_Create(AST_ERROR, scope, pos);
     retval->binop.left = left;
     retval->binop.right = right;
     return retval;

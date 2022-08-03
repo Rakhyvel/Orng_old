@@ -43,6 +43,9 @@ enum astType {
     AST_SLICE,
     AST_ADDROF,
     AST_ORELSE,
+	// Errors
+	AST_CATCH,
+	AST_TRY,
     // Boolean
     AST_NOT,
     AST_OR,
@@ -100,6 +103,7 @@ enum astType {
     AST_PARAMLIST,
     AST_ENUM,
 	AST_UNION,
+	AST_ERROR,
     AST_FUNCTION,
     AST_ADDR,
     AST_ARRAY,
@@ -150,11 +154,16 @@ typedef struct astNode_enumLiteral {
     struct astNode* expr;
 } astNode_enumLiteral;
 
-typedef struct astNode_orelse {
+typedef struct astNode_taggedUnop {
+    int tag;
+    struct astNode* expr;
+} astNode_taggedUnop;
+
+typedef struct astNode_taggedBinop {
     int tag;
     struct astNode* left;
     struct astNode* right;
-} astNode_orelse;
+} astNode_taggedBinop;
 
 typedef struct astNode_unop {
     struct astNode* expr;
@@ -277,7 +286,8 @@ typedef struct astNode {
         astNode_namedArg namedArg;
         astNode_arrayLiteral arrayLiteral;
         astNode_enumLiteral enumLiteral;
-        astNode_orelse orelse;
+        astNode_taggedUnop taggedUnop;
+        astNode_taggedBinop taggedBinop;
         astNode_unop unop;
         astNode_binop binop;
         astNode_call call;
@@ -345,7 +355,9 @@ ASTNode* AST_Create_subtract(struct astNode* left, struct astNode* right, struct
 ASTNode* AST_Create_multiply(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_divide(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_modulus(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
-ASTNode* AST_Create_orelse(int tag, struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_orelse(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_catch(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_try(struct astNode* expr, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_paren(struct astNode* expr, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_deref(struct astNode* expr, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_index(struct astNode* arrayExpr, struct astNode* subscript, struct symbolNode* scope, struct position pos);
@@ -397,6 +409,7 @@ ASTNode* AST_Create_cast(struct astNode* expr, struct astNode* type, struct symb
 ASTNode* AST_Create_paramlist(struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_enum(struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_union(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_error(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_array(struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_function(struct astNode* domain, struct astNode* codomain, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_addr(struct astNode* type, struct symbolNode* scope, struct position pos);

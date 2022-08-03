@@ -452,7 +452,9 @@ static ASTNode* parsePostfix(SymbolNode* scope)
         } else if ((token = accept(TOKEN_QMARK)) != NULL) {
             child = AST_Create_maybe(child, scope, token->pos);
         } else if ((token = accept(TOKEN_ORELSE)) != NULL) {
-            child = AST_Create_orelse(-1, child, parseStatement(scope), scope, token->pos);
+            child = AST_Create_orelse(child, parseStatement(scope), scope, token->pos);
+        } else if ((token = accept(TOKEN_CATCH)) != NULL) {
+            child = AST_Create_catch(child, parseStatement(scope), scope, token->pos);
         } else {
             break;
         }
@@ -476,6 +478,8 @@ static ASTNode* parsePrefix(SymbolNode* scope)
         prefix = AST_Create_bitNot(parsePrefix(scope), scope, token->pos);
     } else if ((token = accept(TOKEN_SIZEOF)) != NULL) {
         prefix = AST_Create_sizeof(parseType(scope, false), scope, token->pos);
+    } else if ((token = accept(TOKEN_TRY)) != NULL) {
+        prefix = AST_Create_try(parseExpr(scope), scope, token->pos);
     } else {
         prefix = parsePostfix(scope);
     }
@@ -909,9 +913,23 @@ static ASTNode* parseTypeUnion(SymbolNode* scope)
     return factor;
 }
 
+static ASTNode* parseTypeError(SymbolNode* scope)
+{
+    ASTNode* factor = parseTypeUnion(scope);
+    struct token* token = NULL;
+    while (true) {
+        if ((token = accept(TOKEN_EMARK)) != NULL) {
+            factor = AST_Create_error(factor, parseType(scope), scope, token->pos);
+        } else {
+            break;
+        }
+    }
+    return factor;
+}
+
 ASTNode* parseTypeFunction(SymbolNode* scope)
 {
-    ASTNode* child = parseTypeUnion(scope);
+    ASTNode* child = parseTypeError(scope);
     struct token* token = NULL;
     while (true) {
         if ((token = accept(TOKEN_ARROW)) != NULL) {

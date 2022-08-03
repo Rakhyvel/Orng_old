@@ -315,6 +315,10 @@ const char* Token_GetRepr(_TokenType type)
         return "sizeof";
     case TOKEN_ORELSE:
         return "orelse";
+    case TOKEN_TRY:
+        return "try";
+    case TOKEN_CATCH:
+        return "catch";
     case TOKEN_ARROW:
         return "->";
     case TOKEN_BIG_ARROW:

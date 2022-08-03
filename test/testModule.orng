@@ -1,26 +1,20 @@
 testModule::Module = (
 	A::Type = (|a, b, c:Int)
-	B::Type = (|c:Int, d, e)
+	B::Type = (|c:Int, d:Char, e)
 
-	ope::(filename:String)->A||B!Int = 4
+	FileError::Type = (| 
+		fileNotFound
+		resourceBusy
+	)
 
-	testFn::(x:Int)->B||A =
-		case x {
-			0 -> A.a
-			1 -> A.b
-			else -> A.c
-		}
+	AllocationError::Type = (|
+		outOfMemory
+		resourceBusy
+	)
 
-	main::(args:[]String)->Int = {
-		leetcode.test_all()
+	givesAnError::(filename:String)->FileError||AllocationError!Int = FileError.fileNotFound
 
-		x:A||B = testFn(args.length)
-		if x == B.c {
-			std.system.println("was B.c")
-		} else {
-			std.system.println("wasn't B.c")
-		}
+	hmm::()->FileError||AllocationError!Int = try givesAnError("Hello!.txt")
 
-		ope("hello").success
-	}
+	main::(args:[]String)->Int = hmm() catch 0
 )

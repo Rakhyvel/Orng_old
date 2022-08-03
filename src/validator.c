@@ -405,6 +405,18 @@ static ASTNode* expandTypeIdent(ASTNode* type, bool reassigning)
         }
         unionEnums(newEnumType, expandedRight);
         expanded = newEnumType;
+    } else if (expanded->astType == AST_ERROR) {
+        ASTNode* newEnumType = AST_Create_enum(expanded->scope, expanded->pos);
+        ASTNode* expandedLeft = expandTypeIdent(expanded->binop.left, reassigning);
+        ASTNode* expandedRight = expandTypeIdent(expanded->binop.right, reassigning);
+
+        SymbolNode* successSymbol = Symbol_Create("success", SYMBOL_VARIABLE, expanded->scope, expanded->pos);
+        ASTNode* successDefine = AST_Create_define(successSymbol, expanded->scope, expanded->pos);
+        successSymbol->type = expandedRight;
+        List_Append(newEnumType->_enum.defines, successDefine);
+
+        unionEnums(newEnumType, expandedLeft);
+        expanded = newEnumType;
     } else if (expanded->astType == AST_FUNCTION) {
         expanded->function.domainType = expandTypeIdent(expanded->function.domainType, true);
         expanded->function.codomainType = expandTypeIdent(expanded->function.codomainType, true);
@@ -548,9 +560,9 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
         break;
     }
     case AST_ORELSE: {
-        ASTNode* left = validateAST(node->orelse.left, NULL);
+        ASTNode* left = node->taggedBinop.left;
         ASTNode* leftType = getType(left, false, false);
-        ASTNode* right = validateAST(node->orelse.right, NULL);
+        ASTNode* right = node->taggedBinop.right;
         ASTNode* rightType = getType(right, false, false);
 
         ASTNode* innerType = NULL;
@@ -565,6 +577,40 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
         type = innerType;
         break;
     }
+    case AST_CATCH: { // a catch expr has the type of the success field
+        ASTNode* left = node->taggedBinop.left;
+        ASTNode* leftType = getType(left, false, false);
+        ASTNode* right = node->taggedBinop.right;
+        ASTNode* rightType = getType(right, false, false);
+
+        ASTNode* innerType = NULL;
+        ListElem* elem = List_Begin(leftType->_enum.defines);
+        for (; elem != List_End(leftType->_enum.defines); elem = elem->next) {
+            ASTNode* define = elem->data;
+            if (!strcmp(define->define.symbol->name, "success")) {
+                innerType = define->define.symbol->type;
+                break;
+            }
+        }
+        type = innerType;
+        break;
+    }
+    case AST_TRY: {
+        ASTNode* left = node->taggedUnop.expr;
+        ASTNode* leftType = getType(left, false, false);
+
+        ASTNode* innerType = NULL;
+        ListElem* elem = List_Begin(leftType->_enum.defines);
+        for (; elem != List_End(leftType->_enum.defines); elem = elem->next) {
+            ASTNode* define = elem->data;
+            if (!strcmp(define->define.symbol->name, "success")) {
+                innerType = define->define.symbol->type;
+                break;
+            }
+        }
+        type = innerType;
+        break;
+	}
     case AST_PAREN: {
         type = getType(List_Get(node->arglist.args, 0), false, reassigning);
         break;
@@ -926,6 +972,7 @@ bool typesAreEquivalent(ASTNode* a, ASTNode* b)
             aExpand = var->def;
         }
     }
+
     if (bExpand->astType == AST_EXTERN) {
         SymbolNode* var = bExpand->_extern.symbol;
         if (var->def->astType == AST_UNDEF) {
@@ -1356,7 +1403,7 @@ ASTNode* tryCoerceToEnum(ASTNode* enumType, ASTNode* member)
             ASTNode* define = elem->data;
             SymbolNode* var = define->define.symbol;
             ASTNode* defineType = var->type;
-            if (typesAreEquivalent(memberType, defineType)) {
+            if (typesAreEquivalent(memberType, defineType) && typesAreEquivalent(defineType, memberType)) {
                 ASTNode* retval = AST_Create_enumLiteral(getTag(var->name, var->type), member, member->scope, member->pos);
                 retval->type = expandedEnumType;
                 return retval;
@@ -2362,13 +2409,13 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
         break;
     }
     case AST_ORELSE: {
-        ASTNode* left = validateAST(node->orelse.left, NULL);
+        ASTNode* left = validateAST(node->taggedBinop.left, NULL);
         ASTNode* leftType = getType(left, false, false);
-        ASTNode* right = validateAST(node->orelse.right, NULL);
+        ASTNode* right = validateAST(node->taggedBinop.right, NULL);
         ASTNode* rightType = getType(right, false, false);
 
         if (leftType->astType != AST_ENUM) {
-            error(left->pos, "left side of orelse must be enum type");
+            error(left->pos, "left side of orelse must be maybe enum type");
         }
 
         ASTNode* innerType = NULL;
@@ -2381,13 +2428,84 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
             }
         }
 
-        if (rightType->astType != AST_UNDEF && !(typesAreEquivalent(rightType, innerType) || typesAreEquivalent(innerType, rightType))) {
+        if (!innerType) {
+            error(left->pos, "left side of orelse must be maybe enum type");
+        }
+
+        if (rightType->astType != AST_UNDEF && !typesAreEquivalent(rightType, innerType)) {
             incompatibleTypesError(node->pos, innerType, rightType);
         }
 
-        node->orelse.tag = getTagEnum("nothing", leftType);
-        node->orelse.left = left;
-        node->orelse.right = right;
+        node->taggedBinop.tag = getTagEnum("nothing", leftType);
+        node->taggedBinop.left = left;
+        node->taggedBinop.right = right;
+        retval = node;
+        break;
+    }
+    case AST_CATCH: {
+        ASTNode* left = validateAST(node->taggedBinop.left, NULL);
+        ASTNode* leftType = getType(left, false, false);
+        ASTNode* right = validateAST(node->taggedBinop.right, NULL);
+        ASTNode* rightType = getType(right, false, false);
+
+        if (leftType->astType != AST_ENUM) {
+            error(left->pos, "left side of catch must be error enum type");
+        }
+
+        ASTNode* innerType = NULL;
+        ListElem* elem = List_Begin(leftType->_enum.defines);
+        for (; elem != List_End(leftType->_enum.defines); elem = elem->next) {
+            ASTNode* define = elem->data;
+            if (!strcmp(define->define.symbol->name, "success")) {
+                innerType = define->define.symbol->type;
+                break;
+            }
+        }
+
+        if (!innerType) {
+            error(left->pos, "left side of catch must be error enum type");
+        }
+
+        if (rightType->astType != AST_UNDEF && !typesAreEquivalent(rightType, innerType)) {
+            incompatibleTypesError(node->pos, innerType, rightType);
+        }
+
+        node->taggedBinop.tag = getTagEnum("success", leftType);
+        node->taggedBinop.left = left;
+        node->taggedBinop.right = right;
+        retval = node;
+        break;
+    }
+    case AST_TRY: {
+        ASTNode* validRetval = validateAST(node->taggedUnop.expr, coerceType);
+        ASTNode* retType = getType(validRetval, false, false);
+
+        // return must be in function
+        SymbolNode* function = Symbol_TypeAncestor(node->scope, SYMBOL_FUNCTION);
+        if (function == NULL) {
+            function = Symbol_TypeAncestor(node->scope, SYMBOL_FUNCTION);
+            if (function == NULL) {
+                error(node->pos, "return not within function");
+                break;
+            }
+        }
+        // return type matches function type
+        ASTNode* functionType = function->type;
+        ASTNode* functionRetType = functionType->function.codomainType;
+        if (retType->astType == AST_VOID) {
+            typesAreEquivalent(retType, functionRetType);
+        }
+        if (!typesAreEquivalent(retType, functionRetType)) {
+            ASTNode* coerced = NULL;
+            if (coerced = tryCoerceToEnum(functionRetType, validRetval)) {
+                validRetval = coerced;
+            } else {
+                typeMismatchError(node->pos, functionRetType, retType);
+            }
+        }
+
+        node->taggedUnop.tag = getTagEnum("success", retType);
+        node->taggedUnop.expr = validRetval;
         retval = node;
         break;
     }

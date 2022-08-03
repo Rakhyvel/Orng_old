@@ -399,11 +399,11 @@ x Generate C code from IR
 		x change syntax so that only one field mapping can have one codomain thingy
 - Go back to adding errors and union type unions
 	- runtime errors
-		- || type operator that operates on any union sets
-			- combines left and right union sets
-			- ok for names to collide, so long as their types are EQUAL (not just subtype)
-			- how do tags work? How can I coerce a union literal?
-				- conversion instruction that maps sub union tags to super union tags
+		x || type operator that operates on any union sets
+			x combines left and right union sets
+			x ok for names to collide, so long as their types are EQUAL (not just subtype)
+			x how do tags work? How can I coerce a union literal?
+				x conversion instruction that maps sub union tags to super union tags
 			Color::Type = (|
 				red			-- tag = 0
 				orange		-- tag = 1
@@ -422,27 +422,16 @@ x Generate C code from IR
 				banana		-- tag = 4
 			)
 			x : Color || Fruit = Color.orange -- needs to be coerced up to superset
-		- <UnionSetType>!<Type> type operator
-			- shorthand for (|success:<Type>) || <UnionSetType>
-			- binds looser than ||
-			- errors are regular unions, become errors with the ! operator
-			- no global error set, but there is the AnyError type which is the union of all error unions
-		- can case on an error union just like any other union set
-			-- uses if-def idiom, very useful! implement it now!!!
-			file = case fileErr := openFile("filename.txt"); fileErr {
-				.success -> fileErr
-				.fileNotFound -> {
-					std.system.println("could not find the file")
-					return fileErr
-				}
-				.fileInUse -> {
-					std.system.println("file is in use by another program")
-					return fileErr
-				}
-			}
+		x <UnionSetType>!<Type> type operator
+			x shorthand for (|success:<Type>) || <UnionSetType>
+			x binds looser than ||
+			x errors are regular enums, become errors with the ! operator
+		x catch unwraps value if no error, or evaluates to default expression
 		- try unwraps value if no error, or returns the error
-		- catch unwraps value if no error, or evaluates to default expression
 		- errdefer is another return exit path if return is an error, a subset of defers (ie it defers all defers, and also errdefers if return is error)
+			- if a return value is detected to not be a successful type, it should follow the error path
+		- !<Type>
+			- infers the error enum set from RHS!
 - Orange should compile the program for you, too
 	- No verbatims, instead write the C file and header, include it, and add it to be included when compiling
 - cleanup!
@@ -471,6 +460,8 @@ x Generate C code from IR
 		- use std::vector and std::map instead of my list and map
 		- some structures could be better represented as classes
 	- rename "expandTypeIdent" to just "expandType"
+	- remove words 'a', 'the' from error messages
+	- fix semantics in parsing functions (instead of prefix/term/factor etc just use child)
 - 'default' keyword which takes in a type and gives its default value
 	if x == default Int64 {
 		std.system.println("x is 0")
@@ -519,6 +510,9 @@ x Generate C code from IR
 		Suit.Clubs    -> 'C'
 		Suit.Spades   -> 'S'
 	}
+	- COUNTERPOINT: some fields are impossible to create an "example expr" to compare with
+		x:(|a:Int, b:Char) = 4
+		-- how to access tags of x?
 - for's with else clause, evaluates to type
 - if's and for's with no else case evaluate to a maybe type
 - parametric types
