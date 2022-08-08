@@ -785,7 +785,7 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
 
                 // Get tag of success type
                 SymbolVersion* tag = tempSymbolVersion(cfg, INT64_TYPE);
-                int tagID = getTag("success", VOID_TYPE);
+                int tagID = getTagEnum("success", var->type);
                 IR* tagIR = createIR_int(IR_LOAD_INT, tag, NULL, NULL, tagID, node->pos);
                 tag->def = tagIR;
                 appendInstruction(cfg, tagIR);
@@ -1021,7 +1021,7 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
 
             // Get tag of success type
             SymbolVersion* tag = tempSymbolVersion(cfg, INT64_TYPE);
-            int tagID = getTag("success", VOID_TYPE);
+            int tagID = getTagEnum("success", var->type);
             IR* tagIR = createIR_int(IR_LOAD_INT, tag, NULL, NULL, tagID, node->pos);
             tag->def = tagIR;
             appendInstruction(cfg, tagIR);

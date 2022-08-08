@@ -1812,6 +1812,8 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
         ASTNode* validBodyBlock = validateAST(node->_if.bodyBlock, coerceType);
         ASTNode* validElseBlock = validateAST(node->_if.elseBlock, coerceType);
 
+        // TODO: if validElseBlock isn't null, set type to coerce type
+
         node->_if.condition = validCondition;
         node->_if.bodyBlock = validBodyBlock;
         node->_if.elseBlock = validElseBlock;

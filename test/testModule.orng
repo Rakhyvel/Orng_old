@@ -21,11 +21,10 @@ testModule::Module = (
 		errdefer std.system.println("Three") 
 		{defer std.system.println("Two")}
 		errdefer std.system.println("One")
-		if filename.length > 4 {
-			return FileError.fileNotFound
-		} else {
-			return 4
-		}
+
+		anError := FileError.fileNotFound
+
+		return anError
 	}
 
 	main::(args:[]String)->Int = givesAnError("Hello") catch 0
