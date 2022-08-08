@@ -69,6 +69,7 @@ typedef struct symVer {
 } SymbolVersion;
 */
 
+// Is this necessary?
 enum terminatorType {
     TERM_JUMP,
     TERM_BRANCH,
