@@ -726,11 +726,14 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
         List* breakLabels = List_Create();
         List* returnLabels = List_Create();
         List* errorLabels = List_Create();
-        forall(elem, node->block.symbol->defers) // TODO: generate defers + err defers for errorLabels
+        forall(elem, node->block.symbol->defers)
         {
             List_Append(continueLabels, createIR_label(node->pos));
             List_Append(breakLabels, createIR_label(node->pos));
             List_Append(returnLabels, createIR_label(node->pos));
+        }
+        forall(elem, node->block.symbol->errdefers)
+        {
             List_Append(errorLabels, createIR_label(node->pos));
         }
         IR* end = createIR_label(node->pos);
@@ -739,18 +742,24 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
         IR* thisBreakLabel = breakLabel;
         IR* thisReturnLabel = returnLabel;
         IR* thisErrorLabel = errorLabel;
-        int deferLabelIndex = node->block.symbol->defers->size;
+        int deferLabelIndex = 0;
+        int errDeferLabelIndex = 0;
 
         SymbolVersion* var = NULL;
         for (ListElem* elem = List_Begin(node->block.children); elem != List_End(node->block.children); elem = elem->next) {
             ASTNode* child = elem->data;
             var = flattenAST(cfg, child, thisReturnLabel, thisBreakLabel, thisContinueLabel, thisErrorLabel, false);
-            if (child->astType == AST_DEFER) { // TODO: if errdefer, advance only error label (?)
-                deferLabelIndex--;
+            if (child->astType == AST_DEFER) {
                 thisContinueLabel = List_Get(continueLabels, deferLabelIndex);
                 thisBreakLabel = List_Get(breakLabels, deferLabelIndex);
                 thisReturnLabel = List_Get(returnLabels, deferLabelIndex);
-                thisErrorLabel = List_Get(errorLabels, deferLabelIndex);
+                thisErrorLabel = List_Get(errorLabels, errDeferLabelIndex);
+                deferLabelIndex++;
+                errDeferLabelIndex++;
+            }
+            if (child->astType == AST_ERRDEFER) {
+                thisErrorLabel = List_Get(errorLabels, errDeferLabelIndex);
+                errDeferLabelIndex++;
             }
         }
 
@@ -760,15 +769,49 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
             IR* ir = createIR(IR_COPY, evalSymbolVersion, var, NULL, node->pos);
             evalSymbolVersion->def = ir;
             appendInstruction(cfg, ir);
+
+            // If eval type is an error enum, and symbol returns an error (create field), add runtime check for tag. If not success tag, branch to error label
+            SymbolNode* parent = node->block.symbol;
+            while (parent->symbolType == SYMBOL_BLOCK) {
+                parent = parent->parent;
+            }
+            if (parent->isError && var->type->astType == AST_ENUM && thisErrorLabel) {
+                // Get tag of expr
+                SymbolVersion* enumDot = tempSymbolVersion(cfg, INT64_TYPE);
+                IR* enumIR = createIR(IR_DOT, enumDot, var, NULL, node->pos);
+                enumIR->strData = "tag";
+                enumDot->def = enumIR;
+                appendInstruction(cfg, enumIR);
+
+                // Get tag of success type
+                SymbolVersion* tag = tempSymbolVersion(cfg, INT64_TYPE);
+                int tagID = getTag("success", VOID_TYPE);
+                IR* tagIR = createIR_int(IR_LOAD_INT, tag, NULL, NULL, tagID, node->pos);
+                tag->def = tagIR;
+                appendInstruction(cfg, tagIR);
+
+                // Compare success tag with expr tag
+                SymbolVersion* condition = tempSymbolVersion(cfg, BOOL_TYPE);
+                IR* conditionIR = createIR(IR_EQ, condition, enumDot, tag, node->pos);
+                condition->def = conditionIR;
+                appendInstruction(cfg, conditionIR);
+
+                // branch to error label if not equal to success
+                appendInstruction(cfg, createIR_branch(IR_BRANCH_IF_FALSE, NULL, condition, NULL, thisErrorLabel, node->pos));
+            }
         }
-		// TODO? test if eval is error enum literal, and if it isn't success field, take error path here instead
 
         generateDefers(cfg, node->block.symbol->defers, continueLabels);
         appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, end, node->pos));
+
         generateDefers(cfg, node->block.symbol->defers, breakLabels);
         appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, breakLabel, node->pos));
+
         generateDefers(cfg, node->block.symbol->defers, returnLabels);
         appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, returnLabel, node->pos));
+
+        generateDefers(cfg, node->block.symbol->errdefers, errorLabels);
+        appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, errorLabel, node->pos));
         appendInstruction(cfg, end);
         return evalSymbolVersion;
     }
@@ -962,6 +1005,36 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
         SymbolVersion* var = unversionedSymbolVersion(cfg, cfg->returnSymbol, cfg->symbol->type->function.codomainType);
 
         appendInstruction(cfg, createIR(IR_COPY, var, retval, NULL, node->pos));
+
+        // Choose whether to return to return path or error path
+        SymbolNode* parent = node->scope;
+        while (parent->symbolType == SYMBOL_BLOCK) {
+            parent = parent->parent;
+        }
+        if (parent->isError && var->type->astType == AST_ENUM && errorLabel) {
+            // Get tag of expr
+            SymbolVersion* enumDot = tempSymbolVersion(cfg, INT64_TYPE);
+            IR* enumIR = createIR(IR_DOT, enumDot, retval, NULL, node->pos);
+            enumIR->strData = "tag";
+            enumDot->def = enumIR;
+            appendInstruction(cfg, enumIR);
+
+            // Get tag of success type
+            SymbolVersion* tag = tempSymbolVersion(cfg, INT64_TYPE);
+            int tagID = getTag("success", VOID_TYPE);
+            IR* tagIR = createIR_int(IR_LOAD_INT, tag, NULL, NULL, tagID, node->pos);
+            tag->def = tagIR;
+            appendInstruction(cfg, tagIR);
+
+            // Compare success tag with expr tag
+            SymbolVersion* condition = tempSymbolVersion(cfg, BOOL_TYPE);
+            IR* conditionIR = createIR(IR_EQ, condition, enumDot, tag, node->pos);
+            condition->def = conditionIR;
+            appendInstruction(cfg, conditionIR);
+
+            // branch to error label if not equal to success
+            appendInstruction(cfg, createIR_branch(IR_BRANCH_IF_FALSE, NULL, condition, NULL, errorLabel, node->pos));
+        }
         appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, returnLabel, node->pos));
         return NULL;
     }
@@ -976,6 +1049,9 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
         return NULL;
     }
     case AST_DEFER: {
+        return NULL;
+    }
+    case AST_ERRDEFER: {
         return NULL;
     }
     case AST_DEFINE: {
@@ -2410,6 +2486,11 @@ bool copyAndConstantPropagation(CFG* cfg)
                         retval = true;
                         LOG("phony has one def\n");
                     }
+                    if (def->listData->size == 0) {
+                        removeInstruction(def->inBlock, def);
+                        retval = true;
+                        LOG("phony has one def\n");
+                    }
                 }
                 break;
             default:
@@ -2809,6 +2890,7 @@ List* createCFG(SymbolNode* functionSymbol, CFG* caller)
         appendInstruction(cfg, createIR(IR_COPY, returnVersion, eval, NULL, invalid_pos));
         appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, NULL, invalid_pos));
     }
+    //printf("%s\n", functionSymbol->name);
     //printInstructionList(cfg);
 
     // Convert quadruple list to CFG of basic blocks, find versions!

@@ -39,6 +39,7 @@ enum astType {
     AST_PAREN,
     // Memory
     AST_DEREF,
+	AST_ERRDEFER,
     AST_INDEX,
     AST_SLICE,
     AST_ADDROF,
@@ -399,6 +400,7 @@ ASTNode* AST_Create_new(struct astNode* type, struct astNode* init, struct symbo
 ASTNode* AST_Create_free(struct astNode* expr, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_return(struct astNode* expr, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_defer(struct astNode* expr, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_errdefer(struct astNode* expr, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_break(struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_continue(struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_dot(struct astNode* container, struct astNode* identifier, struct symbolNode* scope, struct position pos);

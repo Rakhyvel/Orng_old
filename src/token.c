@@ -138,6 +138,8 @@ const char* Token_GetString(_TokenType type)
         return "TOKEN_FREE";
     case TOKEN_DEFER:
         return "TOKEN_DEFER";
+    case TOKEN_ERRDEFER:
+        return "TOKEN_ERRDEFER";
     case TOKEN_ARROW:
         return "TOKEN_ARROW";
     case TOKEN_BIG_ARROW:
@@ -317,6 +319,8 @@ const char* Token_GetRepr(_TokenType type)
         return "orelse";
     case TOKEN_TRY:
         return "try";
+    case TOKEN_ERRDEFER:
+        return "errdefer";
     case TOKEN_CATCH:
         return "catch";
     case TOKEN_ARROW:

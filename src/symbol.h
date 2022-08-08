@@ -35,6 +35,7 @@ typedef struct symbolNode {
     struct astNode* def; // SymbolDefine ASTNode where this symbol is defined
     struct IR* ir;
 
+    bool isError; // If the type of this symbol was constructed using the ! operator
     bool isDeclared;
     bool isExtern;
     bool isRestricted;
@@ -51,6 +52,7 @@ typedef struct symbolNode {
 
     // Defer/block
     List* defers; // list of ast's, in order of declaration
+    List* errdefers; // list of ast's, in order of declaration for both defers and errdefers
     bool isLoop;
     int tempVars;
     int labels;

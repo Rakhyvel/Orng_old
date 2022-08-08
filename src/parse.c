@@ -680,6 +680,18 @@ static ASTNode* parseDefer(SymbolNode* scope)
     }
     ASTNode* retval = AST_Create_defer(deferStatement, scope, prevToken->pos);
     List_Append(scope->defers, deferStatement);
+    List_Append(scope->errdefers, deferStatement);
+    return retval;
+}
+
+static ASTNode* parseErrdefer(SymbolNode* scope)
+{
+    ASTNode* deferStatement = parseStatement(scope);
+    if (deferStatement == NULL) {
+        error(prevToken->pos, "expected statement after defer");
+    }
+    ASTNode* retval = AST_Create_errdefer(deferStatement, scope, prevToken->pos);
+    List_Append(scope->errdefers, deferStatement);
     return retval;
 }
 
@@ -694,6 +706,8 @@ static ASTNode* parseStatement(SymbolNode* scope)
         return parseReturn(scope);
     } else if (accept(TOKEN_DEFER)) {
         return parseDefer(scope);
+    } else if (accept(TOKEN_ERRDEFER)) {
+        return parseErrdefer(scope);
     } else if (accept(TOKEN_CONTINUE)) {
         return AST_Create_continue(scope, prevToken->pos);
     } else if (accept(TOKEN_BREAK)) {
@@ -767,6 +781,7 @@ ASTNode* parseDefine(SymbolNode* scope)
 
     if (!inferType) {
         type = parseType(symbol, false);
+        symbol->isError = type->astType == AST_ERROR;
         type->isConst |= isConst;
         if (type->astType == AST_IDENT && !strcmp(type->ident.data, "Package")) {
             symbol->symbolType = SYMBOL_PACKAGE;
@@ -776,6 +791,7 @@ ASTNode* parseDefine(SymbolNode* scope)
             symbol->symbolType = SYMBOL_TYPE;
         } else if (type->astType == AST_FUNCTION && type->isConst) {
             symbol->symbolType = SYMBOL_FUNCTION;
+            symbol->isError = type->function.codomainType->astType == AST_ERROR;
         } else {
             symbol->symbolType = SYMBOL_VARIABLE;
         }

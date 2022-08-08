@@ -385,17 +385,16 @@ leetcode::Module = (
     -- Given an integer x, return true if x is palindrome integer.
     -- An integer is a palindrome when it reads the same backward as forward.
     isPalindrome::(x:Int)->Bool = {
-        list: &ListNode = convertToList(x)
-        reversedList: &ListNode = reverseList(convertToList(x))
+        list: ?&ListNode = convertToList(x)
+        reversedList: ?&ListNode = reverseList(convertToList(x))
 
         -- can assume that list and reversedList have the same length
-        for true {
-            if list.val != reversedList.val {
+        for list != nothing && reversedList != nothing {
+            if list?.val != reversedList?.val {
                 return false
-            } else {
-                list = list.next orelse break
-                reversedList = reversedList.next orelse break
             }
+            list = list?.next
+            reversedList = reversedList?.next
         }
         return true
     }

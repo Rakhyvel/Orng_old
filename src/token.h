@@ -89,6 +89,7 @@ typedef enum {
 	TOKEN_ORELSE,
 	TOKEN_CATCH,
 	TOKEN_TRY,
+	TOKEN_ERRDEFER,
     // Types
     TOKEN_ARROW,
 	TOKEN_BIG_ARROW,

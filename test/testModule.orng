@@ -1,4 +1,9 @@
 testModule::Module = (
+	x:ConstInt = 45
+	y:ConstInt = 10
+
+	ConstInt::Type = :Int
+
 	A::Type = (|a, b, c:Int)
 	B::Type = (|c:Int, d:Char, e)
 
@@ -12,9 +17,16 @@ testModule::Module = (
 		resourceBusy
 	)
 
-	givesAnError::(filename:String)->FileError||AllocationError!Int = FileError.fileNotFound
+	givesAnError::(filename:String)->FileError||AllocationError!Int = {
+		errdefer std.system.println("Three") 
+		{defer std.system.println("Two")}
+		errdefer std.system.println("One")
+		if filename.length > 4 {
+			return FileError.fileNotFound
+		} else {
+			return 4
+		}
+	}
 
-	hmm::()->FileError||AllocationError!Int = try givesAnError("Hello!.txt")
-
-	main::(args:[]String)->Int = hmm() catch 0
+	main::(args:[]String)->Int = givesAnError("Hello") catch 0
 )

@@ -654,6 +654,14 @@ ASTNode* AST_Create_defer(struct astNode* statement, struct symbolNode* scope, s
     return retval;
 }
 
+ASTNode* AST_Create_errdefer(struct astNode* statement, struct symbolNode* scope, struct position pos)
+{
+    ASTNode* retval = AST_Create(AST_ERRDEFER, scope, pos);
+    retval->defer.statement = statement;
+    retval->defer.deferID = scope->errdefers->size;
+    return retval;
+}
+
 ASTNode* AST_Create_break(struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_BREAK, scope, pos);

@@ -911,8 +911,12 @@ static void generateBasicBlock(FILE* out, CFG* cfg, BasicBlock* bb)
         generatePhi(out, bb->branchArguments, bb->branch, true);
         fprintf(out, "\t\tgoto L%d;\n\t} else {\n", (int)bb->branch->id);
         generatePhi(out, bb->nextArguments, bb->next, true);
-        fprintf(out, "\t\tgoto L%d;\n\t}\n", (int)bb->next->id);
-        generateBasicBlock(out, cfg, bb->next);
+        if (bb->next) {
+            fprintf(out, "\t\tgoto L%d;\n\t}\n", (int)bb->next->id);
+            generateBasicBlock(out, cfg, bb->next);
+        } else {
+            fprintf(out, "\t\tgoto end;\n\t}\n");
+        }
         generateBasicBlock(out, cfg, bb->branch);
     } else if (bb->next) {
         generatePhi(out, bb->nextArguments, bb->next, false);

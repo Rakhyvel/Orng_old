@@ -610,7 +610,7 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
         }
         type = innerType;
         break;
-	}
+    }
     case AST_PAREN: {
         type = getType(List_Get(node->arglist.args, 0), false, reassigning);
         break;
@@ -751,6 +751,7 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
     case AST_DEFINE:
     case AST_FREE:
     case AST_DEFER:
+    case AST_ERRDEFER:
     case AST_BREAK:
     case AST_CONTINUE:
     case AST_ASSIGN:
@@ -1990,13 +1991,26 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
         break;
     }
     case AST_DEFER: {
-        ASTNode* validStatement = node->defer.statement;
+        ASTNode* validStatement = validateAST(node->defer.statement, NULL);
         if (node->containsReturn) {
             error(node->pos, "defer statement cannot contain return");
         } else if (node->containsBreak) {
             error(node->pos, "defer statement cannot contain break");
         } else if (node->containsContinue) {
             error(node->pos, "defer statement cannot contain continue");
+        }
+        node->defer.statement = validStatement;
+        retval = node;
+        break;
+    }
+    case AST_ERRDEFER: {
+        ASTNode* validStatement = validateAST(node->defer.statement, NULL);
+        if (node->containsReturn) {
+            error(node->pos, "errdefer statement cannot contain return");
+        } else if (node->containsBreak) {
+            error(node->pos, "errdefer statement cannot contain break");
+        } else if (node->containsContinue) {
+            error(node->pos, "errdefer statement cannot contain continue");
         }
         node->defer.statement = validStatement;
         retval = node;

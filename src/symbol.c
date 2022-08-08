@@ -31,6 +31,7 @@ struct symbolNode* Symbol_Create(char* name, SymbolType symbolType, struct symbo
     retval->restrictionExpr = List_Create();
     retval->restrictions = List_Create();
     retval->defers = List_Create();
+    retval->errdefers = List_Create();
     retval->pos = pos;
     retval->versions = List_Create();
 
