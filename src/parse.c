@@ -881,9 +881,9 @@ ASTNode* parseTypeAtom(SymbolNode* scope)
         if (child->paramlist.defines->size == 0) {
             child->astType = AST_VOID;
         }
-    } else if ((token = accept(TOKEN_ENUM)) != NULL) {
+    } else if ((token = accept(TOKEN_LSR)) != NULL) {
         child = AST_Create_enum(scope, token->pos);
-        while (!accept(TOKEN_RPAREN)) {
+        while (!accept(TOKEN_GTR)) {
             List_Append(child->_enum.defines, parseEnumDefine(scope));
             if (accept(TOKEN_COMMA)) {
                 if (nextTokenMaybeNewline()->type == TOKEN_NEWLINE) {

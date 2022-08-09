@@ -825,15 +825,9 @@ int AST_TypeRepr(char* str, ASTNode* type)
         break;
     case AST_DEFINE:
         SymbolNode* symbol = type->define.symbol;
-        ASTNode* type2 = symbol->type;
+        ASTNode* type2 = symbol->originalType;
         str += sprintf(str, "%s:", symbol->name);
-        if (symbol->type->astType != AST_PARAMLIST) {
-            str += AST_TypeRepr(str, symbol->type);
-        } else if (doDefTypes) {
-            str += AST_TypeRepr(str, symbol->type);
-        } else {
-            str += sprintf(str, "( .. )");
-        }
+        str += AST_TypeRepr(str, symbol->originalType);
         break;
     case AST_PARAMLIST:
         str += sprintf(str, "(");
@@ -868,10 +862,8 @@ int AST_TypeRepr(char* str, ASTNode* type)
         break;
     }
     case AST_ADDR: {
-        ASTNode* child = type->unop.expr;
         str += sprintf(str, "&");
-        str += sprintf(str, "..");
-        // str += AST_TypeRepr(str, child);
+        str += AST_TypeRepr(str, type->unop.expr);
     } break;
     case AST_ARRAY: {
         ASTNode* lengthDefine = List_Get(type->paramlist.defines, 0);

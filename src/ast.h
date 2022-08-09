@@ -246,6 +246,7 @@ typedef struct astNode_paramlist {
 
 typedef struct astNode_enum {
     List* defines;
+    bool wasAnError;
 } astNode_enum;
 
 typedef struct astNode_function {
@@ -277,6 +278,7 @@ typedef struct astNode {
     bool containsBreak;
 
     struct astNode* type; // The type of the AST Node
+    struct astNode* originalType; // Is never expanded, used to print
 
     union {
         astNode_ident ident;
@@ -304,7 +306,7 @@ typedef struct astNode {
         astNode_mapping mapping;
         astNode_fieldMapping fieldMapping;
         astNode_paramlist paramlist;
-        astNode_paramlist _enum;
+        astNode_enum _enum;
         astNode_function function;
         astNode_extern _extern;
     };

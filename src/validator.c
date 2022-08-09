@@ -378,8 +378,7 @@ static ASTNode* expandTypeIdent(ASTNode* type, bool reassigning)
         loopCounter++;
     }
     if (expanded->astType == AST_ADDR) {
-        ASTNode* oldType = expanded->unop.expr;
-        expanded->unop.expr = expandTypeIdent(oldType, reassigning);
+        expanded = AST_Create_addr(expandTypeIdent(expanded->unop.expr, true), expanded->scope, expanded->pos);
     } else if (expanded->astType == AST_PARAMLIST || expanded->astType == AST_ARRAY) {
         ListElem* elem = List_Begin(expanded->paramlist.defines);
         for (; elem != List_End(expanded->paramlist.defines); elem = elem->next) {
@@ -407,6 +406,7 @@ static ASTNode* expandTypeIdent(ASTNode* type, bool reassigning)
         expanded = newEnumType;
     } else if (expanded->astType == AST_ERROR) {
         ASTNode* newEnumType = AST_Create_enum(expanded->scope, expanded->pos);
+        newEnumType->_enum.wasAnError = true;
         ASTNode* expandedLeft = expandTypeIdent(expanded->binop.left, reassigning);
         ASTNode* expandedRight = expandTypeIdent(expanded->binop.right, reassigning);
 
@@ -418,8 +418,7 @@ static ASTNode* expandTypeIdent(ASTNode* type, bool reassigning)
         unionEnums(newEnumType, expandedLeft);
         expanded = newEnumType;
     } else if (expanded->astType == AST_FUNCTION) {
-        expanded->function.domainType = expandTypeIdent(expanded->function.domainType, true);
-        expanded->function.codomainType = expandTypeIdent(expanded->function.codomainType, true);
+        expanded = AST_Create_function(expandTypeIdent(expanded->function.domainType, true), expandTypeIdent(expanded->function.codomainType, true), expanded->scope, expanded->pos);
     }
     if (expanded->astType == AST_EXTERN && !reassigning) {
         SymbolNode* externVar = expanded->_extern.symbol;
@@ -431,6 +430,8 @@ static ASTNode* expandTypeIdent(ASTNode* type, bool reassigning)
     while (expanded->astType == AST_DOT) {
         expanded = resolveDotTypes(expanded, reassigning);
     }
+
+    expanded->originalType = type->originalType ? type->originalType : type;
 
     return expanded;
 }
@@ -1692,6 +1693,7 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
 {
     static int loops = 0;
     static bool lastEval = true;
+    static bool errorHandled = false;
 
     ASSERT(node != NULL);
     if (node->isValid) {
@@ -1801,7 +1803,10 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
             ASTNode* child = elem->data;
             if (elem->next == List_End(node->block.children)) {
                 lastEval = true;
+                bool oldErrorHandled = errorHandled;
+                errorHandled = node->block.returnEval;
                 List_Append(validChildren, validateAST(child, coerceType));
+                errorHandled = oldErrorHandled;
             } else {
                 lastEval = false;
                 List_Append(validChildren, validateAST(child, NULL));
@@ -1856,8 +1861,11 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
         break;
     }
     case AST_CASE: {
+        bool oldErrorHandled = errorHandled;
+        errorHandled = true;
         ASTNode* validExpr = validateAST(node->_case.expr, INT64_TYPE);
         ASTNode* elementType = getType(validExpr, false, false);
+        errorHandled = oldErrorHandled; // TODO: require full field for errors
 
         List* validMappings = List_Create();
         for (ListElem* elem = List_Begin(node->_case.mappings); elem != List_End(node->_case.mappings); elem = elem->next) {
@@ -1965,11 +1973,14 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
         ASTNode* functionType = function->type;
         ASTNode* functionRetType = functionType->function.codomainType;
         ASTNode* validRetval = NULL;
+        bool oldErrorHandled = errorHandled;
+        errorHandled = true;
         if (functionRetType->astType == AST_VOID) {
             validRetval = validateAST(node->unop.expr, NULL);
         } else {
             validRetval = validateAST(node->unop.expr, functionRetType);
         }
+        errorHandled = oldErrorHandled;
 
         node->unop.expr = validRetval;
         retval = node;
@@ -2395,6 +2406,9 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
         node->call.left = expr;
         expr->type = exprType;
         node->call.fnType = exprType;
+        if (exprType->function.codomainType->astType == AST_ENUM && exprType->_enum.wasAnError && !errorHandled) {
+            error(node->pos, "possible error returned from function not handled");
+        }
         if (exprType->astType != AST_FUNCTION) {
             error(node->pos, "call is not to function");
         }
@@ -2458,8 +2472,12 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
         break;
     }
     case AST_CATCH: {
+        bool oldErrorHandled = errorHandled;
+        errorHandled = true;
         ASTNode* left = validateAST(node->taggedBinop.left, NULL);
         ASTNode* leftType = getType(left, false, false);
+        errorHandled = oldErrorHandled;
+
         ASTNode* right = validateAST(node->taggedBinop.right, NULL);
         ASTNode* rightType = getType(right, false, false);
 
@@ -2492,8 +2510,11 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
         break;
     }
     case AST_TRY: {
+        bool oldErrorHandled = errorHandled;
+        errorHandled = true;
         ASTNode* validRetval = validateAST(node->taggedUnop.expr, coerceType);
         ASTNode* retType = getType(validRetval, false, false);
+        errorHandled = oldErrorHandled;
 
         // return must be in function
         SymbolNode* function = Symbol_TypeAncestor(node->scope, SYMBOL_FUNCTION);
@@ -2648,6 +2669,7 @@ Program Validator_Validate(SymbolNode* symbol)
 
     // Expand symbol type
     if (symbol->type) {
+        symbol->originalType = symbol->type;
         symbol->type = expandTypeIdent(symbol->type, true);
         validateType(symbol->type, true);
     }

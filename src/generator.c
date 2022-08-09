@@ -509,6 +509,10 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
         break;
     }
     case IR_CALL: {
+        fprintf(out, "\tprintf(\"");
+        printPos(out, ir->pos);
+        fprintf(out, "\");\n");
+
         if (ir->dest->type->astType != AST_VOID) {
             printVarAssign(out, ir->dest);
         } else {
@@ -1034,12 +1038,14 @@ void Generator_Generate(FILE* out, Program _program)
 
     srand(time(0));
     int randID = rand();
-    fprintf(out, "/* Code generated using Orange Translator http://josephs-projects.com */\n\n");
+    fprintf(out, "/* Code generated using the Orng compiler http://josephs-projects.com */\n");
+    fprintf(out, "\n#ifndef ORNG_%s\n#define ORNG_%s\n\n", myItoa(randID), myItoa(randID));
     generateIncludes(out, program.includes);
     generateStructDefinitions(out, program.structDependencyGraph);
     generateVerbatims(out, program.verbatims);
+    fprintf(out, "/* Function definitions */\n");
     generateForwardFunctions(out, program.callGraph);
-    fprintf(out, "\n#ifndef ORANGE_PROGRAM_%s\n#define ORANGE_PROGRAM_%s\n\n", myItoa(randID), myItoa(randID));
+    fprintf(out, "\n");
     generateFunctionDefinitions(out, program.callGraph);
     generateMainFunction(out, program.callGraph);
 

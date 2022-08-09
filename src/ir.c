@@ -764,6 +764,7 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
         }
 
         SymbolVersion* evalSymbolVersion = NULL;
+        bool noReturnVar = false; // Don't return var to copied to the return value, already done here before running errdefers
         if (node->type->astType != AST_UNDEF && var) {
             evalSymbolVersion = tempSymbolVersion(cfg, node->type);
             IR* ir = createIR(IR_COPY, evalSymbolVersion, var, NULL, node->pos);
@@ -776,6 +777,10 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
                 parent = parent->parent;
             }
             if (parent->isError && var->type->astType == AST_ENUM && thisErrorLabel && node->block.returnEval) {
+                noReturnVar = true;
+                SymbolVersion* returnVersion = unversionedSymbolVersion(cfg, cfg->returnSymbol, cfg->symbol->type->function.codomainType);
+                appendInstruction(cfg, createIR(IR_COPY, returnVersion, var, NULL, invalid_pos));
+
                 // Get tag of expr
                 SymbolVersion* enumDot = tempSymbolVersion(cfg, INT64_TYPE);
                 IR* enumIR = createIR(IR_DOT, enumDot, var, NULL, node->pos);
@@ -813,7 +818,12 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
         generateDefers(cfg, node->block.symbol->errdefers, errorLabels);
         appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, errorLabel, node->pos));
         appendInstruction(cfg, end);
-        return evalSymbolVersion;
+
+        if (noReturnVar) {
+            return NULL;
+        } else {
+            return evalSymbolVersion;
+        }
     }
     case AST_IF: {
         SymbolVersion* var = NULL;
@@ -2891,8 +2901,8 @@ List* createCFG(SymbolNode* functionSymbol, CFG* caller)
         appendInstruction(cfg, createIR(IR_COPY, returnVersion, eval, NULL, invalid_pos));
         appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, NULL, invalid_pos));
     }
-    printf("%s\n", functionSymbol->name);
-    printInstructionList(cfg);
+    //printf("%s\n", functionSymbol->name);
+    //printInstructionList(cfg);
 
     // Convert quadruple list to CFG of basic blocks, find versions!
     cfg->blockGraph = convertToBasicBlock(cfg, cfg->head, NULL);
@@ -2900,9 +2910,9 @@ List* createCFG(SymbolNode* functionSymbol, CFG* caller)
 
     // Optimize
     do {
-        printf("\n\n%s\n", cfg->symbol->name);
-        clearBBVisitedFlags(cfg);
-        printBlockGraph(cfg->blockGraph);
+        //printf("\n\n%s\n", cfg->symbol->name);
+        //clearBBVisitedFlags(cfg);
+        //printBlockGraph(cfg->blockGraph);
     } while (copyAndConstantPropagation(cfg) | deadCode(cfg));
 
     // Parameters and the such are kept

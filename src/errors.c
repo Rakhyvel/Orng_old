@@ -12,8 +12,8 @@ void typeMismatchError(struct position pos, struct astNode* expectedType, struct
 {
     char expectedStr[255];
     char actualStr[255];
-    AST_TypeRepr(expectedStr, expectedType);
-    AST_TypeRepr(actualStr, actualType);
+    AST_TypeRepr(expectedStr, expectedType->originalType);
+    AST_TypeRepr(actualStr, actualType->originalType);
     error(pos, "type mismatch: expected %s, got %s", expectedStr, actualStr);
 }
 

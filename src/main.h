@@ -12,6 +12,7 @@ want: crazy cool type system from haskell without needing to optimize the hell o
 #include "./ast.h"
 #include "./position.h"
 #include "./symbol.h"
+#include <stdio.h>
 
 char* filename;
 
@@ -32,6 +33,7 @@ typedef struct {
 char* getRelPath(char*);
 char* pathToFilename(char* path);
 void gen_error(const char* message, ...);
+void printPos(FILE* out, struct position pos);
 void error(struct position pos, const char* message, ...);
 void error2(struct position pos1, Position pos2, const char* message, ...);
 void error3(struct position pos1, Position pos2, Position pos3, const char* message, ...);

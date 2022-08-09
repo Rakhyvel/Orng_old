@@ -430,17 +430,23 @@ x Generate C code from IR
 		x try unwraps value if no error, or returns the error
 		x errdefer is another return exit path if return is an error, a subset of defers (ie it defers all defers, and also errdefers if return is error)
 			x if a return value is detected to not be a successful type, it should follow the error path
-		- coerce between if statement clauses for enum if coerced type is given
-			- check the coerce type in getType (?) (there is no coerced type)
+		x coerce between if statement clauses for enum if coerced type is given
+			x check the coerce type in getType (?) (there is no coerced type)
+		- Arglists should accept coercion too
+		x Keep original type
 		- panic messages
 			- stack trace
-			- error return trace (like in Zig!)
+				- After call, if returned an error, THEN push call pos string to stack
+				-                                   ELSE clear stack
+				- If main function returns an error, print out stack
 			- Debug mode which:
 				- Checks indexes are within array bounds
-				- Asserts <expr>? are not nothing
+				- Checks that <expr>? are not nothing
 				- (future, performs refinement type predicate checks)
 		- !<Type>
 			- infers the error enum set from RHS!
+		- New main function return type
+		- If case is on error type, require all fields to be accounted for
 - Orange should compile the program for you, too
 	- No verbatims, instead write the C file and header, include it, and add it to be included when compiling
 - cleanup!
@@ -495,38 +501,41 @@ x Generate C code from IR
 	if myPos == yourPos {
 		-- do something
 	}
+- change case arrow to fat arrow
 - cases should be able to operate on any types that have == and != defined
-	Col::Type = (|A, B, C, D, E, F, G, H)
+	Col::Type = <A, B, C, D, E, F, G, H>
 	ChessSquare::Type = (col:Col, row:Int)
 	queenPos:ChessSquare = (Col.A, 4)
 	pawnPos:ChessSquare = (Col.B, 3)
 	case queenPos {
-		pawnPos -> std.system.println("Queen captures pawn")
-		else    -> std.system.println("Queen doesn't capture pawn")
+		pawnPos => std.system.println("Queen captures pawn")
+		else    => std.system.println("Queen doesn't capture pawn")
 	}
 - add enum literal AST
-	- Syntax: . <field ident> : <type>
-	- Uses field name and type to get tag
-	x:(|a:Int, b:Char) = .a:Int
+	Fruit::Type = <apple, orng, banana>
+	yum := getFruitType()
+	case yum {
+		<apple>		=> std.system.println("Ok!")
+		<orng>		=> std.system.println("love!")
+		<banana>	=> std.system.println("sometimes mushy...")
+	}
+- remove 'nothing' keyword, use <nothing> enum literal instead
 - remove field cases, should compare with enum equality
 	x:?Int = 4
 	case x {
-		nothing -> std.system.println("nothing here")
-		else    -> std.system.println("something here")
+		<nothing>	=> std.system.println("nothing here")
+		else		=> std.system.println("something here")
 	}
 
-	Suit::Type = (|Hearts, Diamonds, Clubs, Spades)
+	Suit::Type = <Hearts, Diamonds, Clubs, Spades>
 	Card::Type = (suit:Suit, value:Char)
 	myCard:Card = (Suit.Hearts, '3')
 	suitRepr:Char = case myCard.suit { -- an enum comparison, like doing myCard.suit == Suit.Hearts
-		Suit.Hearts   -> 'H'
-		Suit.Diamonds -> 'D'
-		Suit.Clubs    -> 'C'
-		Suit.Spades   -> 'S'
+		Suit.Hearts   => 'H'
+		Suit.Diamonds => 'D'
+		Suit.Clubs    => 'C'
+		Suit.Spades   => 'S'
 	}
-	- COUNTERPOINT: some fields are impossible to create an "example expr" to compare with
-		x:(|a:Int, b:Char) = 4
-		-- how to access tags of x?
 - for's with else clause, evaluates to type
 - if's and for's with no else case evaluate to a maybe type
 - parametric types

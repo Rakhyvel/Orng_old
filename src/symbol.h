@@ -28,6 +28,7 @@ typedef enum symbolType {
 typedef struct symbolNode {
     SymbolType symbolType;
     struct astNode* type;
+    struct astNode* originalType; // Is never expanded, used to print
     char name[255];
     char externName[255];
     char desc[255];

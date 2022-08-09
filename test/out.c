@@ -1,4 +1,7 @@
-/* Code generated using Orange Translator http://josephs-projects.com */
+/* Code generated using the Orng compiler http://josephs-projects.com */
+
+#ifndef ORNG_9598
+#define ORNG_9598
 
 /* Includes */
 #include <stdbool.h>
@@ -64,6 +67,11 @@ struct struct_9 {
 };
 
 struct struct_10 {
+	float re;
+	float im;
+};
+
+struct struct_11 {
 	int64_t tag;
 	union {
 		int64_t success;
@@ -73,112 +81,101 @@ struct struct_10 {
 /* Verbatim code */
 int std_system_println(struct struct_1 _format, ...) {va_list _25_args;va_start(_25_args, _format.data);int retval = vprintf(_format.data, _25_args);va_end(_25_args);char newLine[2] = {'\n', '\0'};printf(newLine);return retval;}
 
+/* Function definitions */
 int64_t test_testModule_main(struct struct_2 _args);
-struct struct_10 test_testModule_hmm();
-struct struct_10 test_testModule_givesAnError(struct struct_1 _filename);
-
-#ifndef ORANGE_PROGRAM_3709
-#define ORANGE_PROGRAM_3709
+struct struct_11 test_testModule_hmm();
+struct struct_11 test_testModule_givesAnError(struct struct_1 _filename);
 
 int64_t test_testModule_main(struct struct_2 _args)
 {
 	int64_t retval;
 	int64_t _0;
-	struct struct_10 (*_1) ();
-	struct struct_10 _2;
+	struct struct_11 (*_1) ();
+	struct struct_11 _2;
 	int64_t _3;
 	int64_t _4;
 	bool _5;
 	struct struct_2 _args_0;
 	int64_t _6;
 	_args_0 = _args;
-L9:; // incoming:1
+L6:; // incoming:1
 	_1 = test_testModule_hmm;
+	printf("test/testModule.orng: \n      |\n34    | main::(args:[]String)->Int = hmm() catch 0\n      |                                 ^\n");
 	_2 = _1();
 	_3 = _2.tag;
 	_4 = 11;
 	_5 = _3 == _4;
 	if (!_5) {
-		goto L12;
+		goto L9;
 	} else {
-		goto L10;
+		goto L7;
 	}
-L10:; // incoming:1
+L7:; // incoming:1
 	_6 = _2.success;
 	_0 = _6;
-	goto L11;
-L11:; // incoming:2
+	goto L8;
+L8:; // incoming:2
 	retval = _0;
 	goto end;
-L12:; // incoming:1
+L9:; // incoming:1
 	_0 = 0;
-	goto L11;
+	goto L8;
 end:;
 	return retval;
 }
 
-struct struct_10 test_testModule_hmm()
+struct struct_11 test_testModule_hmm()
 {
-	struct struct_10 retval;
-	int64_t _0;
-	struct struct_10 (*_2) (struct struct_1 _filename);
-	struct struct_1 _4;
-	struct struct_10 _3;
-	int64_t _5;
-	int64_t _6;
-	bool _7;
+	struct struct_11 retval;
+	int64_t (*_3) (struct struct_1 _format, ...);
+	struct struct_1 _5;
+	int64_t _4;
+	struct struct_11 (*_6) (struct struct_1 _filename);
+	struct struct_1 _8;
+	struct struct_11 _7;
+	int64_t _10;
+	int64_t _11;
+	bool _12;
 	int64_t (*_13) (struct struct_1 _format, ...);
 	struct struct_1 _15;
 	int64_t _14;
-	int64_t _17;
-	int64_t (*_10) (struct struct_1 _format, ...);
-	struct struct_1 _12;
-	int64_t _11;
-	int64_t (*_18) (struct struct_1 _format, ...);
-	struct struct_1 _20;
-	int64_t _19;
-L1:; // incoming:1
-	_0 = 11;
-	_2 = test_testModule_givesAnError;
-	_4 = (struct struct_1) {3, "lol"};
-	_3 = _2(_4);
-	_5 = _3.tag;
-	_6 = 11;
-	_7 = _5 == _6;
-	if (!_7) {
-		goto L6;
+L3:; // incoming:1
+	_3 = std_system_println;
+	_5 = (struct struct_1) {4, "done"};
+	printf("test/testModule.orng: \n      |\n30    | std.system.println(\"done\")\n      |                   ^\n");
+	_4 = _3(_5);
+	_6 = test_testModule_givesAnError;
+	_8 = (struct struct_1) {3, "lol"};
+	printf("test/testModule.orng: \n      |\n31    | givesAnError(\"lol\")\n      |             ^\n");
+	_7 = _6(_8);
+	retval = _7;
+	_10 = _7.tag;
+	_11 = 11;
+	_12 = _10 == _11;
+	if (!_12) {
+		goto L5;
 	} else {
-		goto L2;
+		goto end;
 	}
-L2:; // incoming:1
+L5:; // incoming:1
 	_13 = std_system_println;
-	_15 = (struct struct_1) {4, "done"};
+	_15 = (struct struct_1) {4, "hmm2"};
+	printf("test/testModule.orng: \n      |\n26    | errdefer std.system.println(\"hmm2\")\n      |                            ^\n");
 	_14 = _13(_15);
-	_17 = 5;
-	retval = (struct struct_10) {_0, _17};
-	goto end;
-L6:; // incoming:1
-	retval = _3;
-	_10 = std_system_println;
-	_12 = (struct struct_1) {3, "hmm"};
-	_11 = _10(_12);
-	_18 = std_system_println;
-	_20 = (struct struct_1) {4, "hmm2"};
-	_19 = _18(_20);
 	goto end;
 end:;
 	return retval;
 }
 
-struct struct_10 test_testModule_givesAnError(struct struct_1 _filename)
+struct struct_11 test_testModule_givesAnError(struct struct_1 _filename)
 {
-	struct struct_10 retval;
+	struct struct_11 retval;
 	int64_t _0;
 	struct struct_1 _filename_0;
 	_filename_0 = _filename;
 L0:; // incoming:1
 	_0 = 8;
-	retval = (struct struct_10) {_0};
+	retval = (struct struct_11) {_0};
 	goto end;
 end:;
 	return retval;

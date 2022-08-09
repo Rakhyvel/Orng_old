@@ -1,20 +1,40 @@
 testModule::Module = (
-	A::Type = (|a, b, c:Int)
-	B::Type = (|c:Int, d:Char, e)
+	A::Type = <a, b, c:Int>
+	B::Type = <c:Int, d:Char, e>
 
-	FileError::Type = (| 
+	Complex::Type = (
+		re:Real
+		im:Real
+
+		add::(c1:&Complex, c2:Complex)->Complex = (c1.re + c2.re, c1.im + c2.im):Complex
+		sub::(c1:&Complex, c2:Complex)->Complex = (c1.re - c2.re, c1.im - c2.im):Complex
+	)
+
+	FileError::Type = <
 		fileNotFound
 		resourceBusy
-	)
+	>
 
-	AllocationError::Type = (|
+	AllocationError::Type = <
 		outOfMemory
 		resourceBusy
-	)
+	>
 
-	givesAnError::(filename:String)->FileError||AllocationError!Int = FileError.fileNotFound
+	givesAnError::(filename:String)->FileError||AllocationError!Int = {FileError.fileNotFound}
 
-	hmm::()->FileError||AllocationError!Int = {errdefer std.system.println("hmm2"); {errdefer std.system.println("hmm"); try givesAnError("lol")}; std.system.println("done"); 5}
+	hmm::()->FileError||AllocationError!Int = {
+		errdefer std.system.println("hmm2")
+		{
+			errdefer std.system.println("hmm")
+		}
+		std.system.println("done")
+		givesAnError("lol")
+	}
 
-	main::(args:[]String)->Int = hmm() catch 0
+	main::(args:[]String)->Int = {
+		x:Complex = (0, 3):Complex
+		y := (1, 4):Complex
+		z := Complex.add(x, y)
+		hmm() catch 0
+	}
 )
