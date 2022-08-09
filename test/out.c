@@ -1,7 +1,7 @@
 /* Code generated using the Orng compiler http://josephs-projects.com */
 
-#ifndef ORNG_9514
-#define ORNG_9514
+#ifndef ORNG_13283
+#define ORNG_13283
 
 /* Includes */
 #include <stdbool.h>
@@ -108,7 +108,7 @@ int64_t test_testModule_main(struct struct_2 _args)
 	_args_0 = _args;
 L4:; // incoming:1
 	_1 = test_testModule_hmm;
-	printf("test/testModule.orng: \n      |\n32    | main::(args:[]String)->Int = hmm() catch 0\n      |                                  ^\n");
+	printf("test/testModule.orng: \n      |\n31    | main::(args:[]String)->Int = hmm() catch 0\n      |                                  ^\n");
 	_2 = _1();
 	_3 = _2.tag;
 	_4 = 11;
@@ -138,33 +138,31 @@ struct struct_12 test_testModule_hmm()
 	struct struct_11 (*_0) ();
 	struct struct_11 _1;
 	struct struct_12 _2;
-	struct struct_12 _156_x_0;
-	int64_t _3;
 	int64_t _4;
-	bool _5;
-	int64_t (*_6) (struct struct_1 _format, ...);
-	struct struct_1 _8;
-	int64_t _7;
+	int64_t _5;
+	bool _6;
+	int64_t (*_7) (struct struct_1 _format, ...);
+	struct struct_1 _9;
+	int64_t _8;
 L1:; // incoming:1
 	_0 = test_testModule_givesAnError;
-	printf("test/testModule.orng: \n      |\n27    | x:FileError||AllocationError!Int = givesAnError()\n      |                                                ^\n");
+	printf("test/testModule.orng: \n      |\n27    | givesAnError()\n      |             ^\n");
 	_1 = _0();
 	_2 = *((struct struct_12*) &_1);
-	_156_x_0 = _2;
 	retval = _2;
-	_3 = _156_x_0.tag;
-	_4 = 11;
-	_5 = _3 == _4;
-	if (!_5) {
+	_4 = _2.tag;
+	_5 = 11;
+	_6 = _4 == _5;
+	if (!_6) {
 		goto L3;
 	} else {
 		goto end;
 	}
 L3:; // incoming:1
-	_6 = std_system_println;
-	_8 = (struct struct_1) {4, "hmm2"};
+	_7 = std_system_println;
+	_9 = (struct struct_1) {4, "hmm2"};
 	printf("test/testModule.orng: \n      |\n26    | errdefer std.system.println(\"hmm2\")\n      |                            ^\n");
-	_7 = _6(_8);
+	_8 = _7(_9);
 	goto end;
 end:;
 	return retval;

@@ -1720,7 +1720,7 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
             restrictedOrUndefError(node->pos, rejectingSymbol->pos, node->ident.data);
         }
         Validator_Validate(var);
-        if (var->type->isConst) {
+        if (var->symbolType != SYMBOL_FUNCTION && var->type->isConst) {
             retval = var->def;
             break;
         } else {
@@ -2605,7 +2605,7 @@ static bool allReturnPath(ASTNode* node)
             }
         }
     }
-    return false;
+    return true;
 }
 
 void resolveRestrictions(SymbolNode* symbol)
@@ -2771,27 +2771,16 @@ Program Validator_Validate(SymbolNode* symbol)
             SymbolNode* child = Map_Get(symbol->children, elem->data);
             Validator_Validate(child);
         }
-        ASTNode* newDef = validateAST(symbol->def, NULL);
 
         ASTNode* retType = symbol->type->function.codomainType;
-        if (!symbol->isExtern && retType->astType != AST_VOID) {
-            if (newDef->astType == AST_ARGLIST) {
-                argsMatchParams(NULL, newDef, retType);
-            } else if (newDef->astType != AST_UNDEF) {
-                if (!typesAreEquivalent(newDef->type, retType)) {
-                    ASTNode* coerced = tryCoerceToEnum(retType, newDef);
-                    if (coerced) {
-                        symbol->def = coerced;
-                        newDef = coerced;
-                    } else {
-                        typeMismatchError(symbol->pos, retType, newDef->type);
-                    }
-                } else {
-                    symbol->def = newDef;
-                }
-            } else if (!allReturnPath(newDef)) {
-                error(symbol->pos, "not all paths return a value in '%s'", symbol->name);
-            }
+        if (retType->astType != AST_VOID) {
+            symbol->def = validateAST(symbol->def, symbol->type->function.codomainType);
+        } else {
+            symbol->def = validateAST(symbol->def, NULL);
+        }
+
+        if (!symbol->isExtern && retType->astType != AST_VOID && !allReturnPath(symbol->def)) {
+            error(symbol->pos, "not all paths return a value in '%s'", symbol->name);
         }
         if (!strcmp(symbol->name, "main") && typesAreEquivalent(mainFunctionType, symbol->type)) {
             if (mainFunction) {

@@ -24,8 +24,7 @@ testModule::Module = (
 
 	hmm::()->FileError||AllocationError!Int = {
 		errdefer std.system.println("hmm2")
-		x:FileError||AllocationError!Int = givesAnError()
-		return x
+		givesAnError()
 	}
 
 	-- Doesn't catch `main::(args:[]String)->Int = hmm catch 0`, when `hmm` isn't correct type
