@@ -196,7 +196,8 @@ typedef struct astNode_slice {
 
 typedef struct astNode_block {
     List* children;
-    struct symbolNode* symbol; // The symbol node for this block ast, possibly unneeded?
+    struct symbolNode* symbol; // TODO: remove
+    bool returnEval; // Does this block produce the return value for a function?
 } astNode_block;
 
 typedef struct astNode_defer {

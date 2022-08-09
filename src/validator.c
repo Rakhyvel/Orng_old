@@ -1691,6 +1691,7 @@ chars are not considered integral for later compatability with Python
 ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
 {
     static int loops = 0;
+    static bool lastEval = true;
 
     ASSERT(node != NULL);
     if (node->isValid) {
@@ -1794,12 +1795,15 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
         break;
     }
     case AST_BLOCK: {
+        node->block.returnEval = lastEval;
         List* validChildren = List_Create();
         for (ListElem* elem = List_Begin(node->block.children); elem != List_End(node->block.children); elem = elem->next) {
             ASTNode* child = elem->data;
             if (elem->next == List_End(node->block.children)) {
+                lastEval = true;
                 List_Append(validChildren, validateAST(child, coerceType));
             } else {
+                lastEval = false;
                 List_Append(validChildren, validateAST(child, NULL));
             }
         }
@@ -1812,7 +1816,9 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
         ASTNode* validBodyBlock = validateAST(node->_if.bodyBlock, coerceType);
         ASTNode* validElseBlock = validateAST(node->_if.elseBlock, coerceType);
 
-        // TODO: if validElseBlock isn't null, set type to coerce type
+        if (validElseBlock->astType != AST_UNDEF) {
+            node->type = coerceType;
+        }
 
         node->_if.condition = validCondition;
         node->_if.bodyBlock = validBodyBlock;
@@ -1945,8 +1951,6 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
         break;
     }
     case AST_RETURN: {
-        ASTNode* validRetval = validateAST(node->unop.expr, coerceType);
-        ASTNode* retType = getType(validRetval, false, false);
 
         // return must be in function
         SymbolNode* function = Symbol_TypeAncestor(node->scope, SYMBOL_FUNCTION);
@@ -1960,16 +1964,11 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
         // return type matches function type
         ASTNode* functionType = function->type;
         ASTNode* functionRetType = functionType->function.codomainType;
-        if (retType->astType == AST_VOID) {
-            typesAreEquivalent(retType, functionRetType);
-        }
-        if (!typesAreEquivalent(retType, functionRetType)) {
-            ASTNode* coerced = NULL;
-            if (coerced = tryCoerceToEnum(functionRetType, validRetval)) {
-                validRetval = coerced;
-            } else {
-                typeMismatchError(node->pos, functionRetType, retType);
-            }
+        ASTNode* validRetval = NULL;
+        if (functionRetType->astType == AST_VOID) {
+            validRetval = validateAST(node->unop.expr, NULL);
+        } else {
+            validRetval = validateAST(node->unop.expr, functionRetType);
         }
 
         node->unop.expr = validRetval;

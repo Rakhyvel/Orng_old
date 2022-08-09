@@ -471,6 +471,7 @@ x Generate C code from IR
 	- rename "expandTypeIdent" to just "expandType"
 	- remove words 'a', 'the' from error messages
 	- fix semantics in parsing functions (instead of prefix/term/factor etc just use child)
+	- remove 'symbol' field from block ast, should use scope field from common ast struct (right?)
 - 'default' keyword which takes in a type and gives its default value
 	if x == default Int64 {
 		std.system.println("x is 0")

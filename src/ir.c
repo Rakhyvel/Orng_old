@@ -770,12 +770,12 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
             evalSymbolVersion->def = ir;
             appendInstruction(cfg, ir);
 
-            // If eval type is an error enum, and symbol returns an error (create field), add runtime check for tag. If not success tag, branch to error label
+            // If eval type is an error enum, and symbol returns an error (create field), AND this block is a return block, add runtime check for tag. If not success tag, branch to error label
             SymbolNode* parent = node->block.symbol;
             while (parent->symbolType == SYMBOL_BLOCK) {
                 parent = parent->parent;
             }
-            if (parent->isError && var->type->astType == AST_ENUM && thisErrorLabel) {
+            if (parent->isError && var->type->astType == AST_ENUM && thisErrorLabel && node->block.returnEval) {
                 // Get tag of expr
                 SymbolVersion* enumDot = tempSymbolVersion(cfg, INT64_TYPE);
                 IR* enumIR = createIR(IR_DOT, enumDot, var, NULL, node->pos);
@@ -1001,7 +1001,8 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
         return var;
     }
     case AST_RETURN: {
-        SymbolVersion* retval = flattenAST(cfg, node->unop.expr, returnLabel, breakLabel, continueLabel, errorLabel, false);
+        // The error path for the expression in a return is just the return path. Ex: myFunc::()->!Int = {return if true {AnError} else {4}} -- if true clause shouldn't take error path
+        SymbolVersion* retval = flattenAST(cfg, node->unop.expr, returnLabel, breakLabel, continueLabel, returnLabel, false);
         SymbolVersion* var = unversionedSymbolVersion(cfg, cfg->returnSymbol, cfg->symbol->type->function.codomainType);
 
         appendInstruction(cfg, createIR(IR_COPY, var, retval, NULL, node->pos));
@@ -2890,8 +2891,8 @@ List* createCFG(SymbolNode* functionSymbol, CFG* caller)
         appendInstruction(cfg, createIR(IR_COPY, returnVersion, eval, NULL, invalid_pos));
         appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, NULL, invalid_pos));
     }
-    //printf("%s\n", functionSymbol->name);
-    //printInstructionList(cfg);
+    printf("%s\n", functionSymbol->name);
+    printInstructionList(cfg);
 
     // Convert quadruple list to CFG of basic blocks, find versions!
     cfg->blockGraph = convertToBasicBlock(cfg, cfg->head, NULL);
@@ -2899,9 +2900,9 @@ List* createCFG(SymbolNode* functionSymbol, CFG* caller)
 
     // Optimize
     do {
-        //printf("\n\n%s\n", cfg->symbol->name);
-        //clearBBVisitedFlags(cfg);
-        //printBlockGraph(cfg->blockGraph);
+        printf("\n\n%s\n", cfg->symbol->name);
+        clearBBVisitedFlags(cfg);
+        printBlockGraph(cfg->blockGraph);
     } while (copyAndConstantPropagation(cfg) | deadCode(cfg));
 
     // Parameters and the such are kept

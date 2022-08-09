@@ -61,21 +61,6 @@ typedef enum ir_type {
 	IR_FREE 
 } ir_type;
 
-/*
-typedef struct symVer {
-    struct symbolNode* symbol; // the actual symbol node for this symbol
-    int version; // the version of this symbol
-    struct IR* assign; // where in the CFG this SymbolVersion was assigned
-} SymbolVersion;
-*/
-
-// Is this necessary?
-enum terminatorType {
-    TERM_JUMP,
-    TERM_BRANCH,
-    TERM_RET
-};
-
 typedef struct symbolVersion {
     struct symbolNode* symbol;
     struct IR* def;

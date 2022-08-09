@@ -74,46 +74,98 @@ struct struct_10 {
 int std_system_println(struct struct_1 _format, ...) {va_list _25_args;va_start(_25_args, _format.data);int retval = vprintf(_format.data, _25_args);va_end(_25_args);char newLine[2] = {'\n', '\0'};printf(newLine);return retval;}
 
 int64_t test_testModule_main(struct struct_2 _args);
+struct struct_10 test_testModule_hmm();
 struct struct_10 test_testModule_givesAnError(struct struct_1 _filename);
 
-#ifndef ORANGE_PROGRAM_16333
-#define ORANGE_PROGRAM_16333
+#ifndef ORANGE_PROGRAM_3709
+#define ORANGE_PROGRAM_3709
 
 int64_t test_testModule_main(struct struct_2 _args)
 {
 	int64_t retval;
 	int64_t _0;
-	struct struct_10 (*_1) (struct struct_1 _filename);
-	struct struct_1 _3;
+	struct struct_10 (*_1) ();
 	struct struct_10 _2;
+	int64_t _3;
 	int64_t _4;
-	int64_t _5;
-	bool _6;
+	bool _5;
 	struct struct_2 _args_0;
-	int64_t _7;
+	int64_t _6;
 	_args_0 = _args;
-L6:; // incoming:1
-	_1 = test_testModule_givesAnError;
-	_3 = (struct struct_1) {5, "Hello"};
-	_2 = _1(_3);
-	_4 = _2.tag;
-	_5 = 11;
-	_6 = _4 == _5;
-	if (!_6) {
-		goto L9;
+L9:; // incoming:1
+	_1 = test_testModule_hmm;
+	_2 = _1();
+	_3 = _2.tag;
+	_4 = 11;
+	_5 = _3 == _4;
+	if (!_5) {
+		goto L12;
 	} else {
-		goto L7;
+		goto L10;
 	}
-L7:; // incoming:1
-	_7 = _2.success;
-	_0 = _7;
-	goto L8;
-L8:; // incoming:2
+L10:; // incoming:1
+	_6 = _2.success;
+	_0 = _6;
+	goto L11;
+L11:; // incoming:2
 	retval = _0;
 	goto end;
-L9:; // incoming:1
+L12:; // incoming:1
 	_0 = 0;
-	goto L8;
+	goto L11;
+end:;
+	return retval;
+}
+
+struct struct_10 test_testModule_hmm()
+{
+	struct struct_10 retval;
+	int64_t _0;
+	struct struct_10 (*_2) (struct struct_1 _filename);
+	struct struct_1 _4;
+	struct struct_10 _3;
+	int64_t _5;
+	int64_t _6;
+	bool _7;
+	int64_t (*_13) (struct struct_1 _format, ...);
+	struct struct_1 _15;
+	int64_t _14;
+	int64_t _17;
+	int64_t (*_10) (struct struct_1 _format, ...);
+	struct struct_1 _12;
+	int64_t _11;
+	int64_t (*_18) (struct struct_1 _format, ...);
+	struct struct_1 _20;
+	int64_t _19;
+L1:; // incoming:1
+	_0 = 11;
+	_2 = test_testModule_givesAnError;
+	_4 = (struct struct_1) {3, "lol"};
+	_3 = _2(_4);
+	_5 = _3.tag;
+	_6 = 11;
+	_7 = _5 == _6;
+	if (!_7) {
+		goto L6;
+	} else {
+		goto L2;
+	}
+L2:; // incoming:1
+	_13 = std_system_println;
+	_15 = (struct struct_1) {4, "done"};
+	_14 = _13(_15);
+	_17 = 5;
+	retval = (struct struct_10) {_0, _17};
+	goto end;
+L6:; // incoming:1
+	retval = _3;
+	_10 = std_system_println;
+	_12 = (struct struct_1) {3, "hmm"};
+	_11 = _10(_12);
+	_18 = std_system_println;
+	_20 = (struct struct_1) {4, "hmm2"};
+	_19 = _18(_20);
+	goto end;
 end:;
 	return retval;
 }
@@ -121,44 +173,12 @@ end:;
 struct struct_10 test_testModule_givesAnError(struct struct_1 _filename)
 {
 	struct struct_10 retval;
-	int64_t (*_0) (struct struct_1 _format, ...);
-	struct struct_1 _2;
-	int64_t _1;
-	int64_t _12;
-	struct struct_3 _156_anError_0;
-	int64_t _14;
-	int64_t _15;
-	bool _16;
+	int64_t _0;
 	struct struct_1 _filename_0;
-	int64_t (*_17) (struct struct_1 _format, ...);
-	struct struct_1 _19;
-	int64_t _18;
-	int64_t (*_20) (struct struct_1 _format, ...);
-	struct struct_1 _22;
-	int64_t _21;
 	_filename_0 = _filename;
-L1:; // incoming:1
-	_0 = std_system_println;
-	_2 = (struct struct_1) {3, "Two"};
-	_1 = _0(_2);
-	_12 = 8;
-	_156_anError_0 = (struct struct_3) {_12};
-	retval = (struct struct_10) {_12};
-	_14 = _156_anError_0.tag;
-	_15 = 11;
-	_16 = _14 == _15;
-	if (!_16) {
-		goto L4;
-	} else {
-		goto end;
-	}
-L4:; // incoming:1
-	_17 = std_system_println;
-	_19 = (struct struct_1) {3, "One"};
-	_18 = _17(_19);
-	_20 = std_system_println;
-	_22 = (struct struct_1) {5, "Three"};
-	_21 = _20(_22);
+L0:; // incoming:1
+	_0 = 8;
+	retval = (struct struct_10) {_0};
 	goto end;
 end:;
 	return retval;
