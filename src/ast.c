@@ -189,6 +189,8 @@ ASTNode* AST_Create_arglist(struct symbolNode* scope, struct position pos)
 ASTNode* AST_Create_namedArg(char* name, struct astNode* expr, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_NAMED_ARG, scope, pos);
+    retval->namedArg.name = name;
+    retval->namedArg.expr = expr;
     return retval;
 }
 

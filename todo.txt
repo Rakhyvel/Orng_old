@@ -432,7 +432,7 @@ x Generate C code from IR
 			x if a return value is detected to not be a successful type, it should follow the error path
 		x coerce between if statement clauses for enum if coerced type is given
 			x check the coerce type in getType (?) (there is no coerced type)
-		- Arglists should accept coercion too
+		x Arglists should accept coercion too
 		x Keep original type
 		- panic messages
 			- stack trace

@@ -339,7 +339,7 @@ void printVarDef(FILE* out, SymbolVersion* version)
     if (!version->symbol->isVolatile) {
         fprintf(out, "_%d", version->version);
     } else {
-        version->symbol->visited = true;
+        //version->symbol->visited = true;
     }
     if (functionPtr) {
         fprintf(out, ") (");
@@ -958,12 +958,15 @@ void generateFunctionDefinitions(FILE* out, CFG* callGraphNode)
         printType(out, returns);
         fprintf(out, " retval;\n");
     }
+    if (!strcmp(symbol->name, "add")) {
+        printf("herhe\n");
+    }
     forall(elem, callGraphNode->basicBlocks)
     {
         BasicBlock* bb = elem->data;
         for (IR* ir = bb->entry; ir != NULL; ir = ir->next) {
             SymbolVersion* symbver = ir->dest;
-            if (!symbver || !symbver->used || symbver->symbol->visited || symbver->type->astType == AST_VOID || symbver->def != ir) {
+            if (!symbver || !symbver->used || symbver->type->astType == AST_VOID || symbver->def != ir) { // Removed a check for symbver.symbol.visited, was that needed? why?
                 continue;
             }
             printVarDef(out, symbver);

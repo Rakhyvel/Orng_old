@@ -1161,7 +1161,7 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
         return temp;
     }
     case AST_DOT: {
-        if (node->dot.left->type->astType == AST_IDENT && !strcmp(node->dot.left->type->ident.data, "Module")) {
+        if (node->dot.left->type->astType == AST_IDENT && (!strcmp(node->dot.left->type->ident.data, "Module") || !strcmp(node->dot.left->type->ident.data, "Type"))) {
             if (node->dot.symbol->symbolType == SYMBOL_FUNCTION) {
                 createCFG(node->dot.symbol, cfg);
             }
@@ -1529,7 +1529,12 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
         SymbolVersion* left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel, errorLabel, false);
         SymbolVersion* temp = tempSymbolVersion(cfg, node->binop.right);
 
-        IR* ir = createIR_ast(IR_CONVERT, temp, left, NULL, node->binop.left->type, node->binop.right, node->pos);
+        IR* ir = NULL;
+        if (node->binop.right->astType == AST_PARAMLIST) { // C doesn't allow explicit casts to structs, but does allow implicit copies
+            ir = createIR(IR_COPY, temp, left, NULL, node->pos);
+        } else {
+            ir = createIR_ast(IR_CONVERT, temp, left, NULL, node->binop.left->type, node->binop.right, node->pos);
+        }
         temp->def = ir;
         appendInstruction(cfg, ir);
         return temp;
@@ -2901,7 +2906,7 @@ List* createCFG(SymbolNode* functionSymbol, CFG* caller)
         appendInstruction(cfg, createIR(IR_COPY, returnVersion, eval, NULL, invalid_pos));
         appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, NULL, invalid_pos));
     }
-    //printf("%s\n", functionSymbol->name);
+    //printf("\n%s\n", functionSymbol->name);
     //printInstructionList(cfg);
 
     // Convert quadruple list to CFG of basic blocks, find versions!

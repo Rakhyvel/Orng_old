@@ -25,6 +25,7 @@ ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning);
 static ASTNode* expandTypeIdent(ASTNode* type, bool reassigning);
 ASTNode* validateAST(ASTNode* node);
 void inferTypes(SymbolNode* var);
+void argsMatchParams(ASTNode* expr, ASTNode* args, ASTNode* params);
 Program Validator_Validate(SymbolNode* symbol);
 
 int getTypeSize(ASTNode* type)
@@ -432,6 +433,7 @@ static ASTNode* expandTypeIdent(ASTNode* type, bool reassigning)
     }
 
     expanded->originalType = type->originalType ? type->originalType : type;
+    expanded->isConst = expanded->originalType->isConst;
 
     return expanded;
 }
@@ -1446,12 +1448,16 @@ void inferTypes(SymbolNode* var)
             bool typesEquivalent = typesAreEquivalent(defType, var->type);
 
             if (defType && (defType->astType != AST_UNDEF || var->def->astType != AST_UNDEF) && !typesEquivalent) {
-                // Type annot.'d, types disagree
-                ASTNode* coerced = NULL;
-                if (coerced = tryCoerceToEnum(var->type, var->def)) {
-                    var->def = coerced;
+                if (var->def->astType == AST_ARGLIST) {
+                    argsMatchParams(NULL, var->def, var->type);
                 } else {
-                    typeMismatchError(var->pos, var->type, defType);
+                    // Type annot.'d, types disagree
+                    ASTNode* coerced = NULL;
+                    if (coerced = tryCoerceToEnum(var->type, var->def)) {
+                        var->def = coerced;
+                    } else {
+                        typeMismatchError(var->pos, var->type, defType);
+                    }
                 }
             } else {
                 // Types annot.'d, types agree
@@ -1531,7 +1537,7 @@ void namedArgsMatch(ASTNode* expr, ASTNode* args, ASTNode* params)
             List_Append(args->arglist.args, argExpr);
         } else if (symbol->def->astType == AST_UNDEF) {
             error2(args->pos, symbol->pos, "named argument list does not specify all non-default parameters");
-        } else {
+        } else if (!symbol->type->isConst) {
             List_Append(args->arglist.args, symbol->def);
         }
     }
@@ -1619,7 +1625,7 @@ void positionalArgsMatch(ASTNode* expr, ASTNode* args, ASTNode* params)
                 } else {
                     error(args->pos, "argument list with too few arguments");
                 }
-            } else {
+            } else if (!paramSymbol->type->isConst) {
                 List_Append(args->arglist.args, paramDef);
             }
         }
@@ -1628,11 +1634,14 @@ void positionalArgsMatch(ASTNode* expr, ASTNode* args, ASTNode* params)
 
 void argsMatchParams(ASTNode* expr, ASTNode* args, ASTNode* params)
 {
-    if (args->arglist.args->size == 0 && params->paramlist.defines->size == 0) {
+    if ((args->astType != AST_ARGLIST && args->astType != AST_PAREN) || (params->astType != AST_PARAMLIST && params->astType != AST_VOID)) {
+        incompatibleTypesError(args->pos, getType(args, false, false), params);
+    } else if (args->arglist.args->size == 0 && params->paramlist.defines->size == 0) {
         return;
     }
 
-    if (args->arglist.args->size == 0 || ((ASTNode*)List_Get(args->arglist.args, 0))->astType == AST_NAMED_ARG) {
+    ASTNode* firstArg = List_Get(args->arglist.args, 0);
+    if (args->arglist.args->size == 0 || firstArg->astType == AST_NAMED_ARG) {
         namedArgsMatch(expr, args, params);
     } else {
         positionalArgsMatch(expr, args, params);
@@ -2545,11 +2554,15 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
         retval = node;
         break;
     }
+    case AST_NAMED_ARG: {
+        node->namedArg.expr = validateAST(node->namedArg.expr, coerceType);
+        retval = node;
+        break;
+    }
     case AST_ADDR:
     case AST_FUNCTION:
     case AST_UNDEF:
-    case AST_VOID:
-    case AST_NAMED_ARG: {
+    case AST_VOID: {
         retval = UNDEF_TYPE;
         break;
     }
@@ -2559,7 +2572,9 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
     }
     if (retval) {
         retval->type = getType(retval, false, true);
-        if (coerceType && coerceType->astType != AST_UNDEF && retval->astType != AST_UNDEF && retval->type->astType != AST_UNDEF && !typesAreEquivalent(retval->type, coerceType)) {
+        if (retval->astType == AST_ARGLIST && coerceType && coerceType->astType != AST_UNDEF) {
+            argsMatchParams(NULL, retval, coerceType);
+        } else if (coerceType && coerceType->astType != AST_UNDEF && retval->astType != AST_UNDEF && retval->type->astType != AST_UNDEF && !typesAreEquivalent(retval->type, coerceType)) {
             ASTNode* coercedEnum = NULL;
             if (coercedEnum = tryCoerceToEnum(coerceType, retval)) {
                 retval = coercedEnum;
@@ -2761,7 +2776,9 @@ Program Validator_Validate(SymbolNode* symbol)
 
         ASTNode* retType = symbol->type->function.codomainType;
         if (!symbol->isExtern && retType->astType != AST_VOID) {
-            if (newDef->astType != AST_UNDEF) {
+            if (newDef->astType == AST_ARGLIST) {
+                argsMatchParams(NULL, newDef, retType);
+            } else if (newDef->astType != AST_UNDEF) {
                 if (!typesAreEquivalent(newDef->type, retType)) {
                     ASTNode* coerced = tryCoerceToEnum(retType, newDef);
                     if (coerced) {
