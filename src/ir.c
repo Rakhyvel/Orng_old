@@ -1877,7 +1877,7 @@ bool copyAndConstantPropagation(CFG* cfg)
                     LOG("load array copy\n");
                 }
                 // Arglist literal propagation
-                else if (def->src1->def && def->src1->def->irType == IR_LOAD_ARGLIST && !def->src1->symbol->isVolatile) {
+                else if (false && def->src1->def && def->src1->def->irType == IR_LOAD_ARGLIST && !def->src1->symbol->isVolatile) {
                     def->irType = IR_LOAD_ARGLIST;
                     def->listData = def->src1->def->listData;
                     def->src1 = NULL;

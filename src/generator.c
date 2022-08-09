@@ -735,12 +735,21 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
         break;
     }
     case IR_CONVERT: {
-        printVarAssign(out, ir->dest);
-        fprintf(out, "(");
-        printType(out, ir->toType);
-        fprintf(out, ") ");
-        printVar(out, ir->src1);
-        fprintf(out, ";\n");
+        if (ir->toType->astType == AST_ENUM) {
+            printVarAssign(out, ir->dest);
+            fprintf(out, "*((");
+            printType(out, ir->toType);
+            fprintf(out, "*) &");
+            printVar(out, ir->src1);
+            fprintf(out, ");\n");
+        } else {
+            printVarAssign(out, ir->dest);
+            fprintf(out, "(");
+            printType(out, ir->toType);
+            fprintf(out, ") ");
+            printVar(out, ir->src1);
+            fprintf(out, ";\n");
+        }
         break;
     }
     case IR_PHONY: {

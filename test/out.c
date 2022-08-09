@@ -1,7 +1,7 @@
 /* Code generated using the Orng compiler http://josephs-projects.com */
 
-#ifndef ORNG_30031
-#define ORNG_30031
+#ifndef ORNG_9514
+#define ORNG_9514
 
 /* Includes */
 #include <stdbool.h>
@@ -74,7 +74,15 @@ struct struct_10 {
 struct struct_11 {
 	int64_t tag;
 	union {
+		int64_t fileNotFound;
+	};
+};
+
+struct struct_12 {
+	int64_t tag;
+	union {
 		int64_t success;
+		int64_t fileNotFound;
 	};
 };
 
@@ -83,58 +91,94 @@ int std_system_println(struct struct_1 _format, ...) {va_list _25_args;va_start(
 
 /* Function definitions */
 int64_t test_testModule_main(struct struct_2 _args);
-struct struct_10 test_testModule_Complex_add(struct struct_10 _c1, struct struct_10 _c2);
+struct struct_12 test_testModule_hmm();
+struct struct_11 test_testModule_givesAnError();
 
 int64_t test_testModule_main(struct struct_2 _args)
 {
 	int64_t retval;
-	int64_t _1;
-	int64_t _2;
-	struct struct_10 _159_x_0;
+	int64_t _0;
+	struct struct_12 (*_1) ();
+	struct struct_12 _2;
+	int64_t _3;
 	int64_t _4;
-	int64_t _5;
-	struct struct_10 _159_y_0;
-	struct struct_10 (*_6) (struct struct_10 _c1, struct struct_10 _c2);
-	struct struct_10 _7;
+	bool _5;
 	struct struct_2 _args_0;
+	int64_t _6;
 	_args_0 = _args;
+L4:; // incoming:1
+	_1 = test_testModule_hmm;
+	printf("test/testModule.orng: \n      |\n32    | main::(args:[]String)->Int = hmm() catch 0\n      |                                  ^\n");
+	_2 = _1();
+	_3 = _2.tag;
+	_4 = 11;
+	_5 = _3 == _4;
+	if (!_5) {
+		goto L7;
+	} else {
+		goto L5;
+	}
+L5:; // incoming:1
+	_6 = _2.success;
+	_0 = _6;
+	goto L6;
+L6:; // incoming:2
+	retval = _0;
+	goto end;
+L7:; // incoming:1
+	_0 = 0;
+	goto L6;
+end:;
+	return retval;
+}
+
+struct struct_12 test_testModule_hmm()
+{
+	struct struct_12 retval;
+	struct struct_11 (*_0) ();
+	struct struct_11 _1;
+	struct struct_12 _2;
+	struct struct_12 _156_x_0;
+	int64_t _3;
+	int64_t _4;
+	bool _5;
+	int64_t (*_6) (struct struct_1 _format, ...);
+	struct struct_1 _8;
+	int64_t _7;
 L1:; // incoming:1
-	_1 = 0;
-	_2 = 3;
-	_159_x_0 = (struct struct_10) {_1, _2};
-	_4 = 1;
-	_5 = 4;
-	_159_y_0 = (struct struct_10) {_4, _5};
-	_6 = test_testModule_Complex_add;
-	printf("test/testModule.orng: \n      |\n37    | z := Complex.add(x, y)\n      |                 ^\n");
-	_7 = _6(_159_x_0, _159_y_0);
-	retval = 0;
+	_0 = test_testModule_givesAnError;
+	printf("test/testModule.orng: \n      |\n27    | x:FileError||AllocationError!Int = givesAnError()\n      |                                                ^\n");
+	_1 = _0();
+	_2 = *((struct struct_12*) &_1);
+	_156_x_0 = _2;
+	retval = _2;
+	_3 = _156_x_0.tag;
+	_4 = 11;
+	_5 = _3 == _4;
+	if (!_5) {
+		goto L3;
+	} else {
+		goto end;
+	}
+L3:; // incoming:1
+	_6 = std_system_println;
+	_8 = (struct struct_1) {4, "hmm2"};
+	printf("test/testModule.orng: \n      |\n26    | errdefer std.system.println(\"hmm2\")\n      |                            ^\n");
+	_7 = _6(_8);
 	goto end;
 end:;
 	return retval;
 }
 
-struct struct_10 test_testModule_Complex_add(struct struct_10 _c1, struct struct_10 _c2)
+struct struct_11 test_testModule_givesAnError()
 {
-	struct struct_10 retval;
-	float _1;
-	float _2;
-	float _3;
-	float _4;
-	float _5;
-	float _6;
-	struct struct_10 _c1_0;
-	struct struct_10 _c2_0;
-	_c1_0 = _c1;
-	_c2_0 = _c2;
+	struct struct_11 retval;
+	int64_t _0;
+	struct struct_11 _1;
 L0:; // incoming:1
-	_1 = _c1_0.re;
-	_2 = _c2_0.re;
-	_3 = _1 + _2;
-	_4 = _c1_0.im;
-	_5 = _c2_0.im;
-	_6 = _4 + _5;
-	retval = (struct struct_10) {_3, _6};
+	_0 = 8;
+	_1 = (struct struct_11) {_0};
+	retval = _1;
 	goto end;
 end:;
 	return retval;

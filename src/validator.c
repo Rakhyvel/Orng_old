@@ -1392,11 +1392,10 @@ ASTNode* tryCoerceToEnum(ASTNode* enumType, ASTNode* member)
             return NULL;
         }
     }
-    // If the member is an enum expression, and the type of the member is a subtype of the coerce type, just expand the member type to be the coerce type
+    // If the member is an enum expression, and the type of the member is a subtype of the coerce type, create conversion to superenum
     else if (member->type->astType == AST_ENUM) {
         if (enumSubtype(member->type, enumType)) {
-            member->type = enumType;
-            return member;
+            return AST_Create_cast(member, enumType, member->scope, member->pos);
         } else {
             return NULL;
         }
@@ -2415,7 +2414,7 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
         node->call.left = expr;
         expr->type = exprType;
         node->call.fnType = exprType;
-        if (exprType->function.codomainType->astType == AST_ENUM && exprType->_enum.wasAnError && !errorHandled) {
+        if (exprType->function.codomainType->astType == AST_ENUM && exprType->function.codomainType->_enum.wasAnError && !errorHandled) {
             error(node->pos, "possible error returned from function not handled");
         }
         if (exprType->astType != AST_FUNCTION) {

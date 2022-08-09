@@ -11,7 +11,7 @@ testModule::Module = (
 	)
 
 	FileError::Type = <
-		fileNotFound
+		fileNotFound:Int
 		resourceBusy
 	>
 
@@ -20,21 +20,14 @@ testModule::Module = (
 		resourceBusy
 	>
 
-	givesAnError::(filename:String)->FileError||AllocationError!Int = {FileError.fileNotFound}
+	givesAnError::()->FileError = FileError.fileNotFound
 
 	hmm::()->FileError||AllocationError!Int = {
 		errdefer std.system.println("hmm2")
-		{
-			errdefer std.system.println("hmm")
-		}
-		std.system.println("done")
-		givesAnError("lol")
+		x:FileError||AllocationError!Int = givesAnError()
+		return x
 	}
 
-	main::(args:[]String)->Int = {
-		x:Complex = (0, 3)
-		y:Complex = (1, 4)
-		z := Complex.add(x, y)
-		0
-	}
+	-- Doesn't catch `main::(args:[]String)->Int = hmm catch 0`, when `hmm` isn't correct type
+	main::(args:[]String)->Int = hmm() catch 0
 )
