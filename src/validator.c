@@ -22,6 +22,7 @@ bool permissiveTypeEquiv = false; // True during validation phase, false during 
 static ASTNode* mainFunctionType;
 bool typesAreEquivalent(ASTNode* a, ASTNode* b);
 ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning);
+void validateType(ASTNode* node, bool collectThisType);
 static ASTNode* expandTypeIdent(ASTNode* type, bool reassigning);
 ASTNode* validateAST(ASTNode* node);
 void inferTypes(SymbolNode* var);
@@ -331,6 +332,9 @@ static bool unionEnums(ASTNode* left, ASTNode* right)
             ASTNode* leftDefine = elem2->data;
             SymbolNode* leftVar = leftDefine->define.symbol;
             if (!strcmp(rightVar->name, leftVar->name)) {
+                if (!strcmp(rightVar->name, "c")) {
+                    printf("URm!\n");
+                }
                 found = true;
                 break;
             }
@@ -960,8 +964,6 @@ static int typesAreCompatible(ASTNode* a, ASTNode* b)
 
 /*
 checks whether A <= B, that is "is A a subtype of B"
-Note that there is no subtype polymorphism other than T <: :T and enum sets
-All other types are distinct
 */
 bool typesAreEquivalent(ASTNode* a, ASTNode* b)
 {
@@ -1006,7 +1008,9 @@ bool typesAreEquivalent(ASTNode* a, ASTNode* b)
     }
 
     bool retval = true;
-    if (aExpand->astType != bExpand->astType && aExpand != AST_FUNCTION) {
+    if (bExpand->astType == AST_INFER_ERROR && aExpand->astType != AST_INFER_ERROR) {
+        retval = false;
+    } else if (aExpand->astType != bExpand->astType && aExpand != AST_FUNCTION) {
         retval = false;
     } else {
         switch (aExpand->astType) {
@@ -1055,6 +1059,9 @@ bool typesAreEquivalent(ASTNode* a, ASTNode* b)
                 retval = enumSubtype(aExpand, bExpand) && enumSubtype(bExpand, aExpand);
             }
             break;
+        case AST_INFER_ERROR: {
+            retval = aExpand == bExpand;
+        }
         case AST_PARAMLIST: {
             if (aExpand->paramlist.defines->size != bExpand->paramlist.defines->size) {
                 retval = false;
@@ -1182,13 +1189,14 @@ static void putTag(char* fieldName, ASTNode* fieldType)
 static struct graph* addGraphNode(List* depenGraph, ASTNode* structType)
 {
     // Check if type is enum, if so, collect tags
-    if (structType->astType == AST_ENUM) {
+    if (structType->astType == AST_ENUM || structType->astType == AST_INFER_ERROR) {
         forall(elem, structType->_enum.defines)
         {
             ASTNode* define = elem->data;
             SymbolNode* symbol = define->define.symbol;
             // Check if there is a set created in the map, if not create it
             putTag(symbol->name, symbol->type);
+            printf("%s\n", symbol->name);
         }
     }
 
@@ -1256,6 +1264,7 @@ void validateType(ASTNode* node, bool collectThisType)
         validateAST(node, NULL);
         break;
     }
+    case AST_INFER_ERROR:
     case AST_ENUM: {
         validateAST(node, NULL);
         break;
@@ -1311,7 +1320,7 @@ void validateType(ASTNode* node, bool collectThisType)
     node->isValid = true;
 
     // Collect structs
-    if (collectThisType && (node->astType == AST_PARAMLIST || node->astType == AST_ARRAY || node->astType == AST_ENUM) && node->paramlist.defines->size > 0) {
+    if (collectThisType && (node->astType == AST_PARAMLIST || node->astType == AST_ARRAY || node->astType == AST_ENUM || node->astType == AST_INFER_ERROR) && node->paramlist.defines->size > 0) {
         DGraph* graphNode = addGraphNode(structDepenGraph, node);
 
         // go through fields, if field is a parameter list, add to dependencies
@@ -1320,7 +1329,7 @@ void validateType(ASTNode* node, bool collectThisType)
             ASTNode* fieldDefine = paramElem->data;
             SymbolNode* fieldVar = fieldDefine->define.symbol;
             ASTNode* fieldType = expandTypeIdent(fieldVar->type, true);
-            if (fieldType->astType == AST_PARAMLIST || fieldType->astType == AST_ARRAY || fieldType->astType == AST_ENUM) {
+            if (fieldType->astType == AST_PARAMLIST || fieldType->astType == AST_ARRAY || fieldType->astType == AST_ENUM || fieldType->astType == AST_INFER_ERROR) {
                 DGraph* dependency = addGraphNode(structDepenGraph, fieldType);
                 List_Append(graphNode->dependencies, dependency);
             }
@@ -1379,7 +1388,7 @@ ASTNode* tryCoerceToEnum(ASTNode* enumType, ASTNode* member)
     validateType(enumType, true);
 
     ASTNode* expandedEnumType = expandTypeIdent(enumType, false);
-    if (expandedEnumType->astType != AST_ENUM) {
+    if (expandedEnumType->astType != AST_ENUM && expandedEnumType->astType != AST_INFER_ERROR) {
         return NULL;
     } else if (member->astType == AST_NOTHING) {
         ASTNode* firstDefine = List_Get(enumType->_enum.defines, 0);
@@ -1394,6 +1403,9 @@ ASTNode* tryCoerceToEnum(ASTNode* enumType, ASTNode* member)
     }
     // If the member is an enum expression, and the type of the member is a subtype of the coerce type, create conversion to superenum
     else if (member->type->astType == AST_ENUM) {
+        if (enumType->astType == AST_INFER_ERROR) {
+            unionEnums(enumType, member->type);
+        }
         if (enumSubtype(member->type, enumType)) {
             return AST_Create_cast(member, enumType, member->scope, member->pos);
         } else {
@@ -2436,7 +2448,8 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
         retval = UNDEF_TYPE;
         break;
     }
-    case AST_ENUM: {
+    case AST_ENUM:
+    case AST_INFER_ERROR: {
         ListElem* elem = List_Begin(node->_enum.defines);
         for (; elem != List_End(node->_enum.defines); elem = elem->next) {
             ASTNode* define = elem->data;
@@ -2773,10 +2786,17 @@ Program Validator_Validate(SymbolNode* symbol)
         }
 
         ASTNode* retType = symbol->type->function.codomainType;
+        if (symbol->type->function.codomainType->astType == AST_INFER_ERROR) {
+            printf("loln");
+        }
         if (retType->astType != AST_VOID) {
             symbol->def = validateAST(symbol->def, symbol->type->function.codomainType);
         } else {
             symbol->def = validateAST(symbol->def, NULL);
+        }
+        if (symbol->type->function.codomainType->astType == AST_INFER_ERROR) {
+            symbol->type->function.codomainType->astType = AST_ENUM;
+            addGraphNode(structDepenGraph, symbol->type->function.codomainType);
         }
 
         if (!symbol->isExtern && retType->astType != AST_VOID && !allReturnPath(symbol->def)) {

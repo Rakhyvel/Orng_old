@@ -434,6 +434,9 @@ x Generate C code from IR
 			x check the coerce type in getType (?) (there is no coerced type)
 		x Arglists should accept coercion too
 		x Keep original type
+		- !<Type>
+			- infers the error enum set from RHS!
+		- New main function return type
 		- panic messages
 			- stack trace
 				- After call, if returned an error, THEN push call pos string to stack
@@ -443,9 +446,6 @@ x Generate C code from IR
 				- Checks indexes are within array bounds
 				- Checks that <expr>? are not nothing
 				- (future, performs refinement type predicate checks)
-		- !<Type>
-			- infers the error enum set from RHS!
-		- New main function return type
 		- If case is on error type, require all fields to be accounted for
 - Orange should compile the program for you, too
 	- No verbatims, instead write the C file and header, include it, and add it to be included when compiling

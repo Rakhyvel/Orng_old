@@ -743,6 +743,14 @@ ASTNode* AST_Create_error(struct astNode* left, struct astNode* right, struct sy
     return retval;
 }
 
+ASTNode* AST_Create_inferError(struct astNode* expr, struct symbolNode* scope, struct position pos)
+{
+    ASTNode* retval = AST_Create(AST_INFER_ERROR, scope, pos);
+    retval->_enum.expr = expr;
+    retval->_enum.defines = List_Create();
+    return retval;
+}
+
 ASTNode* AST_Create_array(struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_ARRAY, scope, pos);
@@ -863,10 +871,16 @@ int AST_TypeRepr(char* str, ASTNode* type)
         str += AST_TypeRepr(str, output);
         break;
     }
+    case AST_INFER_ERROR: {
+        str += sprintf(str, "!");
+        str += AST_TypeRepr(str, type->_enum.expr);
+        break;
+    }
     case AST_ADDR: {
         str += sprintf(str, "&");
         str += AST_TypeRepr(str, type->unop.expr);
-    } break;
+        break;
+    }
     case AST_ARRAY: {
         ASTNode* lengthDefine = List_Get(type->paramlist.defines, 0);
         SymbolNode* lengthSymbol = lengthDefine->define.symbol;

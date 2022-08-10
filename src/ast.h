@@ -105,6 +105,7 @@ enum astType {
     AST_ENUM,
 	AST_UNION,
 	AST_ERROR,
+	AST_INFER_ERROR,
     AST_FUNCTION,
     AST_ADDR,
     AST_ARRAY,
@@ -247,6 +248,7 @@ typedef struct astNode_paramlist {
 typedef struct astNode_enum {
     List* defines;
     bool wasAnError;
+    struct astNode* expr; // Used for infer errors
 } astNode_enum;
 
 typedef struct astNode_function {
@@ -415,6 +417,7 @@ ASTNode* AST_Create_paramlist(struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_enum(struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_union(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_error(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_inferError(struct astNode* expr, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_array(struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_function(struct astNode* domain, struct astNode* codomain, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_addr(struct astNode* type, struct symbolNode* scope, struct position pos);

@@ -781,7 +781,7 @@ ASTNode* parseDefine(SymbolNode* scope)
 
     if (!inferType) {
         type = parseType(symbol, false);
-        symbol->isError = type->astType == AST_ERROR;
+        symbol->isError = type->astType == AST_ERROR || type->astType == AST_INFER_ERROR;
         type->isConst |= isConst;
         if (type->astType == AST_IDENT && !strcmp(type->ident.data, "Package")) {
             symbol->symbolType = SYMBOL_PACKAGE;
@@ -791,7 +791,7 @@ ASTNode* parseDefine(SymbolNode* scope)
             symbol->symbolType = SYMBOL_TYPE;
         } else if (type->astType == AST_FUNCTION && type->isConst) {
             symbol->symbolType = SYMBOL_FUNCTION;
-            symbol->isError = type->function.codomainType->astType == AST_ERROR;
+            symbol->isError = type->function.codomainType->astType == AST_ERROR || type->function.codomainType->astType == AST_INFER_ERROR;
         } else {
             symbol->symbolType = SYMBOL_VARIABLE;
         }
@@ -987,6 +987,19 @@ ASTNode* parseTypeNonConst(SymbolNode* scope)
         List_Append(maybeEnum->_enum.defines, nothingDefine);
         List_Append(maybeEnum->_enum.defines, somethingDefine);
         return maybeEnum;
+    } else if ((token = accept(TOKEN_EMARK)) != NULL) {
+        ASTNode* errorEnum = AST_Create_enum(scope, token->pos);
+        errorEnum->astType = AST_INFER_ERROR;
+        errorEnum->_enum.wasAnError = true;
+
+        SymbolNode* successSymbol = Symbol_Create("success", SYMBOL_VARIABLE, NULL, errorEnum->pos);
+        ASTNode* successDefine = AST_Create_define(successSymbol, scope, token->pos);
+        ASTNode* successType = parseType(scope);
+        errorEnum->_enum.expr = successType;
+        successSymbol->type = successType;
+        List_Append(errorEnum->_enum.defines, successDefine);
+
+        return errorEnum;
     } else if ((token = accept(TOKEN_LSQUARE)) != NULL) {
         ASTNode* arrStruct = AST_Create_array(scope, token->pos);
 
