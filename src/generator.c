@@ -988,7 +988,9 @@ void generateFunctionDefinitions(FILE* out, CFG* callGraphNode)
     }
     generatePhiFunction(out, callGraphNode);
     clearBBVisitedFlags(callGraphNode);
-    generateBasicBlock(out, callGraphNode, callGraphNode->blockGraph);
+    if (callGraphNode->blockGraph) {
+        generateBasicBlock(out, callGraphNode, callGraphNode->blockGraph);
+    }
     fprintf(out, "end:;\n");
     if (callGraphNode->symbol->type->function.codomainType->astType != AST_VOID) {
         fprintf(out, "\treturn retval;\n}\n\n");
@@ -1027,7 +1029,9 @@ void generateMainFunction(FILE* out, CFG* callGraph)
 
     fprintf(out, "\t}\n");
 
-    fprintf(out, "\tint64_t retval = ");
+    fprintf(out, "\t");
+    printType(out, callGraph->symbol->type->function.codomainType);
+    fprintf(out, " retval = ");
     printPath(out, callGraph->symbol);
     fprintf(out, "(args);\n");
 
@@ -1039,7 +1043,7 @@ void generateMainFunction(FILE* out, CFG* callGraph)
 
     fprintf(out, "\tfree(args.data);\n");
 
-    fprintf(out, "\tsystem(\"pause\");\n\treturn retval;\n");
+    fprintf(out, "\tsystem(\"pause\");\n\treturn retval.tag != %d;\n", getTag("success", VOID_TYPE));
 
     fprintf(out, "}\n");
 }

@@ -677,7 +677,7 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
         temp->def = ir;
         ir->listData = List_Create();
         List_Append(ir->listData, tag);
-        if (expr) {
+        if (expr && expr->type->astType != AST_VOID && getTypeEnum(node->enumLiteral.tag, node->type)->astType != AST_VOID) {
             List_Append(ir->listData, expr);
         }
         appendInstruction(cfg, ir);
@@ -2759,6 +2759,9 @@ void calculateVolatility(CFG* cfg)
 bool deadCode(CFG* cfg)
 {
     bool retval = false;
+    if (!cfg->blockGraph) {
+        return retval;
+    }
 
     calculateArgs(cfg); // Needs to be recalculated each time, because args need to be counted as 'used'. So need to find what args are
     findUnusedSymbolVersions(cfg);
@@ -2785,6 +2788,11 @@ bool deadCode(CFG* cfg)
             if (def->dest && !def->removed && !def->dest->used && def->dest->symbol != cfg->returnSymbol && def->irType != IR_PHONY) {
                 LOG("remove ir %d %s_%d %p\n", def->id, def->dest->symbol->name, def->dest->version, def->dest);
                 removeInstruction(bb, def);
+                retval = true;
+            }
+            if (def->dest && !def->removed && !def->dest->used && def->dest->symbol == cfg->returnSymbol && cfg->symbol->type->function.codomainType->astType == AST_VOID) {
+                removeInstruction(bb, def);
+                printf("lol\n");
                 retval = true;
             }
         }

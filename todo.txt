@@ -434,8 +434,8 @@ x Generate C code from IR
 			x check the coerce type in getType (?) (there is no coerced type)
 		x Arglists should accept coercion too
 		x Keep original type
-		- !<Type>
-			- infers the error enum set from RHS!
+		x !<Type>
+			x infers the error enum set from RHS!
 		- New main function return type
 		- panic messages
 			- stack trace

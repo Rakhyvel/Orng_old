@@ -7,3 +7,5 @@ bool typesAreEquivalent(ASTNode* a, ASTNode* b);
 int getTypeSize(ASTNode* type);
 int getTag(char* fieldName, ASTNode* fieldType);
 int getTagEnum(char* fieldName, ASTNode* enumType);
+ASTNode* getTypeEnum(int tag, ASTNode* enumType);
+bool enumContainsField(ASTNode* enumType, char* fieldName, ASTNode* fieldType);

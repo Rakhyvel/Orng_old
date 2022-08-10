@@ -1170,7 +1170,7 @@ static void putTag(char* fieldName, ASTNode* fieldType)
 
     // Add the type to the set using type equality, not equivalence
     bool typeSetContainsType = false;
-    forall(elem2, typeSet)
+    forall(elem2, typeSet) // Find if the type is in the typeSet
     {
         ASTNode* type = elem2->data;
         if (typesAreEquivalent(fieldType, type) && typesAreEquivalent(type, fieldType)) {
@@ -1383,6 +1383,32 @@ int getTagEnum(char* fieldName, ASTNode* enumType)
     PANIC("couldn't find tag enum");
 }
 
+ASTNode* getTypeEnum(int tag, ASTNode* enumType)
+{
+    forall(elem, enumType->_enum.defines)
+    {
+        ASTNode* define = elem->data;
+        SymbolNode* var = define->define.symbol;
+        if (getTag(var->name, var->type) == tag) {
+            return var->type;
+        }
+    }
+    PANIC("couldn't find tag enum");
+}
+
+bool enumContainsField(ASTNode* enumType, char* fieldName, ASTNode* fieldType)
+{
+    forall(elem, enumType->_enum.defines)
+    {
+        ASTNode* define = elem->data;
+        SymbolNode* var = define->define.symbol;
+        if (!strcmp(var->name, fieldName) && typesAreEquivalent(var->type, fieldType)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 ASTNode* tryCoerceToEnum(ASTNode* enumType, ASTNode* member)
 {
     validateType(enumType, true);
@@ -1423,6 +1449,11 @@ ASTNode* tryCoerceToEnum(ASTNode* enumType, ASTNode* member)
                 retval->type = expandedEnumType;
                 return retval;
             }
+        }
+        if (enumType->astType == AST_INFER_ERROR && enumContainsField(enumType, "success", VOID_TYPE)) {
+            ASTNode* retval = AST_Create_enumLiteral(getTag("success", VOID_TYPE), member, member->scope, member->pos);
+            retval->type = expandedEnumType;
+            return retval;
         }
         return NULL;
     }
@@ -2784,11 +2815,8 @@ Program Validator_Validate(SymbolNode* symbol)
             SymbolNode* child = Map_Get(symbol->children, elem->data);
             Validator_Validate(child);
         }
-
+        //BREAK(!strcmp(symbol->name, "main"));
         ASTNode* retType = symbol->type->function.codomainType;
-        if (symbol->type->function.codomainType->astType == AST_INFER_ERROR) {
-            printf("loln");
-        }
         if (retType->astType != AST_VOID) {
             symbol->def = validateAST(symbol->def, symbol->type->function.codomainType);
         } else {
@@ -2802,11 +2830,13 @@ Program Validator_Validate(SymbolNode* symbol)
         if (!symbol->isExtern && retType->astType != AST_VOID && !allReturnPath(symbol->def)) {
             error(symbol->pos, "not all paths return a value in '%s'", symbol->name);
         }
-        if (!strcmp(symbol->name, "main") && typesAreEquivalent(mainFunctionType, symbol->type)) {
-            if (mainFunction) {
-                error2(symbol->pos, mainFunction->pos, "multiple main function definitions");
-            } else {
-                mainFunction = symbol;
+        if (!strcmp(symbol->name, "main")) {
+            if (symbol->type->function.codomainType->astType == AST_ENUM && enumContainsField(symbol->type->function.codomainType, "success", VOID_TYPE)) {
+                if (mainFunction) {
+                    error2(symbol->pos, mainFunction->pos, "multiple main function definitions");
+                } else {
+                    mainFunction = symbol;
+                }
             }
         }
         break;

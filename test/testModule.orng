@@ -20,20 +20,13 @@ testModule::Module = (
 		resourceBusy
 	>
 
-	givesAnError::()->!() = hmm(0)
-
 	-- ->! is a double token morpheme
 	-- Means the function will return the codomain error unioned with whatever enums are returned in the entire body of the function
 	-- For eval exprs, returns, and try, if the type doesnt match with the ret type, but function is comptime, non-extern, implicit error function, and expr type is enum, add to union set
 	-- Afterwards, type is updated to be the correct error union enum type
-	hmm::(x:Int)->!() = {
-		errdefer std.system.println("Gone!")
-		if x > 0 {
-			return hmm(x-1)
-		} else {
-			return givesAnError()
-		}
+	hmm::()->Int = {
+		hmm()
 	}
 
-	main::(args:[]String)->Int = hmm(5) catch 0
+	main::(args:[]String)->!() = hmm()
 )

@@ -33,3 +33,10 @@ void debug_log(const char* file, int line, const char* function,
     vprintf(message, args);
     va_end(args);
 }
+
+void debug_break(int condition)
+{
+    if (condition) {
+        printf("breakpoint\n");
+    }
+}
