@@ -1431,11 +1431,27 @@ ASTNode* tryCoerceToEnum(ASTNode* enumType, ASTNode* member)
     else if (member->type->astType == AST_ENUM) {
         if (enumType->astType == AST_INFER_ERROR) {
             unionEnums(enumType, member->type);
-        }
-        if (enumSubtype(member->type, enumType)) {
-            return AST_Create_cast(member, enumType, member->scope, member->pos);
+            ASTNode* defineType = NULL;
+            forall(elem, enumType->_enum.defines)
+            {
+                ASTNode* define = elem->data;
+                SymbolNode* var = define->define.symbol;
+                defineType = var->type;
+                if (!strcmp(var->name, "success")) {
+                    break;
+                }
+            }
+            if ((defineType && defineType->astType == AST_VOID) || enumSubtype(member->type, enumType)) {
+                return AST_Create_cast(member, enumType, member->scope, member->pos);
+            } else {
+                return NULL;
+            }
         } else {
-            return NULL;
+            if (enumSubtype(member->type, enumType)) {
+                return AST_Create_cast(member, enumType, member->scope, member->pos);
+            } else {
+                return NULL;
+            }
         }
     } else {
         ASTNode* memberType = getType(member, false, false);
@@ -2580,15 +2596,19 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
         // return type matches function type
         ASTNode* functionType = function->type;
         ASTNode* functionRetType = functionType->function.codomainType;
-        if (retType->astType == AST_VOID) {
-            typesAreEquivalent(retType, functionRetType);
-        }
-        if (!typesAreEquivalent(retType, functionRetType)) {
-            ASTNode* coerced = NULL;
-            if (coerced = tryCoerceToEnum(functionRetType, validRetval)) {
-                validRetval = coerced;
-            } else {
-                typeMismatchError(node->pos, functionRetType, retType);
+        if (functionRetType->astType == AST_INFER_ERROR) {
+            unionEnums(functionRetType, retType);
+        } else {
+            if (retType->astType == AST_VOID) {
+                typesAreEquivalent(retType, functionRetType);
+            }
+            if (!typesAreEquivalent(retType, functionRetType)) {
+                ASTNode* coerced = NULL;
+                if (coerced = tryCoerceToEnum(functionRetType, validRetval)) {
+                    validRetval = coerced;
+                } else {
+                    typeMismatchError(node->pos, functionRetType, retType);
+                }
             }
         }
 
@@ -2815,9 +2835,9 @@ Program Validator_Validate(SymbolNode* symbol)
             SymbolNode* child = Map_Get(symbol->children, elem->data);
             Validator_Validate(child);
         }
-        //BREAK(!strcmp(symbol->name, "main"));
+
         ASTNode* retType = symbol->type->function.codomainType;
-        if (retType->astType != AST_VOID) {
+        if (retType->astType != AST_VOID && !(retType->astType == AST_INFER_ERROR && enumContainsField(retType, "success", VOID_TYPE))) {
             symbol->def = validateAST(symbol->def, symbol->type->function.codomainType);
         } else {
             symbol->def = validateAST(symbol->def, NULL);

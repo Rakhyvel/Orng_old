@@ -776,7 +776,7 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
             while (parent->symbolType == SYMBOL_BLOCK) {
                 parent = parent->parent;
             }
-            if (parent->isError && var->type->astType == AST_ENUM && thisErrorLabel && node->block.returnEval) {
+            if (parent->isError && var->type->astType == AST_ENUM && thisErrorLabel && node->block.returnEval && !enumContainsField(var->type, "success", VOID_TYPE)) {
                 noReturnVar = true;
                 SymbolVersion* returnVersion = unversionedSymbolVersion(cfg, cfg->returnSymbol, cfg->symbol->type->function.codomainType);
                 appendInstruction(cfg, createIR(IR_COPY, returnVersion, var, NULL, invalid_pos));
@@ -1686,12 +1686,12 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
         IR* copy = createIR(IR_COPY, var, somethingDot, NULL, node->pos);
         List_Append(phony->listData, copy);
         appendInstruction(cfg, copy);
-
-        // Error branch, set retval to expr, take err branch
         appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, endLabel, node->pos));
+
+        // Error branch, set retval to error message
         appendInstruction(cfg, elseLabel);
         SymbolVersion* returnSymbolVersion = unversionedSymbolVersion(cfg, cfg->returnSymbol, cfg->symbol->type->function.codomainType);
-        appendInstruction(cfg, createIR(IR_COPY, returnSymbolVersion, left, NULL, node->pos));
+        appendInstruction(cfg, createIR_ast(IR_CONVERT, returnSymbolVersion, left, NULL, NULL, returnSymbolVersion->type, node->pos));
         appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, errorLabel, node->pos));
         appendInstruction(cfg, endLabel);
         return var;
@@ -2909,7 +2909,28 @@ List* createCFG(SymbolNode* functionSymbol, CFG* caller)
 
     // Convert function definition AST to quadruple list
     SymbolVersion* eval = flattenAST(cfg, functionSymbol->def, NULL, NULL, NULL, NULL, false);
-    if (eval) {
+    if (functionSymbol->type->function.codomainType->astType == AST_VOID) {
+        // Do nothing
+    } else if (functionSymbol->type->function.codomainType->astType == AST_ENUM && enumContainsField(functionSymbol->type->function.codomainType, "success", VOID_TYPE)) {
+        // Implicit success return
+        SymbolVersion* tag = tempSymbolVersion(cfg, INT64_TYPE);
+        IR* tagIR = createIR_int(IR_LOAD_INT, tag, NULL, NULL, getTagEnum("success", functionSymbol->type->function.codomainType), invalid_pos);
+        tag->def = tagIR;
+        appendInstruction(cfg, tagIR);
+
+        SymbolVersion* implcitSuccess = tempSymbolVersion(cfg, functionSymbol->type->function.codomainType);
+        IR* ir = createIR(IR_LOAD_ARGLIST, implcitSuccess, NULL, NULL, invalid_pos);
+        implcitSuccess->def = ir;
+        ir->listData = List_Create();
+        List_Append(ir->listData, tag);
+        appendInstruction(cfg, ir);
+
+        SymbolVersion* returnVersion = unversionedSymbolVersion(cfg, cfg->returnSymbol, cfg->symbol->type->function.codomainType);
+
+        appendInstruction(cfg, createIR(IR_COPY, returnVersion, implcitSuccess, NULL, invalid_pos));
+        appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, NULL, invalid_pos));
+    } else if (eval) {
+        // Normal expression return
         SymbolVersion* returnVersion = unversionedSymbolVersion(cfg, cfg->returnSymbol, cfg->symbol->type->function.codomainType);
         appendInstruction(cfg, createIR(IR_COPY, returnVersion, eval, NULL, invalid_pos));
         appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, NULL, invalid_pos));

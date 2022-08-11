@@ -24,9 +24,12 @@ testModule::Module = (
 	-- Means the function will return the codomain error unioned with whatever enums are returned in the entire body of the function
 	-- For eval exprs, returns, and try, if the type doesnt match with the ret type, but function is comptime, non-extern, implicit error function, and expr type is enum, add to union set
 	-- Afterwards, type is updated to be the correct error union enum type
-	hmm::()->Int = {
-		hmm()
+
+	lol::()->!Int = {
+		FileError.fileNotFound
 	}
 
-	main::(args:[]String)->!() = hmm()
+	main::(args:[]String)->!() = {
+		try lol() -- If type does not match for !(), implicit return of success
+	}
 )

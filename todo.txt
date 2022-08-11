@@ -436,16 +436,17 @@ x Generate C code from IR
 		x Keep original type
 		x !<Type>
 			x infers the error enum set from RHS!
-		- New main function return type
+		x New main function return type
+		- try should union error enum to function too
 		- panic messages
 			- stack trace
 				- After call, if returned an error, THEN push call pos string to stack
 				-                                   ELSE clear stack
 				- If main function returns an error, print out stack
-			- Debug mode which:
-				- Checks indexes are within array bounds
-				- Checks that <expr>? are not nothing
-				- (future, performs refinement type predicate checks)
+		- Debug mode which:
+			- Checks indexes are within array bounds
+			- Checks that <expr>? are not nothing
+			- (future, performs refinement type predicate checks)
 		- If case is on error type, require all fields to be accounted for
 - Orange should compile the program for you, too
 	- No verbatims, instead write the C file and header, include it, and add it to be included when compiling

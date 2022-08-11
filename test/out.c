@@ -1,7 +1,7 @@
 /* Code generated using the Orng compiler http://josephs-projects.com */
 
-#ifndef ORNG_1708
-#define ORNG_1708
+#ifndef ORNG_8002
+#define ORNG_8002
 
 /* Includes */
 #include <stdlib.h>
@@ -58,46 +58,73 @@ struct struct_7 {
 
 struct struct_8 {
 	int64_t tag;
+	union {
+		int64_t success;
+		int64_t fileNotFound;
+	};
+};
+
+struct struct_9 {
+	int64_t tag;
+	union {
+		int64_t fileNotFound;
+	};
 };
 
 /* Verbatim code */
 int std_system_println(struct struct_1 _format, ...) {va_list _25_args;va_start(_25_args, _format.data);int retval = vprintf(_format.data, _25_args);va_end(_25_args);char newLine[2] = {'\n', '\0'};printf(newLine);return retval;}
 
 /* Function definitions */
-struct struct_3 test_testModule_main(struct struct_2 _args);
-int64_t test_testModule_hmm();
+struct struct_7 test_testModule_main(struct struct_2 _args);
+struct struct_8 test_testModule_lol();
 
-struct struct_3 test_testModule_main(struct struct_2 _args)
+struct struct_7 test_testModule_main(struct struct_2 _args)
 {
-	struct struct_3 retval;
-	int64_t _0;
-	int64_t (*_1) ();
-	int64_t _2;
-	struct struct_3 _3;
+	struct struct_7 retval;
+	struct struct_8 (*_1) ();
+	struct struct_8 _2;
+	int64_t _3;
+	int64_t _4;
+	bool _5;
 	struct struct_2 _args_0;
+	int64_t _8;
+	struct struct_7 _9;
 	_args_0 = _args;
 L2:; // incoming:1
-	_0 = 10;
-	_1 = test_testModule_hmm;
-	printf("test/testModule.orng: \n      |\n31    | main::(args:[]String)->!() = hmm()\n      |                                 ^\n");
+	_1 = test_testModule_lol;
+	printf("test/testModule.orng: \n      |\n33    | try lol() -- If type does not match for !(), implicit return of success\n      |        ^\n");
 	_2 = _1();
-	_3 = (struct struct_3) {_0};
-	retval = _3;
+	_3 = _2.tag;
+	_4 = 10;
+	_5 = _3 == _4;
+	if (!_5) {
+		goto L6;
+	} else {
+		goto L3;
+	}
+L3:; // incoming:1
+	_8 = 11;
+	_9 = (struct struct_7) {_8};
+	retval = _9;
+	goto end;
+L6:; // incoming:1
+	retval = *((struct struct_7*) &_2);
 	goto end;
 end:;
 	return retval;
 }
 
-int64_t test_testModule_hmm()
+struct struct_8 test_testModule_lol()
 {
-	int64_t retval;
-	int64_t (*_0) ();
-	int64_t _1;
+	struct struct_8 retval;
+	int64_t _0;
+	struct struct_7 _1;
+	struct struct_8 _2;
 L0:; // incoming:1
-	_0 = test_testModule_hmm;
-	printf("test/testModule.orng: \n      |\n28    | hmm()\n      |    ^\n");
-	_1 = _0();
-	retval = _1;
+	_0 = 7;
+	_1 = (struct struct_7) {_0};
+	_2 = *((struct struct_8*) &_1);
+	retval = _2;
 	goto end;
 end:;
 	return retval;
@@ -111,12 +138,12 @@ int main(int argc, char** argv)
 		args.data[i] = (struct struct_1){length, calloc(sizeof(char) * length, 1)};
 		memcpy(args.data[i].data, argv[i], length);
 	}
-	struct struct_3 retval = test_testModule_main(args);
+	struct struct_7 retval = test_testModule_main(args);
 	for (int  i = 0; i < argc; i++) {
 		free(args.data[i].data);
 	}
 	free(args.data);
 	system("pause");
-	return retval.tag != 10;
+	return retval.tag != 11;
 }
 #endif
