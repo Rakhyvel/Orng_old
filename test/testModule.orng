@@ -28,7 +28,7 @@ testModule::Module = (
 		}
 	}
 
-	recursive::(x:Int)->() = {return recursive(x-1)}
+	recursive::()->() = recursive()
 
-	main::(args:[]String)->!() = std.debug.assert(.msg="this should be true", .predicate=false)
+	main::(args:[]String)->!() = recursive()
 )

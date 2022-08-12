@@ -36,7 +36,7 @@ x Surjective to C
 	x varadic paramlist, array struct type with length
 	x enum
 	x assert <condition>
-- Only produce correct, human readable output, or give error
+x Only produce correct, human readable output, or give error
 	x Validate ASTs
 	x validate types
 	x for loop defs are within the block scope
@@ -69,8 +69,8 @@ x Surjective to C
 			x frees an array
 	x type inference
 	x do "." instead of "->" if "&" operator is a parent
-- std library
-	- package and build system:
+x std library
+	x package and build system:
 		x check if orange directory is created, create it if not
 		x take in single compile directory instead
 		x read and parse MANIFEST file
@@ -86,7 +86,7 @@ x Surjective to C
 			x validate that modules don't interact with modules in packages that their own parent doesn't depend on
 		x error messages should just print out package/module instead of full filename
 		x for first package, read in "outname" field, set that as the filename for the output file
-		- restrict symbols
+		x restrict symbols
 			x a list of aliases
 				x <alias_ident> = <symbol_expr>
 				x OR <alias_ident> (which is <alias_ident> = <alias_ident>)
@@ -102,8 +102,8 @@ x Surjective to C
 		x Linkedlist
 		x Vector
 	x SDL hooks -[]
-	- also write a ECS and GUI for apps
-	- put these all on github (should be really easy!)
+	x also write a ECS and GUI for apps
+	x put these all on github (should be really easy!)
 	x package/module convention is all lowercase, to disambiguiate types and modules
 		x enforce that file symbol and filename are the same for modules
 		x enforce package name and package symbol are the same for packages
@@ -114,40 +114,7 @@ x Surjective to C
 	x type inference for module, packages, and types
 	x move restriction to before the symbol
 	x change MANIFEST files to <pkg name>.orng files
-	- doc generation
-		- packages:
-			- package docstring
-			- what includes does this package have?
-			- what other packages does this package depend on
-			- public build symbols?
-			- position?
-		- modules:
-			- docstring
-			- what are the public functions, variables, types, and maybe even other modules in this module
-			- what other modules does this module see
-			- position?
-		- types:
-			- docstring
-			- what is its type?
-			- is it external? What is it's extern name?
-			- position?
-			- orange definition (with CFG highlighting!)
-		- variables:
-			- docstring
-			- what is its type?
-			- is it external? What is it's extern name?
-			- position?
-			- orange definition (with CFG highlighting!)
-		- functions:
-			- docstring
-				- what are the parameters
-				- what does it return
-			- what is its type?
-			- is it external? What is it's extern name?
-			- position?
-			- orange definition (with CFG highlighting!)
-		- call graph visualization?
-- fix varargs once and for all!
+x fix varargs once and for all!
 x ; to add multiple statements on one line
 x for loop uses ; instead of , 
 x 'else' for when a loop wasn't broken out of
@@ -275,7 +242,7 @@ x Rework the compiler to be better [ast-union-type]
 	x use a union for AST Nodes, like you would if you were to rewrite this in Orng
 		x create function to create an AST for every possible AST type
 		x no more guessing the child element in a list! Can now just use it
-- unions like in julia and haskell
+x unions like in julia and haskell
 	x Tagged union and enums
 		x generate union type structs
 		x coerce to union
@@ -284,7 +251,7 @@ x Rework the compiler to be better [ast-union-type]
 		x void type is implied if no type is given
 		x validate that members in union must have either a unique type, or the void type
 		- in field cases, make it so that you need to union name
-	- Maybe type union
+	x Maybe type union
 		x ?<Type> which is just shorthand for (|nothing,  just:<Type>)
 		x can use the name of the maybe variable as-is if the compiler can reason about whether or not the variable is nothing
 			x weak SAT model:
@@ -314,7 +281,7 @@ x Rework the compiler to be better [ast-union-type]
 x Generate IR from AST
 	x basic block, call graph, etc
 x Generate C code from IR
-- IR optimizations
+x IR optimizations
 	x constant propagation
 	x copy propagation
 		x requires symbol versioning
@@ -443,8 +410,8 @@ x Generate C code from IR
 				x After call, if returned an error, THEN push call pos string to stack
 				x                                   ELSE clear stack
 				x If main function returns an error, print out stack
-		- recursive::(x:Int)->() = recursive(x-1) -- Causes error generating phi nodes
-		- recursive::()->() = recursive() -- Doesn't generate call to self
+		x recursive::(x:Int)->() = recursive(x-1) -- Causes error generating phi nodes
+		x recursive::()->() = recursive() -- Doesn't generate call to self
 		- Remove pop/push functions, copy paste code instead
 		- Debug mode which:
 			- Checks indexes are within array bounds
@@ -452,14 +419,53 @@ x Generate C code from IR
 			- Checks that derefs are not null
 			- Checks that slices are within the array
 			- (future, performs refinement type predicate checks)
-		- If case is an error type, require all fields to be accounted for
+		- If case is an enum type, require all fields to be accounted for
 - cleanup!
 	- replace for loops over lists with forall loops
 	- comments on everything
+		- Single line
+		- Assume reader fully understands entire program but what you're commenting
 	- fix enum and switch order to be consistent
 	- change references to "double" to "real"
 	- fix and consistify spelling of ASTs and IRs and Tokens and everything else
 	- write a markup to html program (in orange, add to github) and write tutorial/documentaiton
+		- hello world/comments
+		- declarations
+		- primitive types
+		- operations
+		- compile time constants
+		- blocks/if/for/case/return/break/continue/unreachable/defer
+		- addresses, new/free
+		- structs
+			- default params
+			- named vs position struct literals
+			- methods
+		- arrays/comptime collapse(?)
+		- slices
+		- strings
+		- enums
+			- enum literals
+			- enum unions
+			- maybe types
+				-nothing
+				- ? op
+				-orelse
+			-errors
+				-success
+				- try
+				- catch
+				- infered errors
+				- errdefer
+		- functions
+			- difference between comptime and variable
+			- default params
+			- named vs positional arguments
+			- inner functions
+		- structural type equivalence
+		- default values
+		- external symbol tag/interop with C
+		- restriction symbol tag
+		- packages and modules
 	- reorder functions to be in prefix order, fix header order
 	- variable name semantics
 		- 'type' for AST nodes that are types
@@ -470,10 +476,11 @@ x Generate C code from IR
 		- 'cfg' for a CFG
 		- 'pos' for a Position
 		- 'symbol' for a SymbolNode (not 'scope')
-	- fix prefixes for 'modules', as if they were generated by Orng
+	- fix prefixes for 'modules' in C code, as if they were generated by Orng
 	- move myItoa to a util file
 	- create predicate functions for identical conditions of multiple if statements (like "does this IR type use list data?")
-	- change old references from "union set" type to "enum" (unions are an operation on enum types)
+		- is this type a void error enum type
+	x change old references from "union set" type to "enum" (unions are an operation on enum types)
 	- free memory
 	- rework to be in "c++"
 		- use std::vector and std::map instead of my list and map
@@ -573,6 +580,7 @@ x Generate C code from IR
 	- should be able to define NEW data types that OLD functions work with
 	- should be able to define NEW functions that apply to OLD data types
 - redo string module in stdlib to be like that one Modern C video
+	- cool string formatting? may need comptime stuff and reflection :(
 - refinement types, contracts, pre/post conditions
 	- why?
 		- comments are useless
@@ -658,7 +666,7 @@ x Generate C code from IR
 	- for x : X  {}		# for each loop
 	- all x : X, P		# all x in X satisfy P
 	- some x : X, P		# one or more x in X satisfy P
-
+- doc generation
 
 
 
@@ -677,9 +685,13 @@ Maybe?
 	- exponentiation (useful) instead of bitwise xor (not as useful)
 		- circleArea::(r:Real)->Real = 3.1415 * r ^ 2
 		- generates as pow() or powf() function
+		- bitwise xor should use ~ token
 	- adjacent multiplication
 		- circleArea::(r:Real)->Real = 3.1415 r^2
 		- factor::(x1:Real, x2:Real, x:Real)->Real = (x - x1)(x - x2)
+		- COUNTERPOINT:
+			x:()->Real = someFunctionPtr
+			(x)(4)(5) -- Horrible
 	- relational operator chaining
 		- 0 < x == y < 4
 		- exclusive with implicit eq above

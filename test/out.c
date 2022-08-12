@@ -1,7 +1,7 @@
 /* Code generated using the Orng compiler http://josephs-projects.com */
 
-#ifndef ORNG_22886
-#define ORNG_22886
+#ifndef ORNG_20687
+#define ORNG_20687
 
 /* Includes */
 #include <stdbool.h>
@@ -165,68 +165,37 @@ int std_system_errln(struct struct_1 _format, ...) {va_list _25_args;va_start(_2
 
 /* Function definitions */
 struct struct_3 test_testModule_main(struct struct_2 _args);
-void std_debug_assert(bool _predicate, struct struct_1 _msg);
+void test_testModule_recursive();
 
 struct struct_3 test_testModule_main(struct struct_2 _args)
 {
 	struct struct_3 retval;
-	void (*_0) (bool _predicate, struct struct_1 _msg);
-	bool _2;
-	struct struct_1 _3;
-	int64_t _4;
-	struct struct_3 _5;
+	void (*_0) ();
+	int64_t _2;
+	struct struct_3 _3;
 	struct struct_2 _args_0;
 	_args_0 = _args;
-L5:; // incoming:1
-	_0 = std_debug_assert;
-	_2 = 0;
-	_3 = (struct struct_1) {19, "this should be true"};
-	stackTracePush(&stackTrace, "test/testModule.orng: \n33    | main::(args:[]String)->!() = std.debug.assert(.msg=\"this should be true\", .predicate=false, .lmao=4)\n      |                                              ^\n");
-	_0(_2, _3);
+L1:; // incoming:1
+	_0 = test_testModule_recursive;
+	stackTracePush(&stackTrace, "test/testModule.orng: \n33    | main::(args:[]String)->!() = recursive()\n      |                                       ^\n");
+	_0();
 	stackTracePop(&stackTrace);
-	_4 = 12;
-	_5 = (struct struct_3) {_4};
-	retval = _5;
+	_2 = 12;
+	_3 = (struct struct_3) {_2};
+	retval = _3;
 	goto end;
 end:;
 	return retval;
 }
 
-void std_debug_assert(bool _predicate, struct struct_1 _msg)
+void test_testModule_recursive()
 {
-	bool _0;
-	bool _predicate_0;
-	struct struct_1 _msg_0;
-	int64_t (*_1) (struct struct_1 _format, ...);
-	struct struct_1 _3;
-	int64_t _2;
-	int64_t (*_4) (struct struct_1 _format, ...);
-	int64_t _5;
-	struct struct_1 _msg_1;
-	_predicate_0 = _predicate;
-	_msg_0 = _msg;
+	void (*_0) ();
 L0:; // incoming:1
-	_0 = !_predicate_0;
-	if (!_0) {
-		goto end;
-	} else {
-		_msg_1 = _msg_0;
-		goto L1;
-	}
-L1:; // incoming:1
-	_1 = std_system_err;
-	_3 = (struct struct_1) {18, "assertion failed: "};
-	stackTracePush(&stackTrace, "std/debug.orng: \n4     | system.err(\"assertion failed: \")\n      |           ^\n");
-	_2 = _1(_3);
+	_0 = test_testModule_recursive;
+	stackTracePush(&stackTrace, "test/testModule.orng: \n31    | recursive::()->() = recursive()\n      |                              ^\n");
+	_0();
 	stackTracePop(&stackTrace);
-	_4 = std_system_errln;
-	stackTracePush(&stackTrace, "std/debug.orng: \n5     | system.errln(msg)\n      |             ^\n");
-	_5 = _4(_msg_1);
-	stackTracePop(&stackTrace);
-	fprintf(stderr, "error: unreachable\n");
-	stackTracePush(&stackTrace, "std/debug.orng: \n6     | unreachable\n      | ^^^^^^^^^^^\n");
-	stackTracePrintReverse(&stackTrace);
-	exit(1);
 	goto end;
 end:;
 	return;

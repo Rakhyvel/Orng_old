@@ -1158,17 +1158,17 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
         return temp;
     }
     case AST_INDEX: {
-		// if debug {
-		//		Get array length
-		//		Get index
-		//		If index >= array length, branch to error
-		//		If index < 0, branch to error
-		//		Jump to end:
-		//		error:
-		//		unreachable (abstract to runtime error, with str message?)
-		//		end:
-		// }
-		// Return index
+        // if debug {
+        //		Get array length
+        //		Get index
+        //		If index >= array length, branch to error
+        //		If index < 0, branch to error
+        //		Jump to end:
+        //		error:
+        //		unreachable (abstract to runtime error, with str message?)
+        //		end:
+        // }
+        // Return index
 
         SymbolVersion* left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel, errorLabel, lvalue);
         left->lvalue = lvalue;
@@ -2868,6 +2868,7 @@ bool deadCode(CFG* cfg)
                 retval = true;
             }
             if (def->dest && !def->removed && !def->dest->used && def->dest->symbol == cfg->returnSymbol && cfg->symbol->type->function.codomainType->astType == AST_VOID) {
+                LOG("remove void ir %d %s_%d %p\n", def->id, def->dest->symbol->name, def->dest->version, def->dest);
                 removeInstruction(bb, def);
                 retval = true;
             }
@@ -2985,10 +2986,8 @@ List* createCFG(SymbolNode* functionSymbol, CFG* caller)
 
     // Convert function definition AST to quadruple list
     SymbolVersion* eval = flattenAST(cfg, functionSymbol->def, NULL, NULL, NULL, NULL, false);
-    if (functionSymbol->type->function.codomainType->astType == AST_VOID) {
-        // Do nothing
-    } else if (functionSymbol->type->function.codomainType->astType == AST_ENUM && enumContainsField(functionSymbol->type->function.codomainType, "success", VOID_TYPE)) {
-        // Implicit success return
+    // Implicit success return
+    if (functionSymbol->type->function.codomainType->astType == AST_ENUM && enumContainsField(functionSymbol->type->function.codomainType, "success", VOID_TYPE)) {
         SymbolVersion* tag = tempSymbolVersion(cfg, INT64_TYPE);
         IR* tagIR = createIR_int(IR_LOAD_INT, tag, NULL, NULL, getTagEnum("success", functionSymbol->type->function.codomainType), invalid_pos);
         tag->def = tagIR;
@@ -3005,16 +3004,15 @@ List* createCFG(SymbolNode* functionSymbol, CFG* caller)
 
         appendInstruction(cfg, createIR(IR_COPY, returnVersion, implcitSuccess, NULL, invalid_pos));
         appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, NULL, invalid_pos));
-    } else if (eval) {
-        // Normal expression return
+    }
+    // Normal expression return
+	else if (eval) {
         SymbolVersion* returnVersion = unversionedSymbolVersion(cfg, cfg->returnSymbol, cfg->symbol->type->function.codomainType);
         appendInstruction(cfg, createIR(IR_COPY, returnVersion, eval, NULL, invalid_pos));
         appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, NULL, invalid_pos));
     }
-    if (!strcmp(functionSymbol->name, "assert")) {
-        printf("\n%s\n", functionSymbol->name);
-        printInstructionList(cfg);
-    }
+    //printf("\n%s\n", functionSymbol->name);
+    //printInstructionList(cfg);
 
     // Convert quadruple list to CFG of basic blocks, find versions!
     cfg->blockGraph = convertToBasicBlock(cfg, cfg->head, NULL);
@@ -3022,11 +3020,9 @@ List* createCFG(SymbolNode* functionSymbol, CFG* caller)
 
     // Optimize
     do {
-        if (!strcmp(functionSymbol->name, "assert")) {
-            printf("\n\n%s\n", cfg->symbol->name);
-            clearBBVisitedFlags(cfg);
-            printBlockGraph(cfg->blockGraph);
-        }
+        //printf("\n\n%s\n", cfg->symbol->name);
+        //clearBBVisitedFlags(cfg);
+        //printBlockGraph(cfg->blockGraph);
     } while (copyAndConstantPropagation(cfg) | deadCode(cfg));
 
     // Parameters and the such are kept

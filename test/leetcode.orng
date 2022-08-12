@@ -239,9 +239,9 @@ leetcode::Module = (
         board: [][]Char = new [s.length][numRows]Char
         defer {
             for i := 0; i < s.length; i += 1 {
-                --free board[i]
+                free board[i]
             }
-            --free board
+            free board
         }
 
         x := 0
