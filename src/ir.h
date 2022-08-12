@@ -61,7 +61,8 @@ typedef enum ir_type {
 	IR_FREE,
 
 	IR_PUSH_STACK_TRACE,
-	IR_CLEAR_STACK_TRACE
+	IR_CLEAR_STACK_TRACE,
+	IR_UNREACHABLE,
 } ir_type;
 
 typedef struct symbolVersion {

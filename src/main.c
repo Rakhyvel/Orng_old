@@ -467,8 +467,8 @@ void printPos(FILE* out, struct position pos)
     if (pos.filename) {
         fprintf(out, "%s: ", getRelPath(pos.filename));
         fprintf(out, "%s", newLine);
-        fprintf(out, "      |");
-        fprintf(out, "%s", newLine);
+       // fprintf(out, "      |");
+        //fprintf(out, "%s", newLine);
         int minWhiteSpace = 100000;
         int maxLineLength = 0;
         for (int i = pos.start_line; i <= pos.end_line; i++) {

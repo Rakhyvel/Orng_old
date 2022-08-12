@@ -10,8 +10,8 @@
 #include <string.h>
 
 static const List* structDepenGraph = NULL;
-static const Map* tagTypes = NULL; // Map(name:String, Set(type))
-static const Map* tagIDs = NULL; // Map(name:String, List(tag:Int))
+const Map* tagTypes = NULL; // Map(name:String, Set(type))
+const Map* tagIDs = NULL; // Map(name:String, List(tag:Int))
 static const Map* includes = NULL;
 static const List* verbatims = NULL;
 static const SymbolNode* mainFunction = NULL;
@@ -332,9 +332,6 @@ static bool unionEnums(ASTNode* left, ASTNode* right)
             ASTNode* leftDefine = elem2->data;
             SymbolNode* leftVar = leftDefine->define.symbol;
             if (!strcmp(rightVar->name, leftVar->name)) {
-                if (!strcmp(rightVar->name, "c")) {
-                    printf("URm!\n");
-                }
                 found = true;
                 break;
             }
@@ -774,7 +771,8 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
     case AST_BIT_AND_ASSIGN:
     case AST_LSHIFT_ASSIGN:
     case AST_RSHIFT_ASSIGN:
-    case AST_FOR: {
+    case AST_FOR:
+    case AST_UNREACHABLE: {
         type = UNDEF_TYPE;
         break;
     }
@@ -1196,7 +1194,6 @@ static struct graph* addGraphNode(List* depenGraph, ASTNode* structType)
             SymbolNode* symbol = define->define.symbol;
             // Check if there is a set created in the map, if not create it
             putTag(symbol->name, symbol->type);
-            printf("%s\n", symbol->name);
         }
     }
 
@@ -1793,6 +1790,7 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
     case AST_FALSE:
     case AST_STRING:
     case AST_NOTHING:
+    case AST_UNREACHABLE:
         retval = node;
         break;
     case AST_CHAR: {
@@ -2580,9 +2578,27 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
     case AST_TRY: {
         bool oldErrorHandled = errorHandled;
         errorHandled = true;
-        ASTNode* validRetval = validateAST(node->taggedUnop.expr, coerceType);
-        ASTNode* retType = getType(validRetval, false, false);
+        ASTNode* validExpr = validateAST(node->taggedUnop.expr, coerceType);
+        ASTNode* exprType = getType(validExpr, false, false);
         errorHandled = oldErrorHandled;
+
+        if (exprType->astType != AST_ENUM) {
+            error(validExpr->pos, "left side of catch must be error enum type");
+        }
+
+        ASTNode* innerType = NULL;
+        ListElem* elem = List_Begin(exprType->_enum.defines);
+        for (; elem != List_End(exprType->_enum.defines); elem = elem->next) {
+            ASTNode* define = elem->data;
+            if (!strcmp(define->define.symbol->name, "success")) {
+                innerType = define->define.symbol->type;
+                break;
+            }
+        }
+
+        if (!innerType) {
+            error(validExpr->pos, "left side of catch must be error enum type");
+        }
 
         // return must be in function
         SymbolNode* function = Symbol_TypeAncestor(node->scope, SYMBOL_FUNCTION);
@@ -2597,23 +2613,23 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
         ASTNode* functionType = function->type;
         ASTNode* functionRetType = functionType->function.codomainType;
         if (functionRetType->astType == AST_INFER_ERROR) {
-            unionEnums(functionRetType, retType);
+            unionEnums(functionRetType, exprType);
         } else {
-            if (retType->astType == AST_VOID) {
-                typesAreEquivalent(retType, functionRetType);
+            if (exprType->astType == AST_VOID) {
+                typesAreEquivalent(exprType, functionRetType);
             }
-            if (!typesAreEquivalent(retType, functionRetType)) {
+            if (!typesAreEquivalent(exprType, functionRetType)) {
                 ASTNode* coerced = NULL;
-                if (coerced = tryCoerceToEnum(functionRetType, validRetval)) {
-                    validRetval = coerced;
+                if (coerced = tryCoerceToEnum(functionRetType, validExpr)) {
+                    validExpr = coerced;
                 } else {
-                    typeMismatchError(node->pos, functionRetType, retType);
+                    typeMismatchError(node->pos, functionRetType, exprType);
                 }
             }
         }
 
-        node->taggedUnop.tag = getTagEnum("success", retType);
-        node->taggedUnop.expr = validRetval;
+        node->taggedUnop.tag = getTagEnum("success", exprType);
+        node->taggedUnop.expr = validExpr;
         retval = node;
         break;
     }

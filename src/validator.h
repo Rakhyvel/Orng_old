@@ -2,6 +2,8 @@
 #include "./main.h"
 #include "symbol.h"
 
+const struct map* tagTypes;
+const struct map* tagIDs;
 Program Validator_Validate(SymbolNode* symbol);
 bool typesAreEquivalent(ASTNode* a, ASTNode* b);
 int getTypeSize(ASTNode* type);

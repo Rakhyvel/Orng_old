@@ -13,6 +13,7 @@ leetcode::Module = (
         test_isPalindrome()
         test_isMatch()
         test_maxArea()
+        std.system.println("Passed!")
     }
 
 
@@ -60,11 +61,7 @@ leetcode::Module = (
 
         ans := twoSum(nums, target)
 
-        if nums[ans[0]] + nums[ans[1]] == target {
-            std.system.println("twoSum: Passed!")
-        } else {
-            std.system.println("twoSum: Failed %d %d", ans[0]:Int32, ans[1]:Int32)
-        }
+        std.debug.assert(nums[ans[0]] + nums[ans[1]] == target)
     }
 
 
@@ -105,17 +102,13 @@ leetcode::Module = (
         ans := addTwoNumbers(l1, l2)
 
         hasValue::(node:?&ListNode, x:[]Int)->Bool =
-            if node == nothing {
+            if node != nothing {
                 node?.val == x[0] && hasValue(node?.next, x[1;])
             } else {
                 true
             }
 
-        if hasValue(ans, [7, 0, 8]) {
-            std.system.println("addTwoNumbers: Passed!")
-        } else {
-            std.system.println("addTwoNumbers: Failed")
-        }
+        std.debug.assert(hasValue(ans, [7, 0, 8]))
     }
 
 
@@ -157,11 +150,7 @@ leetcode::Module = (
 
         ans := lengthOfLongestSubstring(s)
 
-        if ans == 3 {
-            std.system.println("lengthOfLongestSubstring: Passed!")
-        } else {
-            std.system.println("lengthOfLongestSubstring: Failed %d", ans)
-        }
+        std.debug.assert(ans == 3)
     }
 
 
@@ -205,11 +194,7 @@ leetcode::Module = (
 
         ans := findMedianSortedArrays(nums1, nums2)
 
-        if ans == 2.0 {
-            std.system.println("findMedianSortedArrays: Passed!")
-        } else {
-            std.system.println("findMedianSortedArrays: Failed %f", ans)
-        }
+        std.debug.assert(ans == 2.0)
     }
 
 
@@ -243,11 +228,7 @@ leetcode::Module = (
 
         ans := longestPalindrome(s)
 
-        if std.string.equals(ans, "bab") || std.string.equals(ans, "aba") {
-            std.system.println("longestPalindrome: Passed!")
-        } else {
-            std.system.println("longestPalindrome: Failed %d", ans.length)
-        }
+        std.debug.assert(std.string.equals(ans, "bab") || std.string.equals(ans, "aba"))
     }
 
 
@@ -301,11 +282,7 @@ leetcode::Module = (
     test_convert::()->() = {
         ans := convert("PAYPALISHIRING", 3)
 
-        if std.string.equals(ans, "PAHNAPLSIIGYIR") {
-            std.system.println("convert: Passed!")
-        } else {
-            std.system.println("convert: Failed")
-        }
+        std.debug.assert(std.string.equals(ans, "PAHNAPLSIIGYIR"))
     }
 
 
@@ -331,11 +308,7 @@ leetcode::Module = (
     test_reverse::()->() = {
         ans := reverse(123)
 
-        if ans == 321 {
-            std.system.println("reverse: Passed!")
-        } else {
-            std.system.println("reverse: Failed")
-        }
+        std.debug.assert(ans == 321)
     }
 
 
@@ -374,11 +347,7 @@ leetcode::Module = (
 
         ans := myAtoi(s)
 
-        if ans == 42 {
-            std.system.println("myAtoi: Passed!")
-        } else {
-            std.system.println("myAtoi: Failed")
-        }
+        std.debug.assert(ans == 42)
     }
 
 
@@ -404,11 +373,7 @@ leetcode::Module = (
         
         ans := isPalindrome(x)
 
-        if ans {
-            std.system.println("isPalindrome: Passed!")
-        } else {
-            std.system.println("isPalindrome: Failed")
-        }
+        std.debug.assert(ans)
     }
 
 
@@ -446,11 +411,7 @@ leetcode::Module = (
 
         ans := isMatch(s, p)
 
-        if ans {
-            std.system.println("isMatch: Passed!")
-        } else {
-            std.system.println("isMatch: Failed")
-        }
+        std.debug.assert(ans)
     }
 
 
@@ -474,10 +435,6 @@ leetcode::Module = (
 
         ans := maxArea(height)
 
-        if ans == 49 {
-            std.system.println("maxArea: Passed!")
-        } else {
-            std.system.println("maxArea: Failed %d", ans)
-        }
+        std.debug.assert(ans == 49)
     }
 )

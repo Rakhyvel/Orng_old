@@ -140,6 +140,8 @@ const char* Token_GetString(_TokenType type)
         return "TOKEN_DEFER";
     case TOKEN_ERRDEFER:
         return "TOKEN_ERRDEFER";
+    case TOKEN_UNREACHABLE:
+        return "TOKEN_UNREACHABLE";
     case TOKEN_ARROW:
         return "TOKEN_ARROW";
     case TOKEN_BIG_ARROW:
@@ -323,6 +325,8 @@ const char* Token_GetRepr(_TokenType type)
         return "errdefer";
     case TOKEN_CATCH:
         return "catch";
+    case TOKEN_UNREACHABLE:
+        return "unreachable";
     case TOKEN_ARROW:
         return "->";
     case TOKEN_BIG_ARROW:

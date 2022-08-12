@@ -33,9 +33,5 @@ testModule::Module = (
 		}
 	}
 
-	main::(args:[]String)->!() = {
-		try lol(3)
-		defer std.system.println("Hello!")
-		try lol(5)
-	}
+	main::(args:[]String)->!() = leetcode.test_all()
 )

@@ -676,6 +676,12 @@ ASTNode* AST_Create_continue(struct symbolNode* scope, struct position pos)
     return retval;
 }
 
+ASTNode* AST_Create_unreachable(struct symbolNode* scope, struct position pos)
+{
+    ASTNode* retval = AST_Create(AST_UNREACHABLE, scope, pos);
+    return retval;
+}
+
 ASTNode* AST_Create_dot(struct astNode* container, struct astNode* identifier, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_DOT, scope, pos);

@@ -39,28 +39,51 @@ static void generateDebug(FILE* out)
     fprintf(out, "	int capacity;\n");
     fprintf(out, "	char** data;\n");
     fprintf(out, "};\n\n");
-    fprintf(out, "struct list stackTrace;\n\n");
-    fprintf(out, "void stackTraceInit() {\n");
-    fprintf(out, "	stackTrace.length = 0;\n");
-    fprintf(out, "	stackTrace.capacity = 10;\n");
-    fprintf(out, "	stackTrace.data = malloc(sizeof(char*) * stackTrace.capacity);\n");
+    fprintf(out, "struct list stackTrace;\n");
+    fprintf(out, "struct list errorTrace;\n\n");
+    fprintf(out, "void stackTraceInit(struct list* list) {\n");
+    fprintf(out, "	list->length = 0;\n");
+    fprintf(out, "	list->capacity = 10;\n");
+    fprintf(out, "	list->data = malloc(sizeof(char*) * list->capacity);\n");
     fprintf(out, "}\n\n");
-    fprintf(out, "void stackTracePush(char* data) {\n");
-    fprintf(out, "	if (stackTrace.length >= stackTrace.capacity) {\n");
-    fprintf(out, "		stackTrace.capacity *= 2;\n");
-    fprintf(out, "		stackTrace.data = realloc(stackTrace.data, stackTrace.capacity);\n");
+    fprintf(out, "void stackTracePush(struct list* list, char* data) {\n");
+    fprintf(out, "	if (list->length >= list->capacity) {\n");
+    fprintf(out, "		list->capacity *= 2;\n");
+    fprintf(out, "		list->data = realloc(list->data, list->capacity);\n");
     fprintf(out, "	}\n");
-    fprintf(out, "	stackTrace.data[stackTrace.length] = data;\n");
-    fprintf(out, "	stackTrace.length++;\n");
+    fprintf(out, "	list->data[list->length] = data;\n");
+    fprintf(out, "	list->length++;\n");
     fprintf(out, "}\n\n");
-    fprintf(out, "void stackTraceClear() {\n");
-    fprintf(out, "	stackTrace.length = 0;\n");
+    fprintf(out, "void stackTracePop(struct list* list) {\n");
+    fprintf(out, "	list->length--;\n");
     fprintf(out, "}\n\n");
-    fprintf(out, "void stackTracePrint() {\n");
-    fprintf(out, "	for (int i = 0; i < stackTrace.length; i++) {\n");
-    fprintf(out, "		printf(\"%%s\", stackTrace.data[i]);\n");
+    fprintf(out, "void stackTraceClear(struct list* list) {\n");
+    fprintf(out, "	list->length = 0;\n");
+    fprintf(out, "}\n\n");
+    fprintf(out, "void stackTracePrint(struct list* list) {\n");
+    fprintf(out, "	for (int i = 0; i < list->length; i++) {\n");
+    fprintf(out, "		fprintf(stderr, \"%%s\", list->data[i]);\n");
     fprintf(out, "	}\n");
     fprintf(out, "}\n\n");
+    fprintf(out, "void stackTracePrintReverse(struct list* list) {\n");
+    fprintf(out, "	for (int i = list->length - 1; i >= 0; i--) {\n");
+    fprintf(out, "		fprintf(stderr, \"%%s\", list->data[i]);\n");
+    fprintf(out, "	}\n");
+    fprintf(out, "}\n\n");
+
+	fprintf(out, "char* tagGetFieldName(int tag) {\n");
+    fprintf(out, "	switch(tag) {\n");
+    forall(elem, tagIDs->keyList)
+    {
+        char* fieldName = elem->data;
+        List* idList = Map_Get(tagIDs, fieldName);
+        for (int i = 0; i < idList->size; i++) {
+            int64_t data = (int64_t)List_Get(idList, i);
+            fprintf(out, "\tcase %d:\n", (int)data);
+        }
+        fprintf(out, "\t\treturn \"%s\";\n", fieldName);
+    }
+    fprintf(out, "\t}\n}\n\n");
 }
 
 static void printStructOrd(FILE* out, ASTNode* type)
@@ -276,10 +299,6 @@ static void generateEnum(FILE* out, DGraph* graphNode)
             numOfNonVoidMembers = 1;
             break;
         }
-    }
-
-    if (graphNode->ordinal + 1 == 13) {
-        printf("ha");
     }
 
     if (numOfNonVoidMembers > 0) {
@@ -541,7 +560,9 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
         break;
     }
     case IR_CALL: {
-
+        fprintf(out, "\tstackTracePush(&stackTrace, \"");
+        printPos(out, ir->pos);
+        fprintf(out, "\");\n");
         if (ir->dest->type->astType != AST_VOID) {
             printVarAssign(out, ir->dest);
         } else {
@@ -879,15 +900,22 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
         break;
     }
     case IR_PUSH_STACK_TRACE: {
-        fprintf(out, "\tstackTracePush(\"");
+        fprintf(out, "\tstackTracePush(&errorTrace, \"");
         printPos(out, ir->pos);
         fprintf(out, "\");\n");
         break;
     }
     case IR_CLEAR_STACK_TRACE: {
-        fprintf(out, "\tstackTraceClear;\n");
+        fprintf(out, "\tstackTraceClear(&errorTrace);\n");
         break;
     }
+    case IR_UNREACHABLE: {
+        fprintf(out, "\tfprintf(stderr, \"error: unreachable\\n\");\n");
+        fprintf(out, "\tstackTracePush(&stackTrace, \"");
+        printPos(out, ir->pos);
+        fprintf(out, "\");\n\tstackTracePrintReverse(&stackTrace);\n\texit(1);\n");
+        break;
+	}
     default: {
         PANIC("unknown IR");
     }
@@ -961,7 +989,11 @@ static void generateBasicBlock(FILE* out, CFG* cfg, BasicBlock* bb)
         printVar(out, bb->condition);
         fprintf(out, ") {\n");
         generatePhi(out, bb->branchArguments, bb->branch, true);
-        fprintf(out, "\t\tgoto L%d;\n\t} else {\n", (int)bb->branch->id);
+        if (bb->branch) {
+            fprintf(out, "\t\tgoto L%d;\n\t} else {\n", (int)bb->branch->id);
+        } else {
+            fprintf(out, "\t\tgoto end;\n\t} else {\n");
+        }
         generatePhi(out, bb->nextArguments, bb->next, true);
         if (bb->next) {
             fprintf(out, "\t\tgoto L%d;\n\t}\n", (int)bb->next->id);
@@ -969,7 +1001,9 @@ static void generateBasicBlock(FILE* out, CFG* cfg, BasicBlock* bb)
         } else {
             fprintf(out, "\t\tgoto end;\n\t}\n");
         }
-        generateBasicBlock(out, cfg, bb->branch);
+        if (bb->branch) {
+            generateBasicBlock(out, cfg, bb->branch);
+        }
     } else if (bb->next) {
         generatePhi(out, bb->nextArguments, bb->next, false);
         fprintf(out, "\tgoto L%d;\n", (int)bb->next->id);
@@ -1028,6 +1062,7 @@ void generateFunctionDefinitions(FILE* out, CFG* callGraphNode)
         generateBasicBlock(out, callGraphNode, callGraphNode->blockGraph);
     }
     fprintf(out, "end:;\n");
+    fprintf(out, "\tstackTracePop(&stackTrace);\n");
     if (callGraphNode->symbol->type->function.codomainType->astType != AST_VOID) {
         fprintf(out, "\treturn retval;\n}\n\n");
     } else {
@@ -1043,11 +1078,13 @@ void generateFunctionDefinitions(FILE* out, CFG* callGraphNode)
 
 void generateMainFunction(FILE* out, CFG* callGraph)
 {
-    fprintf(out, "\int main(int argc, char** argv)\n");
+    fprintf(out, "void pause() {system(\"pause\");}\n\n");
+
+    fprintf(out, "int main(int argc, char** argv)\n");
 
     fprintf(out, "{\n");
 
-    fprintf(out, "\tstackTraceInit();\n");
+    fprintf(out, "\tatexit(pause);\n\tstackTraceInit(&stackTrace);\n\tstackTraceInit(&errorTrace);\n");
 
     fprintf(out, "\t");
     printType(out, STRING_ARR_TYPE);
@@ -1081,7 +1118,7 @@ void generateMainFunction(FILE* out, CFG* callGraph)
 
     fprintf(out, "\tfree(args.data);\n");
 
-    fprintf(out, "\tstackTracePrint();\n\tsystem(\"pause\");\n\treturn retval.tag != %d;\n", getTag("success", VOID_TYPE));
+    fprintf(out, "\tif (errorTrace.length > 0) {\n\t\tfprintf(stderr, \"error: %%s\\n\", tagGetFieldName(retval.tag));\n\t}\n\tstackTracePrint(&errorTrace);\n\treturn retval.tag != %d;\n", getTag("success", VOID_TYPE));
 
     fprintf(out, "}\n");
 }

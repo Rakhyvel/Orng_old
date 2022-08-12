@@ -392,6 +392,8 @@ static ASTNode* parseFactor(SymbolNode* scope)
         return parseFor(scope);
     } else if (accept(TOKEN_CASE)) {
         return parseCase(scope);
+    } else if (accept(TOKEN_UNREACHABLE)) {
+        return AST_Create_unreachable(scope, prevToken->pos);
     } else {
         error(prevToken->pos, "expected expression, got '%s'", Token_GetErrorMsgRepr(nextToken()->type));
     }

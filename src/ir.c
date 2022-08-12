@@ -106,6 +106,8 @@ char* IR_ToString(ir_type type)
         return "IR_PUSH_STACK_TRACE";
     case IR_CLEAR_STACK_TRACE:
         return "IR_CLEAR_STACK_TRACE";
+    case IR_UNREACHABLE:
+        return "IR_UNREACHABLE";
     }
 }
 
@@ -187,7 +189,11 @@ void printBlockGraph(BasicBlock* bb)
         printIR(ir);
     }
     if (bb->hasBranch) {
-        printf("if (!%s_%d) goto %d", bb->condition->symbol->name, bb->condition->version, bb->branch->id);
+        if (bb->branch) {
+            printf("if (!%s_%d) goto %d", bb->condition->symbol->name, bb->condition->version, bb->branch->id);
+        } else {
+            printf("if (!%s_%d) goto <END>", bb->condition->symbol->name, bb->condition->version);
+        }
         printSymbverList(bb->branchArguments);
     }
     if (bb->next) {
@@ -1784,6 +1790,10 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
         }
         return addr;
     }
+    case AST_UNREACHABLE: {
+        appendInstruction(cfg, createIR(IR_UNREACHABLE, NULL, NULL, NULL, node->pos));
+        return NULL;
+    }
     case AST_FREE: {
         SymbolVersion* expr = NULL;
 
@@ -2843,7 +2853,6 @@ bool deadCode(CFG* cfg)
             }
             if (def->dest && !def->removed && !def->dest->used && def->dest->symbol == cfg->returnSymbol && cfg->symbol->type->function.codomainType->astType == AST_VOID) {
                 removeInstruction(bb, def);
-                printf("lol\n");
                 retval = true;
             }
         }
@@ -2986,8 +2995,10 @@ List* createCFG(SymbolNode* functionSymbol, CFG* caller)
         appendInstruction(cfg, createIR(IR_COPY, returnVersion, eval, NULL, invalid_pos));
         appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, NULL, invalid_pos));
     }
-    printf("\n%s\n", functionSymbol->name);
-    printInstructionList(cfg);
+    if (!strcmp(functionSymbol->name, "assert")) {
+        printf("\n%s\n", functionSymbol->name);
+        printInstructionList(cfg);
+    }
 
     // Convert quadruple list to CFG of basic blocks, find versions!
     cfg->blockGraph = convertToBasicBlock(cfg, cfg->head, NULL);
@@ -2995,9 +3006,11 @@ List* createCFG(SymbolNode* functionSymbol, CFG* caller)
 
     // Optimize
     do {
-        //printf("\n\n%s\n", cfg->symbol->name);
-        //clearBBVisitedFlags(cfg);
-        //printBlockGraph(cfg->blockGraph);
+        if (!strcmp(functionSymbol->name, "assert")) {
+            printf("\n\n%s\n", cfg->symbol->name);
+            clearBBVisitedFlags(cfg);
+            printBlockGraph(cfg->blockGraph);
+        }
     } while (copyAndConstantPropagation(cfg) | deadCode(cfg));
 
     // Parameters and the such are kept
