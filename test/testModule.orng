@@ -25,11 +25,17 @@ testModule::Module = (
 	-- For eval exprs, returns, and try, if the type doesnt match with the ret type, but function is comptime, non-extern, implicit error function, and expr type is enum, add to union set
 	-- Afterwards, type is updated to be the correct error union enum type
 
-	lol::()->!Int = {
-		FileError.fileNotFound
+	lol::(x:Int)->!Int = {
+		if x == 0 {
+			return FileError.fileNotFound
+		} else {
+			return x
+		}
 	}
 
 	main::(args:[]String)->!() = {
-		try lol() -- If type does not match for !(), implicit return of success
+		try lol(3)
+		defer std.system.println("Hello!")
+		try lol(5)
 	}
 )

@@ -437,12 +437,12 @@ x Generate C code from IR
 		x !<Type>
 			x infers the error enum set from RHS!
 		x New main function return type
-		- try should union error enum to function too
-		- panic messages
-			- stack trace
-				- After call, if returned an error, THEN push call pos string to stack
-				-                                   ELSE clear stack
-				- If main function returns an error, print out stack
+		x try should union error enum to function too
+		x panic messages
+			x stack trace
+				x After call, if returned an error, THEN push call pos string to stack
+				x                                   ELSE clear stack
+				x If main function returns an error, print out stack
 		- Debug mode which:
 			- Checks indexes are within array bounds
 			- Checks that <expr>? are not nothing

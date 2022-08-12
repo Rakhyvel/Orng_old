@@ -31,6 +31,38 @@ static void generateIncludes(FILE* out, Map* includes)
     fprintf(out, "\n");
 }
 
+static void generateDebug(FILE* out)
+{
+    fprintf(out, "/* Debug */\n");
+    fprintf(out, "struct list {\n");
+    fprintf(out, "	int length;\n");
+    fprintf(out, "	int capacity;\n");
+    fprintf(out, "	char** data;\n");
+    fprintf(out, "};\n\n");
+    fprintf(out, "struct list stackTrace;\n\n");
+    fprintf(out, "void stackTraceInit() {\n");
+    fprintf(out, "	stackTrace.length = 0;\n");
+    fprintf(out, "	stackTrace.capacity = 10;\n");
+    fprintf(out, "	stackTrace.data = malloc(sizeof(char*) * stackTrace.capacity);\n");
+    fprintf(out, "}\n\n");
+    fprintf(out, "void stackTracePush(char* data) {\n");
+    fprintf(out, "	if (stackTrace.length >= stackTrace.capacity) {\n");
+    fprintf(out, "		stackTrace.capacity *= 2;\n");
+    fprintf(out, "		stackTrace.data = realloc(stackTrace.data, stackTrace.capacity);\n");
+    fprintf(out, "	}\n");
+    fprintf(out, "	stackTrace.data[stackTrace.length] = data;\n");
+    fprintf(out, "	stackTrace.length++;\n");
+    fprintf(out, "}\n\n");
+    fprintf(out, "void stackTraceClear() {\n");
+    fprintf(out, "	stackTrace.length = 0;\n");
+    fprintf(out, "}\n\n");
+    fprintf(out, "void stackTracePrint() {\n");
+    fprintf(out, "	for (int i = 0; i < stackTrace.length; i++) {\n");
+    fprintf(out, "		printf(\"%%s\", stackTrace.data[i]);\n");
+    fprintf(out, "	}\n");
+    fprintf(out, "}\n\n");
+}
+
 static void printStructOrd(FILE* out, ASTNode* type)
 {
     struct listElem* elem = List_Begin(program.structDependencyGraph);
@@ -509,9 +541,6 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
         break;
     }
     case IR_CALL: {
-        fprintf(out, "\tprintf(\"");
-        printPos(out, ir->pos);
-        fprintf(out, "\");\n");
 
         if (ir->dest->type->astType != AST_VOID) {
             printVarAssign(out, ir->dest);
@@ -849,6 +878,16 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
         fprintf(out, ");\n");
         break;
     }
+    case IR_PUSH_STACK_TRACE: {
+        fprintf(out, "\tstackTracePush(\"");
+        printPos(out, ir->pos);
+        fprintf(out, "\");\n");
+        break;
+    }
+    case IR_CLEAR_STACK_TRACE: {
+        fprintf(out, "\tstackTraceClear;\n");
+        break;
+    }
     default: {
         PANIC("unknown IR");
     }
@@ -967,9 +1006,6 @@ void generateFunctionDefinitions(FILE* out, CFG* callGraphNode)
         printType(out, returns);
         fprintf(out, " retval;\n");
     }
-    if (!strcmp(symbol->name, "add")) {
-        printf("herhe\n");
-    }
     forall(elem, callGraphNode->basicBlocks)
     {
         BasicBlock* bb = elem->data;
@@ -1011,6 +1047,8 @@ void generateMainFunction(FILE* out, CFG* callGraph)
 
     fprintf(out, "{\n");
 
+    fprintf(out, "\tstackTraceInit();\n");
+
     fprintf(out, "\t");
     printType(out, STRING_ARR_TYPE);
     fprintf(out, " args = {argc, calloc(sizeof(");
@@ -1043,7 +1081,7 @@ void generateMainFunction(FILE* out, CFG* callGraph)
 
     fprintf(out, "\tfree(args.data);\n");
 
-    fprintf(out, "\tsystem(\"pause\");\n\treturn retval.tag != %d;\n", getTag("success", VOID_TYPE));
+    fprintf(out, "\tstackTracePrint();\n\tsystem(\"pause\");\n\treturn retval.tag != %d;\n", getTag("success", VOID_TYPE));
 
     fprintf(out, "}\n");
 }
@@ -1057,6 +1095,7 @@ void Generator_Generate(FILE* out, Program _program)
     fprintf(out, "/* Code generated using the Orng compiler http://josephs-projects.com */\n");
     fprintf(out, "\n#ifndef ORNG_%s\n#define ORNG_%s\n\n", myItoa(randID), myItoa(randID));
     generateIncludes(out, program.includes);
+    generateDebug(out);
     generateStructDefinitions(out, program.structDependencyGraph);
     generateVerbatims(out, program.verbatims);
     fprintf(out, "/* Function definitions */\n");

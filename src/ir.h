@@ -58,7 +58,10 @@ typedef enum ir_type {
 	IR_SIZEOF,
 	IR_NEW, 
 	IR_NEW_ARR,
-	IR_FREE 
+	IR_FREE,
+
+	IR_PUSH_STACK_TRACE,
+	IR_CLEAR_STACK_TRACE
 } ir_type;
 
 typedef struct symbolVersion {

@@ -102,6 +102,10 @@ char* IR_ToString(ir_type type)
         return "IR_NEW_ARR";
     case IR_FREE:
         return "IR_FREE";
+    case IR_PUSH_STACK_TRACE:
+        return "IR_PUSH_STACK_TRACE";
+    case IR_CLEAR_STACK_TRACE:
+        return "IR_CLEAR_STACK_TRACE";
     }
 }
 
@@ -1096,6 +1100,53 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
             List_Append(ir->listData, member);
         }
         appendInstruction(cfg, ir);
+        if (node->type->astType == AST_ENUM) {
+            ASTNode* successType = NULL;
+            forall(elem, node->type->_enum.defines)
+            {
+                ASTNode* define = elem->data;
+                SymbolNode* var = define->define.symbol;
+                if (!strcmp(var->name, "success")) {
+                    successType = var->type;
+                    break;
+                }
+            }
+            // if not successful then push pos str to stack, else clear stack
+            if (successType) {
+                SymbolVersion* enumDot = tempSymbolVersion(cfg, INT64_TYPE);
+                IR* enumIR = createIR(IR_DOT, enumDot, temp, NULL, node->pos);
+                enumIR->strData = "tag";
+                enumDot->def = enumIR;
+                appendInstruction(cfg, enumIR);
+
+                // Get tag of success type
+                SymbolVersion* tag = tempSymbolVersion(cfg, INT64_TYPE);
+                IR* tagIR = createIR_int(IR_LOAD_INT, tag, NULL, NULL, getTag("success", successType), node->pos);
+                tag->def = tagIR;
+                appendInstruction(cfg, tagIR);
+
+                // Compare success tag with expr tag
+                SymbolVersion* condition = tempSymbolVersion(cfg, BOOL_TYPE);
+                IR* conditionIR = createIR(IR_NEQ, condition, enumDot, tag, node->pos);
+                condition->def = conditionIR;
+                appendInstruction(cfg, conditionIR);
+
+                IR* elseLabel = createIR_label(node->pos);
+                IR* endLabel = createIR_label(node->pos);
+
+                // Success branch
+                appendInstruction(cfg, createIR_branch(IR_BRANCH_IF_FALSE, NULL, condition, NULL, elseLabel, node->pos));
+                IR* pushStackTraceIR = createIR(IR_PUSH_STACK_TRACE, NULL, NULL, NULL, node->pos);
+                appendInstruction(cfg, pushStackTraceIR);
+                appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, endLabel, node->pos));
+
+                // Error branch, set retval to error message
+                appendInstruction(cfg, elseLabel);
+                IR* clearStackTraceIR = createIR(IR_CLEAR_STACK_TRACE, NULL, NULL, NULL, node->pos);
+                appendInstruction(cfg, clearStackTraceIR);
+                appendInstruction(cfg, endLabel);
+            }
+        }
         return temp;
     }
     case AST_INDEX: {
@@ -1691,7 +1742,7 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
         // Error branch, set retval to error message
         appendInstruction(cfg, elseLabel);
         SymbolVersion* returnSymbolVersion = unversionedSymbolVersion(cfg, cfg->returnSymbol, cfg->symbol->type->function.codomainType);
-        appendInstruction(cfg, createIR_ast(IR_CONVERT, returnSymbolVersion, left, NULL, NULL, returnSymbolVersion->type, node->pos));
+        appendInstruction(cfg, createIR_ast(IR_CONVERT, returnSymbolVersion, left, NULL, NULL, returnSymbolVersion->type, node->pos)); // Do this rather than a simple copy, may be !() error type, which must be converted
         appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, errorLabel, node->pos));
         appendInstruction(cfg, endLabel);
         return var;
