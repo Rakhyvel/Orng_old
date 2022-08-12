@@ -108,8 +108,8 @@ char* IR_ToString(ir_type type)
         return "IR_PUSH_STACK_TRACE";
     case IR_CLEAR_STACK_TRACE:
         return "IR_CLEAR_STACK_TRACE";
-    case IR_UNREACHABLE:
-        return "IR_UNREACHABLE";
+    case IR_ERROR:
+        return "IR_ERROR";
     }
 }
 
@@ -1158,22 +1158,61 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
         return temp;
     }
     case AST_INDEX: {
-        // if debug {
-        //		Get array length
-        //		Get index
-        //		If index >= array length, branch to error
-        //		If index < 0, branch to error
-        //		Jump to end:
-        //		error:
-        //		unreachable (abstract to runtime error, with str message?)
-        //		end:
-        // }
-        // Return index
-
         SymbolVersion* left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel, errorLabel, lvalue);
         left->lvalue = lvalue;
         SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
         SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
+
+        if (isDebug) {
+			// Done so that versioning is correct. Would version array symbol in this BB and other BB as same version, duplicate code
+            SymbolVersion* arrayCopy = unversionedSymbolVersion(cfg, left->symbol, left->type);
+
+            IR* tooHighLabel = createIR_label(node->pos);
+            IR* tooLowLabel = createIR_label(node->pos);
+            IR* end = createIR_label(node->pos);
+
+			// 0
+            SymbolVersion* zero = tempSymbolVersion(cfg, INT64_TYPE);
+            IR* zeroIR = createIR_int(IR_LOAD_INT, zero, NULL, NULL, 0, node->pos);
+            zero->def = zeroIR;
+            appendInstruction(cfg, zeroIR);
+
+            // Get array length
+            SymbolVersion* arrayLength = tempSymbolVersion(cfg, INT64_TYPE);
+            IR* lengthIR = createIR(IR_DOT, arrayLength, arrayCopy, NULL, node->pos);
+            lengthIR->strData = "length";
+            arrayLength->def = lengthIR;
+            appendInstruction(cfg, lengthIR);
+
+            // If index >= array length, goto branch error
+            SymbolVersion* upperBound = tempSymbolVersion(cfg, BOOL_TYPE);
+            IR* upperIR = createIR(IR_LSR, upperBound, right, arrayLength, node->pos);
+            upperBound->def = upperIR;
+            appendInstruction(cfg, upperIR);
+
+            // If index < 0, branch to error
+            SymbolVersion* lowerBound = tempSymbolVersion(cfg, BOOL_TYPE);
+            IR* lowerIR = createIR(IR_GTE, lowerBound, right, zero, node->pos);
+            lowerBound->def = lowerIR;
+            appendInstruction(cfg, lowerIR);
+
+            appendInstruction(cfg, createIR_branch(IR_BRANCH_IF_FALSE, NULL, upperBound, NULL, tooHighLabel, node->pos));
+            appendInstruction(cfg, createIR_branch(IR_BRANCH_IF_FALSE, NULL, lowerBound, NULL, tooLowLabel, node->pos));
+            appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, end, node->pos));
+            appendInstruction(cfg, tooHighLabel);
+            IR* tooHighError = createIR(IR_ERROR, NULL, NULL, NULL, node->pos);
+            tooHighError->strData = "array index greater than array length";
+            appendInstruction(cfg, tooHighError);
+            appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, end, node->pos));
+
+            appendInstruction(cfg, tooLowLabel);
+            IR* tooLowError = createIR(IR_ERROR, NULL, NULL, NULL, node->pos);
+            tooLowError->strData = "array index is negative";
+            appendInstruction(cfg, tooLowError);
+            appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, end, node->pos));
+
+            appendInstruction(cfg, end);
+        }
 
         IR* ir = createIR(IR_INDEX, temp, left, right, node->pos);
         temp->def = ir;
@@ -1806,7 +1845,9 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
     }
     case AST_UNREACHABLE: {
         if (isDebug) {
-            appendInstruction(cfg, createIR(IR_UNREACHABLE, NULL, NULL, NULL, node->pos));
+            IR* error = createIR(IR_ERROR, NULL, NULL, NULL, node->pos);
+            error->strData = "unreachable";
+            appendInstruction(cfg, error);
         }
         return NULL;
     }
@@ -1973,7 +2014,7 @@ bool copyAndConstantPropagation(CFG* cfg)
                 if (def->src2->def && def->src2->def->irType == IR_LOAD_INT && def->src2->def->intData < 0) {
                     error(def->pos, "array index is negative");
                 } else if (def->src2->def && def->src2->def->irType == IR_LOAD_INT && getArrayLength(def->src1->type) != -1 && def->src2->def->intData >= getArrayLength(def->src1->type)) {
-                    error(def->pos, "array index is greater than array size");
+                    error(def->pos, "array index greater than array length");
                 } else if (def->src1->def && def->src2 && def->src1->def->irType == IR_LOAD_ARRAY_LITERAL && def->src2->def->irType == IR_LOAD_INT && List_Get(def->src1->def->listData, def->src2->def->intData) != NULL) {
                     def->irType = IR_COPY;
                     def->src1 = List_Get(def->src1->def->listData, def->src2->def->intData);
@@ -3006,13 +3047,13 @@ List* createCFG(SymbolNode* functionSymbol, CFG* caller)
         appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, NULL, invalid_pos));
     }
     // Normal expression return
-	else if (eval) {
+    else if (eval) {
         SymbolVersion* returnVersion = unversionedSymbolVersion(cfg, cfg->returnSymbol, cfg->symbol->type->function.codomainType);
         appendInstruction(cfg, createIR(IR_COPY, returnVersion, eval, NULL, invalid_pos));
         appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, NULL, invalid_pos));
     }
-    //printf("\n%s\n", functionSymbol->name);
-    //printInstructionList(cfg);
+    printf("\n%s\n", functionSymbol->name);
+    printInstructionList(cfg);
 
     // Convert quadruple list to CFG of basic blocks, find versions!
     cfg->blockGraph = convertToBasicBlock(cfg, cfg->head, NULL);
@@ -3020,9 +3061,9 @@ List* createCFG(SymbolNode* functionSymbol, CFG* caller)
 
     // Optimize
     do {
-        //printf("\n\n%s\n", cfg->symbol->name);
-        //clearBBVisitedFlags(cfg);
-        //printBlockGraph(cfg->blockGraph);
+        printf("\n\n%s\n", cfg->symbol->name);
+        clearBBVisitedFlags(cfg);
+        printBlockGraph(cfg->blockGraph);
     } while (copyAndConstantPropagation(cfg) | deadCode(cfg));
 
     // Parameters and the such are kept

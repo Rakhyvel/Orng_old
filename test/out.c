@@ -1,7 +1,7 @@
 /* Code generated using the Orng compiler http://josephs-projects.com */
 
-#ifndef ORNG_20687
-#define ORNG_20687
+#ifndef ORNG_23635
+#define ORNG_23635
 
 /* Includes */
 #include <stdbool.h>
@@ -17,7 +17,7 @@
 /* Debug */
 struct list {
 	int length;
-	char* data[10000];
+	char* data[1000];
 };
 
 struct list stackTrace;
@@ -33,24 +33,6 @@ void stackTracePrintReverse(struct list* list) {
 	for (int i = list->length - 1; i >= 0; i--) {
 		fprintf(stderr, "%s", list->data[i]);
 	}
-}
-
-void stackTracePush(struct list* list, char* data) {
-	if (list->length >= 10000) {
-		fprintf(stderr, "error: stack overflow\n");
-		stackTracePrintReverse(list);
-		exit(1);
-	}
-	list->data[list->length] = data;
-	list->length++;
-}
-
-void stackTracePop(struct list* list) {
-	list->length--;
-}
-
-void stackTraceClear(struct list* list) {
-	list->length = 0;
 }
 
 char* tagGetFieldName(int tag) {
@@ -165,37 +147,85 @@ int std_system_errln(struct struct_1 _format, ...) {va_list _25_args;va_start(_2
 
 /* Function definitions */
 struct struct_3 test_testModule_main(struct struct_2 _args);
-void test_testModule_recursive();
+void test_testModule_recursive(int64_t _x);
 
 struct struct_3 test_testModule_main(struct struct_2 _args)
 {
 	struct struct_3 retval;
-	void (*_0) ();
+	void (*_0) (int64_t _x);
 	int64_t _2;
-	struct struct_3 _3;
+	int64_t _5;
+	bool _6;
 	struct struct_2 _args_0;
+	struct struct_1 _3;
+	int64_t _8;
+	int64_t _9;
+	struct struct_3 _10;
+	struct struct_2 _args_1;
+	struct struct_2 _args_2;
 	_args_0 = _args;
 L1:; // incoming:1
 	_0 = test_testModule_recursive;
-	stackTracePush(&stackTrace, "test/testModule.orng: \n33    | main::(args:[]String)->!() = recursive()\n      |                                       ^\n");
-	_0();
-	stackTracePop(&stackTrace);
-	_2 = 12;
-	_3 = (struct struct_3) {_2};
-	retval = _3;
+	_2 = 0;
+	_5 = _args_0.length;
+	_6 = _2 < _5;
+	if (!_6) {
+		_args_2 = _args_0;
+		goto L6;
+	} else {
+		_args_1 = _args_0;
+		goto L4;
+	}
+L4:; // incoming:2
+	_3 = _args_1.data[_2];
+	_8 = _3.length;
+	if ((&stackTrace)->length >= 1000) {
+		fprintf(stderr, "error: stack overflow\n");
+		stackTracePrintReverse((&stackTrace));
+		exit(1);
+	}
+	(&stackTrace)->data[(&stackTrace)->length++] = "test/testModule.orng: \n33    | main::(args:[]String)->!() = recursive(args[0].length)\n      |                                       ^\n";
+	_0(_8);
+	stackTrace.length--;
+	_9 = 12;
+	_10 = (struct struct_3) {_9};
+	retval = _10;
 	goto end;
+L6:; // incoming:1
+	fprintf(stderr, "error: array index greater than array length\n");
+	if ((&errorTrace)->length >= 1000) {
+		fprintf(stderr, "error: stack overflow\n");
+		stackTracePrintReverse((&errorTrace));
+		exit(1);
+	}
+	(&errorTrace)->data[(&errorTrace)->length++] = "test/testModule.orng: \n33    | main::(args:[]String)->!() = recursive(args[0].length)\n      |                                            ^\n";
+	stackTracePrintReverse(&stackTrace);
+	exit(1);
+	_args_1 = _args_2;
+	goto L4;
 end:;
 	return retval;
 }
 
-void test_testModule_recursive()
+void test_testModule_recursive(int64_t _x)
 {
-	void (*_0) ();
+	void (*_0) (int64_t _x);
+	int64_t _2;
+	int64_t _3;
+	int64_t _x_0;
+	_x_0 = _x;
 L0:; // incoming:1
 	_0 = test_testModule_recursive;
-	stackTracePush(&stackTrace, "test/testModule.orng: \n31    | recursive::()->() = recursive()\n      |                              ^\n");
-	_0();
-	stackTracePop(&stackTrace);
+	_2 = 1;
+	_3 = _x_0 + _2;
+	if ((&stackTrace)->length >= 1000) {
+		fprintf(stderr, "error: stack overflow\n");
+		stackTracePrintReverse((&stackTrace));
+		exit(1);
+	}
+	(&stackTrace)->data[(&stackTrace)->length++] = "test/testModule.orng: \n31    | recursive::(x:Int)->() = recursive(x+1)\n      |                                   ^\n";
+	_0(_3);
+	stackTrace.length--;
 	goto end;
 end:;
 	return;

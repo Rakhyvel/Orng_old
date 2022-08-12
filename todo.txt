@@ -412,9 +412,9 @@ x IR optimizations
 				x If main function returns an error, print out stack
 		x recursive::(x:Int)->() = recursive(x-1) -- Causes error generating phi nodes
 		x recursive::()->() = recursive() -- Doesn't generate call to self
-		- Remove pop/push functions, copy paste code instead
+		x Remove pop/push functions, copy paste code instead
 		- Debug mode which:
-			- Checks indexes are within array bounds
+			x Checks indexes are within array bounds
 			- Checks that dots for enum literals have the correct tag
 			- Checks that derefs are not null
 			- Checks that slices are within the array
@@ -486,7 +486,7 @@ x IR optimizations
 		- use std::vector and std::map instead of my list and map
 		- some structures could be better represented as classes
 	- rename "expandTypeIdent" to just "expandType"
-	- remove words 'a', 'the' from error messages
+	- remove words 'a', 'the', 'is/are' from error messages
 	- fix semantics in parsing functions (instead of prefix/term/factor etc just use child)
 	- remove 'symbol' field from block ast, should use scope field from common ast struct (right?)
 - Orange should compile the program for you, too
@@ -666,6 +666,7 @@ x IR optimizations
 	- for x : X  {}		# for each loop
 	- all x : X, P		# all x in X satisfy P
 	- some x : X, P		# one or more x in X satisfy P
+- LLVM
 - doc generation
 
 

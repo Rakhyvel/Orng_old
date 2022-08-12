@@ -28,7 +28,7 @@ testModule::Module = (
 		}
 	}
 
-	recursive::()->() = recursive()
+	recursive::(x:Int)->() = recursive(x+1)
 
-	main::(args:[]String)->!() = recursive()
+	main::(args:[]String)->!() = recursive(args[-1].length)
 )

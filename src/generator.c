@@ -38,7 +38,7 @@ static void generateDebug(FILE* out)
     fprintf(out, "/* Debug */\n");
     fprintf(out, "struct list {\n");
     fprintf(out, "	int length;\n");
-    fprintf(out, "	char* data[10000];\n");
+    fprintf(out, "	char* data[1000];\n");
     fprintf(out, "};\n\n");
     fprintf(out, "struct list stackTrace;\n");
     fprintf(out, "struct list errorTrace;\n\n");
@@ -52,23 +52,8 @@ static void generateDebug(FILE* out)
     fprintf(out, "		fprintf(stderr, \"%%s\", list->data[i]);\n");
     fprintf(out, "	}\n");
     fprintf(out, "}\n\n");
-    fprintf(out, "void stackTracePush(struct list* list, char* data) {\n");
-    fprintf(out, "	if (list->length >= 10000) {\n");
-    fprintf(out, "		fprintf(stderr, \"error: stack overflow\\n\");\n");
-    fprintf(out, "		stackTracePrintReverse(list);\n");
-    fprintf(out, "		exit(1);\n");
-    fprintf(out, "	}\n");
-    fprintf(out, "	list->data[list->length] = data;\n");
-    fprintf(out, "	list->length++;\n");
-    fprintf(out, "}\n\n");
-    fprintf(out, "void stackTracePop(struct list* list) {\n");
-    fprintf(out, "	list->length--;\n");
-    fprintf(out, "}\n\n");
-    fprintf(out, "void stackTraceClear(struct list* list) {\n");
-    fprintf(out, "	list->length = 0;\n");
-    fprintf(out, "}\n\n");
 
-	fprintf(out, "char* tagGetFieldName(int tag) {\n");
+    fprintf(out, "char* tagGetFieldName(int tag) {\n");
     fprintf(out, "	switch(tag) {\n");
     forall(elem, tagIDs->keyList)
     {
@@ -81,6 +66,16 @@ static void generateDebug(FILE* out)
         fprintf(out, "\t\treturn \"%s\";\n", fieldName);
     }
     fprintf(out, "\t}\n}\n\n");
+}
+
+static void stackTracePush(FILE* out, char* list)
+{
+    fprintf(out, "	if (%s->length >= 1000) {\n", list);
+    fprintf(out, "		fprintf(stderr, \"error: stack overflow\\n\");\n");
+    fprintf(out, "		stackTracePrintReverse(%s);\n", list);
+    fprintf(out, "		exit(1);\n");
+    fprintf(out, "	}\n");
+    fprintf(out, "	%s->data[%s->length++] = ", list, list);
 }
 
 static void printStructOrd(FILE* out, ASTNode* type)
@@ -557,9 +552,10 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
         break;
     }
     case IR_CALL: {
-        fprintf(out, "\tstackTracePush(&stackTrace, \"");
+        stackTracePush(out, "(&stackTrace)");
+        fprintf(out, "\"");
         printPos(out, ir->pos);
-        fprintf(out, "\");\n");
+        fprintf(out, "\";\n");
         if (ir->dest->type->astType != AST_VOID) {
             printVarAssign(out, ir->dest);
         } else {
@@ -576,7 +572,7 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
             }
         }
         fprintf(out, ");\n");
-        fprintf(out, "\tstackTracePop(&stackTrace);\n");
+        fprintf(out, "\tstackTrace.length--;\n");
         break;
     }
     case IR_INDEX: {
@@ -898,22 +894,24 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
         break;
     }
     case IR_PUSH_STACK_TRACE: {
-        fprintf(out, "\tstackTracePush(&errorTrace, \"");
+        stackTracePush(out, "(&errorTrace)");
+        fprintf(out, "\"");
         printPos(out, ir->pos);
-        fprintf(out, "\");\n");
+        fprintf(out, "\";\n");
         break;
     }
     case IR_CLEAR_STACK_TRACE: {
-        fprintf(out, "\tstackTraceClear(&errorTrace);\n");
+        fprintf(out, "\errorTrace.length = 0;\n");
         break;
     }
-    case IR_UNREACHABLE: {
-        fprintf(out, "\tfprintf(stderr, \"error: unreachable\\n\");\n");
-        fprintf(out, "\tstackTracePush(&stackTrace, \"");
+    case IR_ERROR: {
+        fprintf(out, "\tfprintf(stderr, \"error: %s\\n\");\n", ir->strData);
+        stackTracePush(out, "(&errorTrace)");
+        fprintf(out, "\"");
         printPos(out, ir->pos);
-        fprintf(out, "\");\n\tstackTracePrintReverse(&stackTrace);\n\texit(1);\n");
+        fprintf(out, "\";\n\tstackTracePrintReverse(&stackTrace);\n\texit(1);\n");
         break;
-	}
+    }
     default: {
         PANIC("unknown IR");
     }
@@ -1043,7 +1041,7 @@ void generateFunctionDefinitions(FILE* out, CFG* callGraphNode)
         BasicBlock* bb = elem->data;
         for (IR* ir = bb->entry; ir != NULL; ir = ir->next) {
             SymbolVersion* symbver = ir->dest;
-            if (!symbver || !symbver->used || symbver->type->astType == AST_VOID || symbver->def != ir) { // Removed a check for symbver.symbol.visited, was that needed? why?
+            if (!symbver || !symbver->used || symbver->symbol->visited || symbver->type->astType == AST_VOID) { // Removed a check for symbver.symbol.visited, was that needed? why?
                 continue;
             }
             printVarDef(out, symbver);
