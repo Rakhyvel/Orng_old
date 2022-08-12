@@ -1,4 +1,5 @@
-#pragma once
+// © 2021-2022 Joseph Shimel. All rights reserved.
+
 #include "./main.h"
 #include "symbol.h"
 

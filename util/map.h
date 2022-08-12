@@ -1,3 +1,5 @@
+// © 2020-2022 Joseph Shimel. All rights reserved.
+
 #ifndef MAP_H
 #define MAP_H
 

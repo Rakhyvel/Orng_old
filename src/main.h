@@ -1,9 +1,4 @@
-/*
-easy to define new types that apply to existing methods - interfaces
-easy to define new methods that apply to existing types - implmentation of interface methods for types is done anywhere
-
-want: crazy cool type system from haskell without needing to optimize the hell out of declarative code
-*/
+// © 2021-2022 Joseph Shimel. All rights reserved.
 
 #ifndef MAIN_H
 #define MAIN_H
@@ -29,6 +24,8 @@ typedef struct {
     List* verbatims;
     struct CFG* callGraph;
 } Program;
+
+bool isDebug;
 
 char* getRelPath(char*);
 char* pathToFilename(char* path);

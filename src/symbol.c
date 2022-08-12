@@ -1,10 +1,4 @@
-/*
-A symbol is a name in the program that refers to something in the program.
-Examples are variable names, procedures, even block {} statements are their
-own symbols.
-
-The symbol tree is used to determine scope.
-*/
+// © 2021-2022 Joseph Shimel. All rights reserved.
 
 #include "symbol.h"
 #include "../util/debug.h"

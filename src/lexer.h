@@ -1,7 +1,4 @@
-/*
-Delcares the line global, and the Lexer_GetNextToken() function for other files to use.
-Implementation is in the lexer.c file
-*/
+// © 2021-2022 Joseph Shimel. All rights reserved.
 
 #ifndef LEXER_H
 #define LEXER_H

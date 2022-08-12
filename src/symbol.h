@@ -1,3 +1,5 @@
+// © 2021-2022 Joseph Shimel. All rights reserved.
+
 #ifndef SYMBOL_H
 #define SYMBOL_H
 

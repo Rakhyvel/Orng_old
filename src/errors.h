@@ -1,3 +1,5 @@
+// © 2021-2022 Joseph Shimel. All rights reserved.
+
 #ifndef ERRORS_H
 #define ERRORS_H
 

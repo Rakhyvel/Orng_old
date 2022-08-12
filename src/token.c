@@ -1,3 +1,5 @@
+// © 2021-2022 Joseph Shimel. All rights reserved.
+
 #include "token.h"
 #include "../util/debug.h"
 #include "../util/list.h"

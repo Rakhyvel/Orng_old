@@ -1,7 +1,4 @@
-/*
-This file declares the Generator_Generate() function for other files to use.
-Implementation is in the file generator.c
-*/
+// © 2021-2022 Joseph Shimel. All rights reserved.
 
 #ifndef GENERATOR_H
 #define GENERATOR_H

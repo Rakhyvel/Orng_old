@@ -1,3 +1,5 @@
+// © 2021-2022 Joseph Shimel. All rights reserved.
+
 /*  list.c
 
     A doubley linked list, where nodes have references both to the node that 

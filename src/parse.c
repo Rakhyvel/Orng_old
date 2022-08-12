@@ -1,7 +1,4 @@
-/*
-Reads in two tokens at a time from the token queue (see lexer.c) and creates one
-symbol tree that points to many abstract syntax trees
-*/
+// © 2021-2022 Joseph Shimel. All rights reserved.
 
 #define _CRT_SECURE_NO_WARNINGS
 #include "parse.h"

@@ -1,3 +1,5 @@
+// © 2021-2022 Joseph Shimel. All rights reserved.
+
 /*
 PHILOSOPHY:
 - Stateless functional style between modules/packages for predictability
@@ -49,6 +51,8 @@ char* filename;
 char outFilename[255];
 
 static bool errsExist = false;
+
+bool isDebug = true;
 
 // files[fileNo] -> lines[lineNo]
 Map* files;

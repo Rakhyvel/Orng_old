@@ -1,7 +1,4 @@
-/*
-The lexer handles reading in from a file stream, and grouping characters 
-into tokens so that they can be easily manipulated later. 
-*/
+// © 2021-2022 Joseph Shimel. All rights reserved.
 
 #include "lexer.h"
 #include "../util/debug.h"
@@ -125,9 +122,8 @@ static bool shouldSplitToken(char c, char start, int length)
         return getCharType(c) != getCharType(start);
     }
 }
-/* 
-Reads in a file stream, gets the data for the next token. Leaves file 
-stream at the begining of next token */
+
+// Reads in a file stream, gets the data for the next token. Leaves file stream at the begining of next token
 Token* Lexer_GetNextToken(FILE* in)
 {
     int nextChar;

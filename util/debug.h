@@ -1,3 +1,5 @@
+// © 2022 Joseph Shimel. All rights reserved.
+
 #ifndef DEBUG_H
 #define DEBUG_H
 

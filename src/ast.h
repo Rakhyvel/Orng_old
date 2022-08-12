@@ -1,8 +1,4 @@
-/*
-AST stands for Abstract Syntax Tree. This is a data structure used to organize
-and give meaning to the token read in from the file. It is similar to a parse
-tree, but slightly different in that it doesn't have redundant nodes.
-*/
+// © 2021-2022 Joseph Shimel. All rights reserved.
 
 #ifndef AST_H
 #define AST_H

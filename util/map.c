@@ -1,3 +1,5 @@
+// © 2020-2022 Joseph Shimel. All rights reserved.
+
 /*
     Maps are used to associate string names with pieces of data. They can give 
     almost instantaneous lookup capabilities. 

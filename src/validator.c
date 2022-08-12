@@ -1,3 +1,5 @@
+// © 2021-2022 Joseph Shimel. All rights reserved.
+
 #include "validator.h"
 #include "../util/debug.h"
 #include "./ast.h"

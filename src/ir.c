@@ -1,3 +1,5 @@
+// © 2021-2022 Joseph Shimel. All rights reserved.
+
 #include "./ir.h"
 #include "../util/debug.h"
 #include "./ast.h"
@@ -1156,6 +1158,18 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
         return temp;
     }
     case AST_INDEX: {
+		// if debug {
+		//		Get array length
+		//		Get index
+		//		If index >= array length, branch to error
+		//		If index < 0, branch to error
+		//		Jump to end:
+		//		error:
+		//		unreachable (abstract to runtime error, with str message?)
+		//		end:
+		// }
+		// Return index
+
         SymbolVersion* left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel, errorLabel, lvalue);
         left->lvalue = lvalue;
         SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
@@ -1791,7 +1805,9 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
         return addr;
     }
     case AST_UNREACHABLE: {
-        appendInstruction(cfg, createIR(IR_UNREACHABLE, NULL, NULL, NULL, node->pos));
+        if (isDebug) {
+            appendInstruction(cfg, createIR(IR_UNREACHABLE, NULL, NULL, NULL, node->pos));
+        }
         return NULL;
     }
     case AST_FREE: {

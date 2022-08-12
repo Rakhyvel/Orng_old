@@ -1,3 +1,5 @@
+// © 2021-2022 Joseph Shimel. All rights reserved.
+
 /*
 This file deals with generating the output C file from the AST and Symbol trees
 parsed from the input file.

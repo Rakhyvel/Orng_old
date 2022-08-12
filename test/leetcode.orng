@@ -61,7 +61,7 @@ leetcode::Module = (
 
         ans := twoSum(nums, target)
 
-        std.debug.assert(nums[ans[0]] + nums[ans[1]] == target)
+        std.debug.assert(nums[ans[0]] + nums[ans[1]] == target, "sums are correct")
     }
 
 

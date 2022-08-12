@@ -1,3 +1,5 @@
+// © 2021-2022 Joseph Shimel. All rights reserved.
+
 #include "generator.h"
 #include "../util/debug.h"
 #include "../util/list.h"
@@ -36,30 +38,10 @@ static void generateDebug(FILE* out)
     fprintf(out, "/* Debug */\n");
     fprintf(out, "struct list {\n");
     fprintf(out, "	int length;\n");
-    fprintf(out, "	int capacity;\n");
-    fprintf(out, "	char** data;\n");
+    fprintf(out, "	char* data[10000];\n");
     fprintf(out, "};\n\n");
     fprintf(out, "struct list stackTrace;\n");
     fprintf(out, "struct list errorTrace;\n\n");
-    fprintf(out, "void stackTraceInit(struct list* list) {\n");
-    fprintf(out, "	list->length = 0;\n");
-    fprintf(out, "	list->capacity = 10;\n");
-    fprintf(out, "	list->data = malloc(sizeof(char*) * list->capacity);\n");
-    fprintf(out, "}\n\n");
-    fprintf(out, "void stackTracePush(struct list* list, char* data) {\n");
-    fprintf(out, "	if (list->length >= list->capacity) {\n");
-    fprintf(out, "		list->capacity *= 2;\n");
-    fprintf(out, "		list->data = realloc(list->data, list->capacity);\n");
-    fprintf(out, "	}\n");
-    fprintf(out, "	list->data[list->length] = data;\n");
-    fprintf(out, "	list->length++;\n");
-    fprintf(out, "}\n\n");
-    fprintf(out, "void stackTracePop(struct list* list) {\n");
-    fprintf(out, "	list->length--;\n");
-    fprintf(out, "}\n\n");
-    fprintf(out, "void stackTraceClear(struct list* list) {\n");
-    fprintf(out, "	list->length = 0;\n");
-    fprintf(out, "}\n\n");
     fprintf(out, "void stackTracePrint(struct list* list) {\n");
     fprintf(out, "	for (int i = 0; i < list->length; i++) {\n");
     fprintf(out, "		fprintf(stderr, \"%%s\", list->data[i]);\n");
@@ -69,6 +51,21 @@ static void generateDebug(FILE* out)
     fprintf(out, "	for (int i = list->length - 1; i >= 0; i--) {\n");
     fprintf(out, "		fprintf(stderr, \"%%s\", list->data[i]);\n");
     fprintf(out, "	}\n");
+    fprintf(out, "}\n\n");
+    fprintf(out, "void stackTracePush(struct list* list, char* data) {\n");
+    fprintf(out, "	if (list->length >= 10000) {\n");
+    fprintf(out, "		fprintf(stderr, \"error: stack overflow\\n\");\n");
+    fprintf(out, "		stackTracePrintReverse(list);\n");
+    fprintf(out, "		exit(1);\n");
+    fprintf(out, "	}\n");
+    fprintf(out, "	list->data[list->length] = data;\n");
+    fprintf(out, "	list->length++;\n");
+    fprintf(out, "}\n\n");
+    fprintf(out, "void stackTracePop(struct list* list) {\n");
+    fprintf(out, "	list->length--;\n");
+    fprintf(out, "}\n\n");
+    fprintf(out, "void stackTraceClear(struct list* list) {\n");
+    fprintf(out, "	list->length = 0;\n");
     fprintf(out, "}\n\n");
 
 	fprintf(out, "char* tagGetFieldName(int tag) {\n");
@@ -579,6 +576,7 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
             }
         }
         fprintf(out, ");\n");
+        fprintf(out, "\tstackTracePop(&stackTrace);\n");
         break;
     }
     case IR_INDEX: {
@@ -1062,7 +1060,6 @@ void generateFunctionDefinitions(FILE* out, CFG* callGraphNode)
         generateBasicBlock(out, callGraphNode, callGraphNode->blockGraph);
     }
     fprintf(out, "end:;\n");
-    fprintf(out, "\tstackTracePop(&stackTrace);\n");
     if (callGraphNode->symbol->type->function.codomainType->astType != AST_VOID) {
         fprintf(out, "\treturn retval;\n}\n\n");
     } else {
@@ -1084,7 +1081,7 @@ void generateMainFunction(FILE* out, CFG* callGraph)
 
     fprintf(out, "{\n");
 
-    fprintf(out, "\tatexit(pause);\n\tstackTraceInit(&stackTrace);\n\tstackTraceInit(&errorTrace);\n");
+    fprintf(out, "\tatexit(pause);\n");
 
     fprintf(out, "\t");
     printType(out, STRING_ARR_TYPE);

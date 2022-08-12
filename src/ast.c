@@ -1,10 +1,5 @@
-﻿/*
- * Provides functionality for creating and maintaining an Abstract Syntax Tree.
- *
- * See ast.h for more information.
- * 
- * Author: Joseph Shimel
-*/
+﻿// © 2021-2022 Joseph Shimel. All rights reserved.
+// Provides functionality for creating and maintaining an Abstract Syntax Tree.
 
 #define _CRT_SECURE_NO_WARNINGS
 #include "ast.h"
@@ -38,7 +33,7 @@ const ASTNode* NOTHING_AST = NULL;
 
 bool doDefTypes = false;
 
-// Generates common ptr-to-array types
+// Generates common array type AST Nodes. `length` should be -1 if undefined
 ASTNode* createArrayTypeNode(ASTNode* baseType, int length)
 {
     ASTNode* array = AST_Create_array(NULL, (Position) { NULL, 0, 0, 0 });

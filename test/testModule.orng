@@ -20,11 +20,6 @@ testModule::Module = (
 		resourceBusy
 	>
 
-	-- ->! is a double token morpheme
-	-- Means the function will return the codomain error unioned with whatever enums are returned in the entire body of the function
-	-- For eval exprs, returns, and try, if the type doesnt match with the ret type, but function is comptime, non-extern, implicit error function, and expr type is enum, add to union set
-	-- Afterwards, type is updated to be the correct error union enum type
-
 	lol::(x:Int)->!Int = {
 		if x == 0 {
 			return FileError.fileNotFound
@@ -33,5 +28,7 @@ testModule::Module = (
 		}
 	}
 
-	main::(args:[]String)->!() = leetcode.test_all()
+	recursive::(x:Int)->() = {return recursive(x-1)}
+
+	main::(args:[]String)->!() = std.debug.assert(.msg="this should be true", .predicate=false)
 )
