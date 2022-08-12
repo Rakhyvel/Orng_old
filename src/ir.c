@@ -1027,7 +1027,9 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
         SymbolVersion* retval = flattenAST(cfg, node->unop.expr, returnLabel, breakLabel, continueLabel, returnLabel, false);
         SymbolVersion* var = unversionedSymbolVersion(cfg, cfg->returnSymbol, cfg->symbol->type->function.codomainType);
 
-        appendInstruction(cfg, createIR(IR_COPY, var, retval, NULL, node->pos));
+        if (retval) {
+            appendInstruction(cfg, createIR(IR_COPY, var, retval, NULL, node->pos));
+        }
 
         // Choose whether to return to return path or error path
         SymbolNode* parent = node->scope;
@@ -1164,14 +1166,14 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
         SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
 
         if (isDebug) {
-			// Done so that versioning is correct. Would version array symbol in this BB and other BB as same version, duplicate code
+            // Done so that versioning is correct. Would version array symbol in this BB and other BB as same version, duplicate code
             SymbolVersion* arrayCopy = unversionedSymbolVersion(cfg, left->symbol, left->type);
 
             IR* tooHighLabel = createIR_label(node->pos);
             IR* tooLowLabel = createIR_label(node->pos);
             IR* end = createIR_label(node->pos);
 
-			// 0
+            // 0
             SymbolVersion* zero = tempSymbolVersion(cfg, INT64_TYPE);
             IR* zeroIR = createIR_int(IR_LOAD_INT, zero, NULL, NULL, 0, node->pos);
             zero->def = zeroIR;
@@ -1283,12 +1285,41 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
             appendInstruction(cfg, ir);
             return temp;
         } else {
-            SymbolVersion* left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel, errorLabel, lvalue);
+            SymbolVersion* left = flattenAST(cfg, node->dot.left, returnLabel, breakLabel, continueLabel, errorLabel, lvalue);
             left->lvalue = lvalue;
             SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
 
+            if (node->dot.left->type->astType == AST_ENUM && isDebug) {
+                SymbolVersion* enumLiteralExpr = unversionedSymbolVersion(cfg, left->symbol, left->type);
+                IR* endLabel = createIR_label(node->pos);
+                // Get tag of expr
+                SymbolVersion* enumDot = tempSymbolVersion(cfg, INT64_TYPE);
+                IR* enumIR = createIR(IR_DOT, enumDot, enumLiteralExpr, NULL, node->pos);
+                enumIR->strData = "tag";
+                enumDot->def = enumIR;
+                appendInstruction(cfg, enumIR);
+
+                // Get tag of success type
+                SymbolVersion* tag = tempSymbolVersion(cfg, INT64_TYPE);
+                IR* tagIR = createIR_int(IR_LOAD_INT, tag, NULL, NULL, getTagEnum(node->dot.right->ident.data, node->dot.left->type), node->pos);
+                tag->def = tagIR;
+                appendInstruction(cfg, tagIR);
+
+                // Compare success tag with expr tag
+                SymbolVersion* condition = tempSymbolVersion(cfg, BOOL_TYPE);
+                IR* conditionIR = createIR(IR_NEQ, condition, enumDot, tag, node->pos);
+                condition->def = conditionIR;
+                appendInstruction(cfg, conditionIR);
+
+                appendInstruction(cfg, createIR_branch(IR_BRANCH_IF_FALSE, NULL, condition, NULL, endLabel, node->pos));
+                IR* fieldError = createIR(IR_ERROR, NULL, NULL, NULL, node->pos);
+                fieldError->strData = "field not active";
+                appendInstruction(cfg, fieldError);
+                appendInstruction(cfg, endLabel);
+            }
+
             IR* ir = createIR(IR_DOT, temp, left, NULL, node->pos);
-            ir->strData = node->binop.right->ident.data;
+            ir->strData = node->dot.right->ident.data;
             temp->def = ir;
             appendInstruction(cfg, ir);
             return temp;

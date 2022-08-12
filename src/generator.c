@@ -906,7 +906,7 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
     }
     case IR_ERROR: {
         fprintf(out, "\tfprintf(stderr, \"error: %s\\n\");\n", ir->strData);
-        stackTracePush(out, "(&errorTrace)");
+        stackTracePush(out, "(&stackTrace)");
         fprintf(out, "\"");
         printPos(out, ir->pos);
         fprintf(out, "\";\n\tstackTracePrintReverse(&stackTrace);\n\texit(1);\n");
@@ -1052,9 +1052,9 @@ void generateFunctionDefinitions(FILE* out, CFG* callGraphNode)
             printVarDef(out, symbver);
         }
     }
-    generatePhiFunction(out, callGraphNode);
-    clearBBVisitedFlags(callGraphNode);
     if (callGraphNode->blockGraph) {
+        generatePhiFunction(out, callGraphNode);
+        clearBBVisitedFlags(callGraphNode);
         generateBasicBlock(out, callGraphNode, callGraphNode->blockGraph);
     }
     fprintf(out, "end:;\n");

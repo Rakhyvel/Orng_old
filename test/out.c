@@ -1,7 +1,7 @@
 /* Code generated using the Orng compiler http://josephs-projects.com */
 
-#ifndef ORNG_23635
-#define ORNG_23635
+#ifndef ORNG_29911
+#define ORNG_29911
 
 /* Includes */
 #include <stdbool.h>
@@ -147,88 +147,75 @@ int std_system_errln(struct struct_1 _format, ...) {va_list _25_args;va_start(_2
 
 /* Function definitions */
 struct struct_3 test_testModule_main(struct struct_2 _args);
-void test_testModule_recursive(int64_t _x);
 
 struct struct_3 test_testModule_main(struct struct_2 _args)
 {
 	struct struct_3 retval;
-	void (*_0) (int64_t _x);
-	int64_t _2;
-	int64_t _5;
-	bool _6;
-	struct struct_2 _args_0;
-	struct struct_1 _3;
-	int64_t _8;
+	int64_t _0;
+	struct struct_9 _1;
+	struct struct_9 _137__enum_0;
+	int8_t _2;
+	int64_t _3;
+	int64_t (*_5) (struct struct_1 _format, ...);
+	struct struct_1 _7;
 	int64_t _9;
-	struct struct_3 _10;
-	struct struct_2 _args_1;
-	struct struct_2 _args_2;
+	int64_t _10;
+	bool _11;
+	struct struct_2 _args_0;
+	struct struct_9 _137__enum_1;
+	int8_t _8;
+	int64_t _6;
+	int64_t _14;
+	struct struct_3 _15;
+	struct struct_9 _137__enum_2;
 	_args_0 = _args;
-L1:; // incoming:1
-	_0 = test_testModule_recursive;
-	_2 = 0;
-	_5 = _args_0.length;
-	_6 = _2 < _5;
-	if (!_6) {
-		_args_2 = _args_0;
-		goto L6;
+L0:; // incoming:1
+	_0 = 5;
+	_1 = (struct struct_9) {_0};
+	_137__enum_0 = _1;
+	_2 = 65;
+	_3 = (int64_t) _2;
+	_137__enum_0.c = _3;
+	_5 = std_system_println;
+	_7 = (struct struct_1) {2, "%c"};
+	_9 = _137__enum_0.tag;
+	_10 = 6;
+	_11 = _9 != _10;
+	if (!_11) {
+		_137__enum_2 = _137__enum_0;
+		goto L2;
 	} else {
-		_args_1 = _args_0;
-		goto L4;
+		_137__enum_1 = _137__enum_0;
+		goto L1;
 	}
-L4:; // incoming:2
-	_3 = _args_1.data[_2];
-	_8 = _3.length;
+L1:; // incoming:1
+	fprintf(stderr, "error: field not active\n");
 	if ((&stackTrace)->length >= 1000) {
 		fprintf(stderr, "error: stack overflow\n");
 		stackTracePrintReverse((&stackTrace));
 		exit(1);
 	}
-	(&stackTrace)->data[(&stackTrace)->length++] = "test/testModule.orng: \n33    | main::(args:[]String)->!() = recursive(args[0].length)\n      |                                       ^\n";
-	_0(_8);
-	stackTrace.length--;
-	_9 = 12;
-	_10 = (struct struct_3) {_9};
-	retval = _10;
-	goto end;
-L6:; // incoming:1
-	fprintf(stderr, "error: array index greater than array length\n");
-	if ((&errorTrace)->length >= 1000) {
-		fprintf(stderr, "error: stack overflow\n");
-		stackTracePrintReverse((&errorTrace));
-		exit(1);
-	}
-	(&errorTrace)->data[(&errorTrace)->length++] = "test/testModule.orng: \n33    | main::(args:[]String)->!() = recursive(args[0].length)\n      |                                            ^\n";
+	(&stackTrace)->data[(&stackTrace)->length++] = "test/testModule.orng: \n34    | std.system.println(\"%c\", enum.d)\n      |                               ^\n";
 	stackTracePrintReverse(&stackTrace);
 	exit(1);
-	_args_1 = _args_2;
-	goto L4;
-end:;
-	return retval;
-}
-
-void test_testModule_recursive(int64_t _x)
-{
-	void (*_0) (int64_t _x);
-	int64_t _2;
-	int64_t _3;
-	int64_t _x_0;
-	_x_0 = _x;
-L0:; // incoming:1
-	_0 = test_testModule_recursive;
-	_2 = 1;
-	_3 = _x_0 + _2;
+	_137__enum_2 = _137__enum_1;
+	goto L2;
+L2:; // incoming:2
+	_8 = _137__enum_2.d;
 	if ((&stackTrace)->length >= 1000) {
 		fprintf(stderr, "error: stack overflow\n");
 		stackTracePrintReverse((&stackTrace));
 		exit(1);
 	}
-	(&stackTrace)->data[(&stackTrace)->length++] = "test/testModule.orng: \n31    | recursive::(x:Int)->() = recursive(x+1)\n      |                                   ^\n";
-	_0(_3);
+	(&stackTrace)->data[(&stackTrace)->length++] = "test/testModule.orng: \n34    | std.system.println(\"%c\", enum.d)\n      |                   ^\n";
+	_6 = _5(_7, _8);
 	stackTrace.length--;
+	_14 = 12;
+	_15 = (struct struct_3) {_14};
+	retval = _15;
 	goto end;
 end:;
-	return;
+	return retval;
 }
 
 void pause() {system("pause");}

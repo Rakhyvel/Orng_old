@@ -413,12 +413,9 @@ x IR optimizations
 		x recursive::(x:Int)->() = recursive(x-1) -- Causes error generating phi nodes
 		x recursive::()->() = recursive() -- Doesn't generate call to self
 		x Remove pop/push functions, copy paste code instead
-		- Debug mode which:
+		x Debug mode which:
 			x Checks indexes are within array bounds
-			- Checks that dots for enum literals have the correct tag
-			- Checks that derefs are not null
-			- Checks that slices are within the array
-			- (future, performs refinement type predicate checks)
+			x Checks that dots for enum literals have the correct tag
 		- If case is an enum type, require all fields to be accounted for
 - cleanup!
 	- replace for loops over lists with forall loops
@@ -553,16 +550,11 @@ x IR optimizations
 - if's and for's with no else case evaluate to a maybe type
 - parametric types
 	- you would need a function that 'returns' a type
-		- this would require a unification of type and value syntax
-		- can I find any instances where this leads to ambiguity that cannot be solved?
-			- addr-of type and addr-of value must be treated differently
-		- 'parameterized types', instead of a full blown function that returns a type
-	- if a function takes in all compile-time constant arguments and returns something compile-time constant, replace call with function definition
-		- can do this because:
-		- referential transparency- most function calls can simply be replaced with their definition
-		- all parameters are compile-time known, can simply replace references to the parameters with the arguments in the definition
-			- doesn't this imply we'd need to clone the def AST?
-	- rewrite util data structures to be variant
+		- use a token to 'switch' from expr syntax to type syntax, to return a type expression
+	- if a function takes in all compile-time constant arguments and returns something compile-time constant, run at compile-time
+		- create a 'stack frame' with symbols, and a strip of memory for data, use offsets for this
+		- should there be a way to force comptime evaluation, like in zig? comptime keyword?
+	- rewrite util data structures to be parametric
 	- typeof operator which gets the compiletime type of an expression
 	- subtype operator which does compile time type checking
 - interfaces (traits in rust https://theburningmonk.com/2015/05/rust-memory-safety-without-gc/)
@@ -581,28 +573,6 @@ x IR optimizations
 	- should be able to define NEW functions that apply to OLD data types
 - redo string module in stdlib to be like that one Modern C video
 	- cool string formatting? may need comptime stuff and reflection :(
-- refinement types, contracts, pre/post conditions
-	- why?
-		- comments are useless
-		- often times code will change and the comments will become wrong
-		- comments are not checked by compiler
-		- comments are rarely checked by programmer
-		- refinement types WILL be checked by compiler, and pre/post conditions WILL be checked by compiler
-		- comments should be kept, but only used to provide a convenient way to enumerate what to document
-	Evens::Type = {x : Int | x % 2 == 0} -- Would be checked for debug build, not checked for release build
-	- are an expression, need another expression after them
-	- can chain them and other expressions together
-	arcsin::(x:Real)->Real = 
-	|>	-1 <= x <= 1		-- this expression is evaluated, if its false program hard crashes
-	|<	y; sin(y) == x		-- post conditions capture the return value, then have the expression
-	{
-		-- do math here
-	}
-	- |> for pre condition (like input)
-	- |< for post condition (like output!)
-	- maybe a post condition built in expression for like "|< no IO output happened during this function"
-	- conceptually, |> evaluates itself, then evaluates child
-	- |< evaluates its child at the end of the chain, captures it and performs condition
 - allocators and IO 'monads'
 	new::(T::Type)->?&T = 
 		if retval := calloc(sizeof T, 1):&T; (retval:Int) == 0 {
@@ -656,9 +626,6 @@ x IR optimizations
 	} else if node % 2 != 0 {
 		
 	}
-	INCREDIBLY USEFUL FOR DEFINING AN IDENT AS A DOT AND CHECKING FOR NOTHING!
-	since you we can't reason about dots, can only reason about ident symbols
-	can assign an ident to a dot, which then 
 - language server for visual studio code
 - quantifiers from Alloy- or maybe these would be better as interfaces?
 	- basically just iterators, use interface above
@@ -749,3 +716,26 @@ Maybe?
 		(Suit.Spades, _)   -> 'S'
 	}
 	-- Perhaps does the default value if ever generated, but if used for a comparison the comparison will be skipped/always result in true
+
+- refinement types, contracts, pre/post conditions
+	- why?
+		- comments are useless
+		- often times code will change and the comments will become wrong
+		- comments are not checked by compiler
+		- comments are rarely checked by programmer
+		- refinement types WILL be checked by compiler, and pre/post conditions WILL be checked by compiler
+		- comments should be kept, but only used to provide a convenient way to enumerate what to document
+	Evens::Type = {x : Int | x % 2 == 0} -- Would be checked for debug build, not checked for release build
+	- are an expression, need another expression after them
+	- can chain them and other expressions together
+	arcsin::(x:Real)->Real = 
+	|>	-1 <= x <= 1		-- this expression is evaluated, if its false program hard crashes
+	|<	y; sin(y) == x		-- post conditions capture the return value, then have the expression
+	{
+		-- do math here
+	}
+	- |> for pre condition (like input)
+	- |< for post condition (like output!)
+	- maybe a post condition built in expression for like "|< no IO output happened during this function"
+	- conceptually, |> evaluates itself, then evaluates child
+	- |< evaluates its child at the end of the chain, captures it and performs condition
