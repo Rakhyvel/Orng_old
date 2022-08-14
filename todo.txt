@@ -416,7 +416,6 @@ x IR optimizations
 		x Debug mode which:
 			x Checks indexes are within array bounds
 			x Checks that dots for enum literals have the correct tag
-		- If case is an enum type, require all fields to be accounted for
 - cleanup!
 	- replace for loops over lists with forall loops
 	- comments on everything
@@ -440,6 +439,7 @@ x IR optimizations
 		- arrays/comptime collapse(?)
 		- slices
 		- strings
+			- comptime string concat
 		- enums
 			- enum literals
 			- enum unions

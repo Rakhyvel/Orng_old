@@ -468,6 +468,7 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
     }
 
     switch (ir->irType) {
+    case IR_LOAD_EXTERN:
     case IR_LOAD_SYMBOL: {
         printVarAssign(out, ir->dest);
         printPath(out, ir->symbol);

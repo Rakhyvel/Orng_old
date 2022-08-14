@@ -1778,7 +1778,7 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
             restrictedOrUndefError(node->pos, rejectingSymbol->pos, node->ident.data);
         }
         Validator_Validate(var);
-        if (var->symbolType != SYMBOL_FUNCTION && var->type->isConst) {
+        if (var->symbolType != SYMBOL_FUNCTION && !var->isExtern && var->type->isConst) {
             retval = var->def;
             break;
         } else {

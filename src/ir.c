@@ -18,6 +18,8 @@ char* IR_ToString(ir_type type)
     switch (type) {
     case IR_LOAD_SYMBOL:
         return "IR_LOAD_SYMBOL";
+    case IR_LOAD_EXTERN:
+        return "IR_LOAD_EXTERN";
     case IR_LOAD_INT:
         return "IR_LOAD_INT";
     case IR_LOAD_REAL:
@@ -558,7 +560,14 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
     switch (node->astType) {
     case AST_IDENT: { // the symbol version for the ident needs to be unversioned, and not shared with any other IR
         SymbolNode* symbol = Symbol_Find(node->ident.data, node->scope);
-        if (symbol->symbolType == SYMBOL_FUNCTION) {
+        if (symbol->isExtern) {
+            SymbolVersion* temp = tempSymbolVersion(cfg, symbol->type);
+            IR* ir = createIR(IR_LOAD_EXTERN, temp, NULL, NULL, node->pos);
+            ir->symbol = symbol;
+            temp->def = ir;
+            appendInstruction(cfg, ir);
+            return temp;
+        } else if (symbol->symbolType == SYMBOL_FUNCTION) {
             createCFG(symbol, cfg);
             SymbolVersion* temp = tempSymbolVersion(cfg, symbol->type);
 
@@ -903,6 +912,8 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
             List_Append(mappingLabels, createIR_label(node->pos));
         }
         IR* endLabel = createIR_label(node->pos);
+
+        // TODO: if case expr is enum type, make a set of tags. Add each mapping expr's tag to the set. Afterwards, go through enum defines and get tag, remove tag. If tag not found, error (field not in enum), if set is empty before done with enum type defines, error (some fields not handled)
 
         // For each expr in each mapping, branch if false to the mapping's label if caseExpr does not equal mapping expr
         int i = 0;

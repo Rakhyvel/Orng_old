@@ -9,6 +9,7 @@
 typedef enum ir_type {
     // Constants and literals
 	IR_LOAD_SYMBOL,
+	IR_LOAD_EXTERN,
     IR_LOAD_INT,
     IR_LOAD_REAL,
     IR_LOAD_ARGLIST,
