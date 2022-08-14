@@ -4,7 +4,7 @@ leetcode::Module = (
     test_all::()->() = {
         test_twoSum()
         test_addTwoNumbers()
-        --test_lengthOfLongestSubstring()
+        test_lengthOfLongestSubstring()
         test_findMedianSortedArrays()
         test_longestPalindrome()
         test_convert()
@@ -13,12 +13,13 @@ leetcode::Module = (
         test_isPalindrome()
         test_isMatch()
         test_maxArea()
+        std.system.println("Passed!")
     }
 
 
     -- not leetcode, but a functional approach to fizzbuzz
-    fizzbuzz::(n:Int)->() = 
-        if n % 16 == 0 {
+    fizzbuzz::(n:Int)->String = 
+        if n % 15 == 0 {
             "fizzbuzz"
         } else if n % 3 == 0 {
             "fizz"
@@ -60,11 +61,7 @@ leetcode::Module = (
 
         ans := twoSum(nums, target)
 
-        if nums[ans[0]] + nums[ans[1]] == target {
-            std.system.println("twoSum: Passed!")
-        } else {
-            std.system.println("twoSum: Failed %d %d", nums[ans[0]], nums[ans[1]])
-        }
+        std.debug.assert(nums[ans[0]] + nums[ans[1]] == target, "sums are correct")
     }
 
 
@@ -81,7 +78,7 @@ leetcode::Module = (
     convertToInt::(l:?&ListNode)->Int =
         case l {
             .nothing   -> 0;
-            .something -> l.val + convertToInt(l.next) * 10
+            .something -> l?.val + convertToInt(l?.next) * 10
         }
 
     convertToList::(i:Int)->&ListNode =
@@ -106,16 +103,12 @@ leetcode::Module = (
 
         hasValue::(node:?&ListNode, x:[]Int)->Bool =
             if node != nothing {
-                node.val == x[0] && hasValue(node.next, x[1;])
+                node?.val == x[0] && hasValue(node?.next, x[1;])
             } else {
                 true
             }
 
-        if hasValue(ans, [7, 0, 8]) {
-            std.system.println("addTwoNumbers: Passed!")
-        } else {
-            std.system.println("addTwoNumbers: Failed")
-        }
+        std.debug.assert(hasValue(ans, [7, 0, 8]))
     }
 
 
@@ -157,11 +150,7 @@ leetcode::Module = (
 
         ans := lengthOfLongestSubstring(s)
 
-        if ans == 3 {
-            std.system.println("lengthOfLongestSubstring: Passed!")
-        } else {
-            std.system.println("lengthOfLongestSubstring: Failed %d", ans)
-        }
+        std.debug.assert(ans == 3)
     }
 
 
@@ -205,11 +194,7 @@ leetcode::Module = (
 
         ans := findMedianSortedArrays(nums1, nums2)
 
-        if ans == 2.0 {
-            std.system.println("findMedianSortedArrays: Passed!")
-        } else {
-            std.system.println("findMedianSortedArrays: Failed %f", ans)
-        }
+        std.debug.assert(ans == 2.0)
     }
 
 
@@ -243,27 +228,15 @@ leetcode::Module = (
 
         ans := longestPalindrome(s)
 
-        if std.string.equals(ans, "bab") || std.string.equals(ans, "aba") {
-            std.system.println("longestPalindrome: Passed!")
-        } else {
-            std.system.println("longestPalindrome: Failed %d", ans.length)
-        }
+        std.debug.assert(std.string.equals(ans, "bab") || std.string.equals(ans, "aba"))
     }
 
 
     -- Write the code that will take a string and make this conversion given a
     -- number of rows
     -- https://leetcode.com/problems/zigzag-conversion/
-    convert
-        ::(
-            s:String, numRows:Int)
-        -> 
-        String 
-    = {
-        board: [][]Char = new [s.length][]Char
-        for i := 0; i < s.length; i += 1 {
-            board[i] = new [numRows]Char
-        }
+    convert::(s:String, numRows:Int)-> String = {
+        board: [][]Char = new [s.length][numRows]Char
         defer {
             for i := 0; i < s.length; i += 1 {
                 free board[i]
@@ -309,11 +282,7 @@ leetcode::Module = (
     test_convert::()->() = {
         ans := convert("PAYPALISHIRING", 3)
 
-        if std.string.equals(ans, "PAHNAPLSIIGYIR") {
-            std.system.println("convert: Passed!")
-        } else {
-            std.system.println("convert: Failed")
-        }
+        std.debug.assert(std.string.equals(ans, "PAHNAPLSIIGYIR"))
     }
 
 
@@ -327,23 +296,19 @@ leetcode::Module = (
         if next == nothing {
             return list
         } else {
-            newList = reverseList(next)
-            next.next = list
+            newList = reverseList(next?)
+            next?.next = list
         }
         list.next = nothing
         return newList
     }
-    
+
     reverse::(x:Int)->Int = convertToInt(reverseList(convertToList(x)))
 
     test_reverse::()->() = {
         ans := reverse(123)
 
-        if ans == 321 {
-            std.system.println("reverse: Passed!")
-        } else {
-            std.system.println("reverse: Failed")
-        }
+        std.debug.assert(ans == 321)
     }
 
 
@@ -382,28 +347,23 @@ leetcode::Module = (
 
         ans := myAtoi(s)
 
-        if ans == 42 {
-            std.system.println("myAtoi: Passed!")
-        } else {
-            std.system.println("myAtoi: Failed")
-        }
+        std.debug.assert(ans == 42)
     }
 
 
     -- Given an integer x, return true if x is palindrome integer.
     -- An integer is a palindrome when it reads the same backward as forward.
     isPalindrome::(x:Int)->Bool = {
-        list: &ListNode = convertToList(x)
-        reversedList: &ListNode = reverseList(convertToList(x))
+        list: ?&ListNode = convertToList(x)
+        reversedList: ?&ListNode = reverseList(convertToList(x))
 
         -- can assume that list and reversedList have the same length
-        for true {
-            if list.val != reversedList.val {
+        for list != nothing && reversedList != nothing {
+            if list?.val != reversedList?.val {
                 return false
-            } else {
-                list = list.next orelse break
-                reversedList = reversedList.next orelse break
             }
+            list = list?.next
+            reversedList = reversedList?.next
         }
         return true
     }
@@ -413,11 +373,7 @@ leetcode::Module = (
         
         ans := isPalindrome(x)
 
-        if ans {
-            std.system.println("isPalindrome: Passed!")
-        } else {
-            std.system.println("isPalindrome: Failed")
-        }
+        std.debug.assert(ans)
     }
 
 
@@ -455,11 +411,7 @@ leetcode::Module = (
 
         ans := isMatch(s, p)
 
-        if ans {
-            std.system.println("isMatch: Passed!")
-        } else {
-            std.system.println("isMatch: Failed")
-        }
+        std.debug.assert(ans)
     }
 
 
@@ -469,22 +421,20 @@ leetcode::Module = (
     -- Find two lines that together with the x-axis form a container, such that
     -- the container contains the most water.
     -- Return the maximum amount of water a container can store.
-    maxArea::(height:[]Int, max:Int=0)->Int =
+    maxArea::(height:[]Int, max:Int=0)->Int = {
         for i := 0; i < height.length - 1; i += 1 {
             for j := i + 1; j < height.length; j += 1 {
                 max = std.math.max(max, std.math.abs(i - j) * std.math.min(height[i], height[j])):Int
             }
         }
+        return max
+    }
 
     test_maxArea::()->() = {
         height := [1,8,6,2,5,4,8,3,7] 
 
         ans := maxArea(height)
 
-        if ans == 49 {
-            std.system.println("maxArea: Passed!")
-        } else {
-            std.system.println("maxArea: Failed %d", ans)
-        }
+        std.debug.assert(ans == 49)
     }
 )

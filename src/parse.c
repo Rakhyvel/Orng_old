@@ -1,7 +1,4 @@
-/*
-Reads in two tokens at a time from the token queue (see lexer.c) and creates one
-symbol tree that points to many abstract syntax trees
-*/
+// © 2021-2022 Joseph Shimel. All rights reserved.
 
 #define _CRT_SECURE_NO_WARNINGS
 #include "parse.h"
@@ -392,6 +389,8 @@ static ASTNode* parseFactor(SymbolNode* scope)
         return parseFor(scope);
     } else if (accept(TOKEN_CASE)) {
         return parseCase(scope);
+    } else if (accept(TOKEN_UNREACHABLE)) {
+        return AST_Create_unreachable(scope, prevToken->pos);
     } else {
         error(prevToken->pos, "expected expression, got '%s'", Token_GetErrorMsgRepr(nextToken()->type));
     }
@@ -449,8 +448,12 @@ static ASTNode* parsePostfix(SymbolNode* scope)
             strncpy_s(text, 255, token->data, 254);
             ASTNode* ident = AST_Create_ident(text, scope, token->pos);
             child = AST_Create_dot(child, ident, scope, token->pos, false);
+        } else if ((token = accept(TOKEN_QMARK)) != NULL) {
+            child = AST_Create_maybe(child, scope, token->pos);
         } else if ((token = accept(TOKEN_ORELSE)) != NULL) {
             child = AST_Create_orelse(child, parseStatement(scope), scope, token->pos);
+        } else if ((token = accept(TOKEN_CATCH)) != NULL) {
+            child = AST_Create_catch(child, parseStatement(scope), scope, token->pos);
         } else {
             break;
         }
@@ -474,6 +477,8 @@ static ASTNode* parsePrefix(SymbolNode* scope)
         prefix = AST_Create_bitNot(parsePrefix(scope), scope, token->pos);
     } else if ((token = accept(TOKEN_SIZEOF)) != NULL) {
         prefix = AST_Create_sizeof(parseType(scope, false), scope, token->pos);
+    } else if ((token = accept(TOKEN_TRY)) != NULL) {
+        prefix = AST_Create_try(parseExpr(scope), scope, token->pos);
     } else {
         prefix = parsePostfix(scope);
     }
@@ -643,12 +648,16 @@ static ASTNode* parseExpr(SymbolNode* scope)
         child = AST_Create_divAssign(child, parseOrExpr(scope), scope, token->pos);
     } else if ((token = accept(TOKEN_PERCENT_ASSIGN)) != NULL) {
         child = AST_Create_modAssign(child, parseOrExpr(scope), scope, token->pos);
-    } else if ((token = accept(TOKEN_AMPERSAND_ASSIGN)) != NULL) {
+    } else if ((token = accept(TOKEN_DAMPERSAND_ASSIGN)) != NULL) {
         child = AST_Create_andAssign(child, parseOrExpr(scope), scope, token->pos);
-    } else if ((token = accept(TOKEN_BAR_ASSIGN)) != NULL) {
+    } else if ((token = accept(TOKEN_DBAR_ASSIGN)) != NULL) {
         child = AST_Create_orAssign(child, parseOrExpr(scope), scope, token->pos);
+    } else if ((token = accept(TOKEN_AMPERSAND_ASSIGN)) != NULL) {
+        child = AST_Create_bitAndAssign(child, parseOrExpr(scope), scope, token->pos);
+    } else if ((token = accept(TOKEN_BAR_ASSIGN)) != NULL) {
+        child = AST_Create_bitOrAssign(child, parseOrExpr(scope), scope, token->pos);
     } else if ((token = accept(TOKEN_CARET_ASSIGN)) != NULL) {
-        child = AST_Create_xorAssign(child, parseOrExpr(scope), scope, token->pos);
+        child = AST_Create_bitXorAssign(child, parseOrExpr(scope), scope, token->pos);
     } else if ((token = accept(TOKEN_DLSR_ASSIGN)) != NULL) {
         child = AST_Create_lshiftAssign(child, parseOrExpr(scope), scope, token->pos);
     } else if ((token = accept(TOKEN_DGTR_ASSIGN)) != NULL) {
@@ -670,6 +679,18 @@ static ASTNode* parseDefer(SymbolNode* scope)
     }
     ASTNode* retval = AST_Create_defer(deferStatement, scope, prevToken->pos);
     List_Append(scope->defers, deferStatement);
+    List_Append(scope->errdefers, deferStatement);
+    return retval;
+}
+
+static ASTNode* parseErrdefer(SymbolNode* scope)
+{
+    ASTNode* deferStatement = parseStatement(scope);
+    if (deferStatement == NULL) {
+        error(prevToken->pos, "expected statement after defer");
+    }
+    ASTNode* retval = AST_Create_errdefer(deferStatement, scope, prevToken->pos);
+    List_Append(scope->errdefers, deferStatement);
     return retval;
 }
 
@@ -684,6 +705,8 @@ static ASTNode* parseStatement(SymbolNode* scope)
         return parseReturn(scope);
     } else if (accept(TOKEN_DEFER)) {
         return parseDefer(scope);
+    } else if (accept(TOKEN_ERRDEFER)) {
+        return parseErrdefer(scope);
     } else if (accept(TOKEN_CONTINUE)) {
         return AST_Create_continue(scope, prevToken->pos);
     } else if (accept(TOKEN_BREAK)) {
@@ -757,6 +780,7 @@ ASTNode* parseDefine(SymbolNode* scope)
 
     if (!inferType) {
         type = parseType(symbol, false);
+        symbol->isError = type->astType == AST_ERROR || type->astType == AST_INFER_ERROR;
         type->isConst |= isConst;
         if (type->astType == AST_IDENT && !strcmp(type->ident.data, "Package")) {
             symbol->symbolType = SYMBOL_PACKAGE;
@@ -766,6 +790,7 @@ ASTNode* parseDefine(SymbolNode* scope)
             symbol->symbolType = SYMBOL_TYPE;
         } else if (type->astType == AST_FUNCTION && type->isConst) {
             symbol->symbolType = SYMBOL_FUNCTION;
+            symbol->isError = type->function.codomainType->astType == AST_ERROR || type->function.codomainType->astType == AST_INFER_ERROR;
         } else {
             symbol->symbolType = SYMBOL_VARIABLE;
         }
@@ -801,7 +826,7 @@ ASTNode* parseDefine(SymbolNode* scope)
     return define;
 }
 
-ASTNode* parseUnionDefine(SymbolNode* scope)
+ASTNode* parseEnumDefine(SymbolNode* scope)
 {
     struct token* name = expect(TOKEN_IDENT);
     SymbolNode* symbol = Symbol_Create(name->data, SYMBOL_VARIABLE, scope, name->pos);
@@ -855,10 +880,10 @@ ASTNode* parseTypeAtom(SymbolNode* scope)
         if (child->paramlist.defines->size == 0) {
             child->astType = AST_VOID;
         }
-    } else if ((token = accept(TOKEN_UNION)) != NULL) {
-        child = AST_Create_unionset(scope, token->pos);
-        while (!accept(TOKEN_RPAREN)) {
-            List_Append(child->unionset.defines, parseUnionDefine(scope));
+    } else if ((token = accept(TOKEN_LSR)) != NULL) {
+        child = AST_Create_enum(scope, token->pos);
+        while (!accept(TOKEN_GTR)) {
+            List_Append(child->_enum.defines, parseEnumDefine(scope));
             if (accept(TOKEN_COMMA)) {
                 if (nextTokenMaybeNewline()->type == TOKEN_NEWLINE) {
                     error(nextTokenMaybeNewline()->pos, "unexpected newline");
@@ -866,8 +891,8 @@ ASTNode* parseTypeAtom(SymbolNode* scope)
             }
         }
         child->pos = merge(child->pos, token->pos);
-        if (child->unionset.defines->size == 0) {
-            error(token->pos, "empty union set");
+        if (child->_enum.defines->size == 0) {
+            error(token->pos, "empty enum");
         }
     } else {
         error(prevToken->pos, "expected type, got '%s'", Token_GetErrorMsgRepr(nextToken()->type));
@@ -889,9 +914,37 @@ static ASTNode* parseTypeDot(SymbolNode* scope)
     return factor;
 }
 
+static ASTNode* parseTypeUnion(SymbolNode* scope)
+{
+    ASTNode* factor = parseTypeDot(scope);
+    struct token* token = NULL;
+    while (true) {
+        if ((token = accept(TOKEN_DBAR)) != NULL) {
+            factor = AST_Create_union(factor, parseTypeDot(scope), scope, token->pos);
+        } else {
+            break;
+        }
+    }
+    return factor;
+}
+
+static ASTNode* parseTypeError(SymbolNode* scope)
+{
+    ASTNode* factor = parseTypeUnion(scope);
+    struct token* token = NULL;
+    while (true) {
+        if ((token = accept(TOKEN_EMARK)) != NULL) {
+            factor = AST_Create_error(factor, parseType(scope), scope, token->pos);
+        } else {
+            break;
+        }
+    }
+    return factor;
+}
+
 ASTNode* parseTypeFunction(SymbolNode* scope)
 {
-    ASTNode* child = parseTypeDot(scope);
+    ASTNode* child = parseTypeError(scope);
     struct token* token = NULL;
     while (true) {
         if ((token = accept(TOKEN_ARROW)) != NULL) {
@@ -918,21 +971,34 @@ ASTNode* parseTypeNonConst(SymbolNode* scope)
         ASTNode* type = AST_Create_addr(parseType(scope), scope, token->pos);
         return AST_Create_addr(type, scope, token->pos);
     } else if ((token = accept(TOKEN_QMARK)) != NULL) {
-        ASTNode* maybeUnion = AST_Create_unionset(scope, token->pos);
+        ASTNode* maybeEnum = AST_Create_enum(scope, token->pos);
 
-        SymbolNode* nothingSymbol = Symbol_Create("nothing", SYMBOL_VARIABLE, NULL, maybeUnion->pos);
+        SymbolNode* nothingSymbol = Symbol_Create("nothing", SYMBOL_VARIABLE, NULL, maybeEnum->pos);
         ASTNode* nothingDefine = AST_Create_define(nothingSymbol, scope, token->pos);
         ASTNode* nothingType = AST_Create_void(scope, token->pos);
         nothingSymbol->type = nothingType;
 
-        SymbolNode* somethingSymbol = Symbol_Create("something", SYMBOL_VARIABLE, NULL, maybeUnion->pos);
+        SymbolNode* somethingSymbol = Symbol_Create("something", SYMBOL_VARIABLE, NULL, maybeEnum->pos);
         ASTNode* somethingDefine = AST_Create_define(somethingSymbol, scope, token->pos);
         ASTNode* somethingType = parseType(scope);
         somethingSymbol->type = somethingType;
 
-        List_Append(maybeUnion->unionset.defines, nothingDefine);
-        List_Append(maybeUnion->unionset.defines, somethingDefine);
-        return maybeUnion;
+        List_Append(maybeEnum->_enum.defines, nothingDefine);
+        List_Append(maybeEnum->_enum.defines, somethingDefine);
+        return maybeEnum;
+    } else if ((token = accept(TOKEN_EMARK)) != NULL) {
+        ASTNode* errorEnum = AST_Create_enum(scope, token->pos);
+        errorEnum->astType = AST_INFER_ERROR;
+        errorEnum->_enum.wasAnError = true;
+
+        SymbolNode* successSymbol = Symbol_Create("success", SYMBOL_VARIABLE, NULL, errorEnum->pos);
+        ASTNode* successDefine = AST_Create_define(successSymbol, scope, token->pos);
+        ASTNode* successType = parseType(scope);
+        errorEnum->_enum.expr = successType;
+        successSymbol->type = successType;
+        List_Append(errorEnum->_enum.defines, successDefine);
+
+        return errorEnum;
     } else if ((token = accept(TOKEN_LSQUARE)) != NULL) {
         ASTNode* arrStruct = AST_Create_array(scope, token->pos);
 

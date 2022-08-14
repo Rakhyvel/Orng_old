@@ -1,10 +1,5 @@
-﻿/*
- * Provides functionality for creating and maintaining an Abstract Syntax Tree.
- *
- * See ast.h for more information.
- * 
- * Author: Joseph Shimel
-*/
+﻿// © 2021-2022 Joseph Shimel. All rights reserved.
+// Provides functionality for creating and maintaining an Abstract Syntax Tree.
 
 #define _CRT_SECURE_NO_WARNINGS
 #include "ast.h"
@@ -30,6 +25,7 @@ const ASTNode* BOOL_TYPE = NULL;
 const ASTNode* TYPE_TYPE = NULL;
 const ASTNode* UNDEF_TYPE = NULL;
 const ASTNode* VOID_ADDR_TYPE = NULL;
+const ASTNode* MAYBE_VOID_TYPE = NULL;
 
 const ASTNode* TRUE_AST = NULL;
 const ASTNode* FALSE_AST = NULL;
@@ -37,7 +33,7 @@ const ASTNode* NOTHING_AST = NULL;
 
 bool doDefTypes = false;
 
-// Generates common ptr-to-array types
+// Generates common array type AST Nodes. `length` should be -1 if undefined
 ASTNode* createArrayTypeNode(ASTNode* baseType, int length)
 {
     ASTNode* array = AST_Create_array(NULL, (Position) { NULL, 0, 0, 0 });
@@ -68,6 +64,24 @@ ASTNode* createArrayTypeNode(ASTNode* baseType, int length)
     return array;
 }
 
+ASTNode* createMaybeType(ASTNode* somethingBaseType)
+{
+    ASTNode* maybe = AST_Create_enum(NULL, (Position) { NULL, 0, 0, 0 });
+
+    SymbolNode* nothingSymbol = Symbol_Create("nothing", SYMBOL_VARIABLE, NULL, (Position) { NULL, 0, 0, 0 });
+    ASTNode* nothingDefine = AST_Create_define(nothingSymbol, NULL, (Position) { NULL, 0, 0, 0 });
+    nothingSymbol->type = VOID_TYPE;
+
+    SymbolNode* somethingSymbol = Symbol_Create("something", SYMBOL_VARIABLE, NULL, (Position) { NULL, 0, 0, 0 });
+    ASTNode* somethingDefine = AST_Create_define(somethingSymbol, NULL, (Position) { NULL, 0, 0, 0 });
+    somethingSymbol->type = somethingBaseType;
+
+    List_Append(maybe->_enum.defines, nothingDefine);
+    List_Append(maybe->_enum.defines, somethingDefine);
+
+    return maybe;
+}
+
 void AST_Init()
 {
     INT8_TYPE = AST_Create_ident("Int8", NULL, (Position) { NULL, 0, 0, 0 });
@@ -92,6 +106,8 @@ void AST_Init()
     TRUE_AST = AST_Create_true(NULL, (Position) { NULL, 0, 0, 0 });
     FALSE_AST = AST_Create_false(NULL, (Position) { NULL, 0, 0, 0 });
     NOTHING_AST = AST_Create_nothing(NULL, (Position) { NULL, 0, 0, 0 });
+
+    MAYBE_VOID_TYPE = createMaybeType(VOID_TYPE);
 }
 
 /*
@@ -168,6 +184,8 @@ ASTNode* AST_Create_arglist(struct symbolNode* scope, struct position pos)
 ASTNode* AST_Create_namedArg(char* name, struct astNode* expr, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_NAMED_ARG, scope, pos);
+    retval->namedArg.name = name;
+    retval->namedArg.expr = expr;
     return retval;
 }
 
@@ -178,11 +196,11 @@ ASTNode* AST_Create_arrayLiteral(struct symbolNode* scope, struct position pos)
     return retval;
 }
 
-ASTNode* AST_Create_unionLiteral(int tag, struct astNode* expr, struct symbolNode* scope, struct position pos)
+ASTNode* AST_Create_enumLiteral(int tag, struct astNode* expr, struct symbolNode* scope, struct position pos)
 {
-    ASTNode* retval = AST_Create(AST_UNION_LITERAL, scope, pos);
-    retval->unionLiteral.tag = tag;
-    retval->unionLiteral.expr = expr;
+    ASTNode* retval = AST_Create(AST_ENUM_LITERAL, scope, pos);
+    retval->enumLiteral.tag = tag;
+    retval->enumLiteral.expr = expr;
     return retval;
 }
 
@@ -260,8 +278,26 @@ ASTNode* AST_Create_modulus(struct astNode* left, struct astNode* right, struct 
 ASTNode* AST_Create_orelse(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_ORELSE, scope, pos);
-    retval->binop.left = left;
-    retval->binop.right = right;
+    retval->taggedBinop.tag = -1;
+    retval->taggedBinop.left = left;
+    retval->taggedBinop.right = right;
+    return retval;
+}
+
+ASTNode* AST_Create_catch(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos)
+{
+    ASTNode* retval = AST_Create(AST_CATCH, scope, pos);
+    retval->taggedBinop.tag = -1;
+    retval->taggedBinop.left = left;
+    retval->taggedBinop.right = right;
+    return retval;
+}
+
+ASTNode* AST_Create_try(struct astNode* expr, struct symbolNode* scope, struct position pos)
+{
+    ASTNode* retval = AST_Create(AST_TRY, scope, pos);
+    retval->taggedUnop.tag = -1;
+    retval->taggedUnop.expr = expr;
     return retval;
 }
 
@@ -501,9 +537,25 @@ ASTNode* AST_Create_orAssign(struct astNode* left, struct astNode* right, struct
     return retval;
 }
 
-ASTNode* AST_Create_xorAssign(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos)
+ASTNode* AST_Create_bitAndAssign(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos)
 {
-    ASTNode* retval = AST_Create(AST_XOR_ASSIGN, scope, pos);
+    ASTNode* retval = AST_Create(AST_BIT_AND_ASSIGN, scope, pos);
+    retval->binop.left = left;
+    retval->binop.right = right;
+    return retval;
+}
+
+ASTNode* AST_Create_bitOrAssign(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos)
+{
+    ASTNode* retval = AST_Create(AST_BIT_OR_ASSIGN, scope, pos);
+    retval->binop.left = left;
+    retval->binop.right = right;
+    return retval;
+}
+
+ASTNode* AST_Create_bitXorAssign(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos)
+{
+    ASTNode* retval = AST_Create(AST_BIT_XOR_ASSIGN, scope, pos);
     retval->binop.left = left;
     retval->binop.right = right;
     return retval;
@@ -599,6 +651,14 @@ ASTNode* AST_Create_defer(struct astNode* statement, struct symbolNode* scope, s
     return retval;
 }
 
+ASTNode* AST_Create_errdefer(struct astNode* statement, struct symbolNode* scope, struct position pos)
+{
+    ASTNode* retval = AST_Create(AST_ERRDEFER, scope, pos);
+    retval->defer.statement = statement;
+    retval->defer.deferID = scope->errdefers->size;
+    return retval;
+}
+
 ASTNode* AST_Create_break(struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_BREAK, scope, pos);
@@ -611,11 +671,25 @@ ASTNode* AST_Create_continue(struct symbolNode* scope, struct position pos)
     return retval;
 }
 
+ASTNode* AST_Create_unreachable(struct symbolNode* scope, struct position pos)
+{
+    ASTNode* retval = AST_Create(AST_UNREACHABLE, scope, pos);
+    return retval;
+}
+
 ASTNode* AST_Create_dot(struct astNode* container, struct astNode* identifier, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_DOT, scope, pos);
     retval->dot.left = container;
     retval->dot.right = identifier;
+    return retval;
+}
+
+ASTNode* AST_Create_maybe(struct astNode* container, struct symbolNode* scope, struct position pos)
+{
+    ASTNode* retval = AST_Create(AST_DOT, scope, pos);
+    retval->dot.left = container;
+    retval->dot.right = AST_Create_ident("something", scope, pos);
     return retval;
 }
 
@@ -647,10 +721,34 @@ ASTNode* AST_Create_paramlist(struct symbolNode* scope, struct position pos)
     return retval;
 }
 
-ASTNode* AST_Create_unionset(struct symbolNode* scope, struct position pos)
+ASTNode* AST_Create_enum(struct symbolNode* scope, struct position pos)
 {
-    ASTNode* retval = AST_Create(AST_UNIONSET, scope, pos);
+    ASTNode* retval = AST_Create(AST_ENUM, scope, pos);
     retval->paramlist.defines = List_Create();
+    return retval;
+}
+
+ASTNode* AST_Create_union(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos)
+{
+    ASTNode* retval = AST_Create(AST_UNION, scope, pos);
+    retval->binop.left = left;
+    retval->binop.right = right;
+    return retval;
+}
+
+ASTNode* AST_Create_error(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos)
+{
+    ASTNode* retval = AST_Create(AST_ERROR, scope, pos);
+    retval->binop.left = left;
+    retval->binop.right = right;
+    return retval;
+}
+
+ASTNode* AST_Create_inferError(struct astNode* expr, struct symbolNode* scope, struct position pos)
+{
+    ASTNode* retval = AST_Create(AST_INFER_ERROR, scope, pos);
+    retval->_enum.expr = expr;
+    retval->_enum.defines = List_Create();
     return retval;
 }
 
@@ -738,15 +836,9 @@ int AST_TypeRepr(char* str, ASTNode* type)
         break;
     case AST_DEFINE:
         SymbolNode* symbol = type->define.symbol;
-        ASTNode* type2 = symbol->type;
+        ASTNode* type2 = symbol->originalType;
         str += sprintf(str, "%s:", symbol->name);
-        if (symbol->type->astType != AST_PARAMLIST) {
-            str += AST_TypeRepr(str, symbol->type);
-        } else if (doDefTypes) {
-            str += AST_TypeRepr(str, symbol->type);
-        } else {
-            str += sprintf(str, "( .. )");
-        }
+        str += AST_TypeRepr(str, symbol->originalType);
         break;
     case AST_PARAMLIST:
         str += sprintf(str, "(");
@@ -760,12 +852,12 @@ int AST_TypeRepr(char* str, ASTNode* type)
             }
         }
         break;
-    case AST_UNIONSET:
+    case AST_ENUM:
         str += sprintf(str, "(|");
-        for (struct listElem* elem = List_Begin(type->unionset.defines); elem != List_End(type->unionset.defines); elem = elem->next) {
+        for (struct listElem* elem = List_Begin(type->_enum.defines); elem != List_End(type->_enum.defines); elem = elem->next) {
             ASTNode* param = elem->data;
             str += AST_TypeRepr(str, param);
-            if (elem->next == List_End(type->unionset.defines)) {
+            if (elem->next == List_End(type->_enum.defines)) {
                 str += sprintf(str, ")");
             } else {
                 str += sprintf(str, ", ");
@@ -780,12 +872,16 @@ int AST_TypeRepr(char* str, ASTNode* type)
         str += AST_TypeRepr(str, output);
         break;
     }
+    case AST_INFER_ERROR: {
+        str += sprintf(str, "!");
+        str += AST_TypeRepr(str, type->_enum.expr);
+        break;
+    }
     case AST_ADDR: {
-        ASTNode* child = type->unop.expr;
         str += sprintf(str, "&");
-        str += sprintf(str, "..");
-        // str += AST_TypeRepr(str, child);
-    } break;
+        str += AST_TypeRepr(str, type->unop.expr);
+        break;
+    }
     case AST_ARRAY: {
         ASTNode* lengthDefine = List_Get(type->paramlist.defines, 0);
         SymbolNode* lengthSymbol = lengthDefine->define.symbol;
@@ -962,4 +1058,36 @@ char* AST_GetString(enum astType type)
     default:
         return "Unknown ASTNode type";
     }
+}
+
+ASTNode* getArrayLengthAST(ASTNode* type)
+{
+    ASTNode* lengthDefine = List_Get(type->paramlist.defines, 0);
+    SymbolNode* lengthSymbol = lengthDefine->define.symbol;
+    ASTNode* lengthCode = lengthSymbol->def;
+    return lengthCode;
+}
+
+int getArrayLength(ASTNode* type)
+{
+    ASTNode* lengthDefine = List_Get(type->paramlist.defines, 0);
+    SymbolNode* lengthSymbol = lengthDefine->define.symbol;
+    ASTNode* lengthCode = lengthSymbol->def;
+    return lengthCode->astType == AST_INT ? lengthCode->_int.data : -1;
+}
+
+ASTNode* getArrayDataType(ASTNode* type)
+{
+    ASTNode* dataDefine = List_Get(type->paramlist.defines, 1);
+    SymbolNode* dataSymbol = dataDefine->define.symbol;
+    ASTNode* dataType = dataSymbol->type->unop.expr;
+    return dataType;
+}
+
+ASTNode* getArrayDataTypeAddr(ASTNode* type)
+{
+    ASTNode* dataDefine = List_Get(type->paramlist.defines, 1);
+    SymbolNode* dataSymbol = dataDefine->define.symbol;
+    ASTNode* dataType = dataSymbol->type;
+    return dataType;
 }

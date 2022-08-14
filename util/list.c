@@ -1,3 +1,5 @@
+// © 2021-2022 Joseph Shimel. All rights reserved.
+
 /*  list.c
 
     A doubley linked list, where nodes have references both to the node that 
@@ -21,6 +23,25 @@ List* List_Create()
     list->tail.prev = &list->head;
 
     return list;
+}
+
+// Empty the list but do not free the data
+void List_Clear(List* list)
+{
+    ListElem* toFree = NULL;
+    forall(elem, list)
+    {
+        if (toFree) {
+            free(toFree);
+        }
+        toFree = elem;
+    }
+    if (toFree) {
+        free(toFree);
+    }
+    list->head.next = &list->tail;
+    list->tail.prev = &list->head;
+    list->size = 0;
 }
 
 List* List_Concat(List* a, List* b)
@@ -78,6 +99,19 @@ void List_Insert(List* list, ListElem* before, void* data)
 void List_Append(List* list, void* data)
 {
     List_Insert(list, &list->tail, data);
+}
+
+void List_Remove(List* list, void* data)
+{
+    forall(elem, list)
+    {
+        if (elem->data == data) {
+            elem->prev->next = elem->next;
+            elem->next->prev = elem->prev;
+            list->size--;
+            return;
+        }
+    }
 }
 
 /*
@@ -146,4 +180,16 @@ bool List_Contains(List* list, void* data)
         }
     }
     return false;
+}
+
+bool Set_Put(List* list, void* data)
+{
+    forall(elem, list)
+    {
+        if (elem->data == data) {
+            return false;
+        }
+    }
+    List_Append(list, data);
+    return true;
 }

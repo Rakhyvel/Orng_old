@@ -1,8 +1,4 @@
-/*
-AST stands for Abstract Syntax Tree. This is a data structure used to organize
-and give meaning to the token read in from the file. It is similar to a parse
-tree, but slightly different in that it doesn't have redundant nodes.
-*/
+// © 2021-2022 Joseph Shimel. All rights reserved.
 
 #ifndef AST_H
 #define AST_H
@@ -26,7 +22,7 @@ enum astType {
     AST_ARGLIST,
     AST_NAMED_ARG,
     AST_ARRAY_LITERAL,
-    AST_UNION_LITERAL,
+    AST_ENUM_LITERAL,
     AST_UNDEF,
     AST_DOC,
     // Math
@@ -39,11 +35,15 @@ enum astType {
     AST_PAREN,
     // Memory
     AST_DEREF,
+	AST_ERRDEFER,
     AST_INDEX,
     AST_SLICE,
     AST_ADDROF,
-	AST_ORELSE,
- // Boolean
+    AST_ORELSE,
+	// Errors
+	AST_CATCH,
+	AST_TRY,
+    // Boolean
     AST_NOT,
     AST_OR,
     AST_AND,
@@ -70,31 +70,39 @@ enum astType {
     AST_MULT_ASSIGN,
     AST_DIV_ASSIGN,
     AST_MOD_ASSIGN,
-    AST_AND_ASSIGN,
     AST_OR_ASSIGN,
-    AST_XOR_ASSIGN,
+    AST_AND_ASSIGN,
+    AST_BIT_OR_ASSIGN,
+    AST_BIT_AND_ASSIGN,
+    AST_BIT_XOR_ASSIGN,
     AST_LSHIFT_ASSIGN,
     AST_RSHIFT_ASSIGN,
     AST_IF,
     AST_FOR,
     AST_CASE,
-	AST_FIELD_CASE,
+    AST_FIELD_CASE,
     AST_MAPPING,
-	AST_FIELD_MAPPING,
+    AST_FIELD_MAPPING,
     AST_RETURN,
     AST_NEW, // Replace with allocator method
     AST_FREE, // Replace with allocator method
     AST_DEFER,
     AST_BREAK,
     AST_CONTINUE,
+	AST_UNREACHABLE,
     // Module
     AST_DOT,
+    AST_DEREF_DOT,
+    AST_MAYBE,
     // Types
     AST_SIZEOF,
     AST_VOID,
     AST_CAST,
     AST_PARAMLIST,
-    AST_UNIONSET,
+    AST_ENUM,
+	AST_UNION,
+	AST_ERROR,
+	AST_INFER_ERROR,
     AST_FUNCTION,
     AST_ADDR,
     AST_ARRAY,
@@ -140,10 +148,21 @@ typedef struct astNode_arrayLiteral {
     List* members; // members in the array literal, all of which are the same type
 } astNode_arrayLiteral;
 
-typedef struct astNode_unionLiteral {
+typedef struct astNode_enumLiteral {
     int tag;
     struct astNode* expr;
-} astNode_unionLiteral;
+} astNode_enumLiteral;
+
+typedef struct astNode_taggedUnop {
+    int tag;
+    struct astNode* expr;
+} astNode_taggedUnop;
+
+typedef struct astNode_taggedBinop {
+    int tag;
+    struct astNode* left;
+    struct astNode* right;
+} astNode_taggedBinop;
 
 typedef struct astNode_unop {
     struct astNode* expr;
@@ -164,6 +183,7 @@ typedef struct astNode_dot {
     struct astNode* left;
     struct astNode* right;
     struct symbolNode* symbol;
+    bool assign;
 } astNode_dot;
 
 typedef struct astNode_slice {
@@ -174,7 +194,8 @@ typedef struct astNode_slice {
 
 typedef struct astNode_block {
     List* children;
-    struct symbolNode* symbol; // The symbol node for this block ast, possibly unneeded?
+    struct symbolNode* symbol; // TODO: remove
+    bool returnEval; // Does this block produce the return value for a function?
 } astNode_block;
 
 typedef struct astNode_defer {
@@ -216,14 +237,16 @@ typedef struct astNode_fieldMapping {
     int tag;
 } astNode_fieldMapping;
 
-// for parameter lists, modules, structs, arrays, unions, a lot!
+// for parameter lists, modules, structs, arrays, enums, a lot!
 typedef struct astNode_paramlist {
     List* defines;
 } astNode_paramlist;
 
-typedef struct astNode_unionset {
+typedef struct astNode_enum {
     List* defines;
-} astNode_unionset;
+    bool wasAnError;
+    struct astNode* expr; // Used for infer errors
+} astNode_enum;
 
 typedef struct astNode_function {
     struct astNode* domainType;
@@ -241,11 +264,12 @@ typedef struct astNode {
     enum astType astType; // The type of the AST node
     struct symbolNode* scope; // The scope that this AST is constrained within
     struct position pos;
+    int tag; // Tag of a specific type for enums
 
     bool visited;
-    bool isValid; // TODO: Remove?
+    bool isValid;
 
-    bool isConst; // TODO: remove and put into type asts
+    bool isConst;
 
     // if subtree contains any of these
     bool containsReturn;
@@ -253,6 +277,7 @@ typedef struct astNode {
     bool containsBreak;
 
     struct astNode* type; // The type of the AST Node
+    struct astNode* originalType; // Is never expanded, used to print
 
     union {
         astNode_ident ident;
@@ -263,7 +288,9 @@ typedef struct astNode {
         astNode_arglist arglist;
         astNode_namedArg namedArg;
         astNode_arrayLiteral arrayLiteral;
-        astNode_unionLiteral unionLiteral;
+        astNode_enumLiteral enumLiteral;
+        astNode_taggedUnop taggedUnop;
+        astNode_taggedBinop taggedBinop;
         astNode_unop unop;
         astNode_binop binop;
         astNode_call call;
@@ -278,7 +305,7 @@ typedef struct astNode {
         astNode_mapping mapping;
         astNode_fieldMapping fieldMapping;
         astNode_paramlist paramlist;
-        astNode_paramlist unionset;
+        astNode_enum _enum;
         astNode_function function;
         astNode_extern _extern;
     };
@@ -303,6 +330,7 @@ const ASTNode* PACKAGE_TYPE;
 const ASTNode* UNDEF_TYPE;
 const ASTNode* VOID_ADDR_TYPE;
 const ASTNode* VOID_TYPE;
+const ASTNode* MAYBE_VOID_TYPE;
 
 const ASTNode* TRUE_AST;
 const ASTNode* FALSE_AST;
@@ -317,18 +345,22 @@ ASTNode* AST_Create_real(double data, struct symbolNode* scope, struct position 
 ASTNode* AST_Create_arglist(struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_namedArg(char* name, struct astNode* expr, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_arrayLiteral(struct symbolNode* scope, struct position pos);
-ASTNode* AST_Create_unionLiteral(int tag, struct astNode* expr, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_enumLiteral(int tag, struct astNode* expr, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_true(struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_false(struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_nothing(struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_undef(struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_neg(struct astNode* right, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_addrOf(struct astNode* expr, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_deref(struct astNode* expr, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_add(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_subtract(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_multiply(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_divide(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_modulus(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_orelse(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_catch(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_try(struct astNode* expr, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_paren(struct astNode* expr, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_deref(struct astNode* expr, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_index(struct astNode* arrayExpr, struct astNode* subscript, struct symbolNode* scope, struct position pos);
@@ -370,19 +402,29 @@ ASTNode* AST_Create_new(struct astNode* type, struct astNode* init, struct symbo
 ASTNode* AST_Create_free(struct astNode* expr, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_return(struct astNode* expr, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_defer(struct astNode* expr, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_errdefer(struct astNode* expr, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_break(struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_continue(struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_unreachable(struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_dot(struct astNode* container, struct astNode* identifier, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_maybe(struct astNode* container, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_sizeof(struct astNode* type, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_void(struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_cast(struct astNode* expr, struct astNode* type, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_paramlist(struct symbolNode* scope, struct position pos);
-ASTNode* AST_Create_unionset(struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_enum(struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_union(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_error(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_inferError(struct astNode* expr, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_array(struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_function(struct astNode* domain, struct astNode* codomain, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_addr(struct astNode* type, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_extern(struct symbolNode* externSymbol, struct symbolNode* scope, struct position pos);
 
+int getArrayLength(ASTNode* type);
+ASTNode* getArrayLengthAST(ASTNode* type);
+ASTNode* getArrayDataType(ASTNode* type);
+ASTNode* getArrayDataTypeAddr(ASTNode* type);
 ASTNode* createArrayTypeNode(ASTNode* baseType, int length);
 ASTNode* AST_Create(enum astType type, SymbolNode* scope, struct position pos);
 void AST_Print(ASTNode* root, char* prefix, char* childrenPrefix);

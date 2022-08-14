@@ -1,3 +1,5 @@
+// © 2021-2022 Joseph Shimel. All rights reserved.
+
 #include "doc.h"
 #include "ast.h"
 #include "main.h"

@@ -1,7 +1,4 @@
-/*
-This file declares the Generator_Generate() function for other files to use.
-Implementation is in the file generator.c
-*/
+// © 2021-2022 Joseph Shimel. All rights reserved.
 
 #ifndef GENERATOR_H
 #define GENERATOR_H
@@ -11,6 +8,6 @@ Implementation is in the file generator.c
 #include "./symbol.h"
 #include <stdio.h>
 
-void Generator_Generate(Program program, FILE* out);
+void Generator_Generate(FILE* out, Program program);
 
 #endif

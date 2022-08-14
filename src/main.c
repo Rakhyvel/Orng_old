@@ -1,3 +1,5 @@
+// © 2021-2022 Joseph Shimel. All rights reserved.
+
 /*
 PHILOSOPHY:
 - Stateless functional style between modules/packages for predictability
@@ -49,6 +51,8 @@ char* filename;
 char outFilename[255];
 
 static bool errsExist = false;
+
+bool isDebug = true;
 
 // files[fileNo] -> lines[lineNo]
 Map* files;
@@ -394,7 +398,7 @@ int main(int argc, char** argv)
             exit(1);
         }
 
-        Generator_Generate(programStruct, out);
+        Generator_Generate(out, programStruct);
 
         if (fclose(out)) {
             perror(outFilename);
@@ -446,11 +450,29 @@ static int countLeadingWhitespace(char* str)
     return count;
 }
 
-static void printPos(struct position pos)
+static void printPosChar(FILE* out, char c)
 {
+    if (out != stderr) {
+        if (c == '"') {
+            fprintf(out, "\\\"");
+        } else if (c == '\\') {
+            fprintf(out, "\\");
+        } else {
+            fprintf(out, "%c", c);
+        }
+    } else {
+        fprintf(out, "%c", c);
+    }
+}
+
+void printPos(FILE* out, struct position pos)
+{
+    char* newLine = out == stderr ? "\n" : "\\n";
     if (pos.filename) {
-        fprintf(stderr, "%s: \n", getRelPath(pos.filename));
-        fprintf(stderr, "      |\n");
+        fprintf(out, "%s: ", getRelPath(pos.filename));
+        fprintf(out, "%s", newLine);
+       // fprintf(out, "      |");
+        //fprintf(out, "%s", newLine);
         int minWhiteSpace = 100000;
         int maxLineLength = 0;
         for (int i = pos.start_line; i <= pos.end_line; i++) {
@@ -459,20 +481,22 @@ static void printPos(struct position pos)
             minWhiteSpace = min(minWhiteSpace, countLeadingWhitespace(lineStr));
         }
         for (int i = pos.start_line; i <= pos.end_line; i++) {
-            fprintf(stderr, "%d", i);
+            fprintf(out, "%d", i);
             for (int j = 0; j < 5 - (int)(log(i) / log(10)); j++) {
-                fprintf(stderr, " ");
+                fprintf(out, " ");
             }
             List* lines = Map_Get(files, pos.filename);
             char* lineStr = List_Get(lines, i - 1);
             int spaces = countLeadingWhitespace(lineStr) - minWhiteSpace;
-            fprintf(stderr, "| ");
+            fprintf(out, "| ");
             for (int j = 0; j < spaces; j++) {
-                fprintf(stderr, " ");
+                fprintf(out, " ");
             }
             if (pos.start_line == pos.end_line || (i != pos.start_line && i != pos.end_line)) {
                 char* stripped = firstNonSpace(lineStr);
-                fprintf(stderr, "%s", stripped);
+                for (char* c = stripped; *c; c++) {
+                    printPosChar(out, *c);
+                }
                 maxLineLength = max(maxLineLength, strlen(stripped) + spaces);
             } else {
                 bool seenNonWhiteSpace = false;
@@ -485,29 +509,29 @@ static void printPos(struct position pos)
                         continue;
                     } else {
                         seenNonWhiteSpace = true;
-                        fprintf(stderr, "%c", c);
+                        printPosChar(out, c);
                         charsPrinted++;
                     }
                 }
                 maxLineLength = max(maxLineLength, charsPrinted - 1);
             }
-            fprintf(stderr, "\n");
+            fprintf(out, "%s", newLine);
         }
 
-        fprintf(stderr, "      | ");
+        fprintf(out, "      | ");
         if (pos.start_line == pos.end_line) {
             for (int i = 0; i < pos.start_span - 1; i++) {
-                fprintf(stderr, " ");
+                fprintf(out, " ");
             }
             for (int i = pos.start_span; i < pos.end_span; i++) {
-                fprintf(stderr, "^");
+                fprintf(out, "^");
             }
         } else {
             for (int i = 0; i < maxLineLength; i++) {
-                fprintf(stderr, "^");
+                fprintf(out, "^");
             }
         }
-        fprintf(stderr, "\n");
+        fprintf(out, "%s", newLine);
     }
 }
 
@@ -524,7 +548,7 @@ void error(struct position pos, const char* message, ...)
     va_end(args);
     fprintf(stderr, "\n");
 
-    printPos(pos);
+    printPos(stderr, pos);
 
     system("pause");
     exit(1);
@@ -540,8 +564,26 @@ void error2(Position pos1, Position pos2, const char* message, ...)
     va_end(args);
     fprintf(stderr, "\n");
 
-    printPos(pos1);
-    printPos(pos2);
+    printPos(stderr, pos1);
+    printPos(stderr, pos2);
+
+    system("pause");
+    exit(1);
+}
+
+void error3(Position pos1, Position pos2, Position pos3, const char* message, ...)
+{
+    va_list args;
+    fprintf(stderr, "error: ");
+
+    va_start(args, message);
+    vfprintf(stderr, message, args);
+    va_end(args);
+    fprintf(stderr, "\n");
+
+    printPos(stderr, pos1);
+    printPos(stderr, pos2);
+    printPos(stderr, pos3);
 
     system("pause");
     exit(1);

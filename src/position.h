@@ -1,3 +1,5 @@
+// © 2021-2022 Joseph Shimel. All rights reserved.
+
 #ifndef POSITION_H
 #define POSITION_H
 
@@ -9,6 +11,9 @@ typedef struct position {
     int end_line;
     int end_span;
 } Position;
+
+#define invalid_pos \
+    ((struct position) { NULL, 0, 0, 0, 0})
 
 Position merge(Position a, Position b);
 

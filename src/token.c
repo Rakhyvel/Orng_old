@@ -1,3 +1,5 @@
+// © 2021-2022 Joseph Shimel. All rights reserved.
+
 #include "token.h"
 #include "../util/debug.h"
 #include "../util/list.h"
@@ -138,6 +140,10 @@ const char* Token_GetString(_TokenType type)
         return "TOKEN_FREE";
     case TOKEN_DEFER:
         return "TOKEN_DEFER";
+    case TOKEN_ERRDEFER:
+        return "TOKEN_ERRDEFER";
+    case TOKEN_UNREACHABLE:
+        return "TOKEN_UNREACHABLE";
     case TOKEN_ARROW:
         return "TOKEN_ARROW";
     case TOKEN_BIG_ARROW:
@@ -209,6 +215,10 @@ const char* Token_GetRepr(_TokenType type)
         return "/=";
     case TOKEN_PERCENT_ASSIGN:
         return "%=";
+    case TOKEN_DAMPERSAND_ASSIGN:
+        return "&&=";
+    case TOKEN_DBAR_ASSIGN:
+        return "||=";
     case TOKEN_AMPERSAND_ASSIGN:
         return "&=";
     case TOKEN_BAR_ASSIGN:
@@ -283,7 +293,7 @@ const char* Token_GetRepr(_TokenType type)
         return "]";
     case TOKEN_RESTRICT:
         return "-[";
-    case TOKEN_UNION:
+    case TOKEN_ENUM:
         return "(|";
     case TOKEN_IF:
         return "if";
@@ -311,6 +321,14 @@ const char* Token_GetRepr(_TokenType type)
         return "sizeof";
     case TOKEN_ORELSE:
         return "orelse";
+    case TOKEN_TRY:
+        return "try";
+    case TOKEN_ERRDEFER:
+        return "errdefer";
+    case TOKEN_CATCH:
+        return "catch";
+    case TOKEN_UNREACHABLE:
+        return "unreachable";
     case TOKEN_ARROW:
         return "->";
     case TOKEN_BIG_ARROW:

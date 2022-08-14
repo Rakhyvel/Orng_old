@@ -1,10 +1,4 @@
-/*
-A symbol is a name in the program that refers to something in the program.
-Examples are variable names, procedures, even block {} statements are their
-own symbols.
-
-The symbol tree is used to determine scope.
-*/
+// © 2021-2022 Joseph Shimel. All rights reserved.
 
 #include "symbol.h"
 #include "../util/debug.h"
@@ -31,8 +25,9 @@ struct symbolNode* Symbol_Create(char* name, SymbolType symbolType, struct symbo
     retval->restrictionExpr = List_Create();
     retval->restrictions = List_Create();
     retval->defers = List_Create();
+    retval->errdefers = List_Create();
     retval->pos = pos;
-    retval->isReachable = true;
+    retval->versions = List_Create();
 
     strncpy_s(retval->name, 255, name, 254);
     if (parent != NULL) {

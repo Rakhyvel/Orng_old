@@ -36,7 +36,7 @@ x Surjective to C
 	x varadic paramlist, array struct type with length
 	x enum
 	x assert <condition>
-- Only produce correct, human readable output, or give error
+x Only produce correct, human readable output, or give error
 	x Validate ASTs
 	x validate types
 	x for loop defs are within the block scope
@@ -69,8 +69,8 @@ x Surjective to C
 			x frees an array
 	x type inference
 	x do "." instead of "->" if "&" operator is a parent
-- std library
-	- package and build system:
+x std library
+	x package and build system:
 		x check if orange directory is created, create it if not
 		x take in single compile directory instead
 		x read and parse MANIFEST file
@@ -86,7 +86,7 @@ x Surjective to C
 			x validate that modules don't interact with modules in packages that their own parent doesn't depend on
 		x error messages should just print out package/module instead of full filename
 		x for first package, read in "outname" field, set that as the filename for the output file
-		- restrict symbols
+		x restrict symbols
 			x a list of aliases
 				x <alias_ident> = <symbol_expr>
 				x OR <alias_ident> (which is <alias_ident> = <alias_ident>)
@@ -102,8 +102,8 @@ x Surjective to C
 		x Linkedlist
 		x Vector
 	x SDL hooks -[]
-	- also write a ECS and GUI for apps
-	- put these all on github (should be really easy!)
+	x also write a ECS and GUI for apps
+	x put these all on github (should be really easy!)
 	x package/module convention is all lowercase, to disambiguiate types and modules
 		x enforce that file symbol and filename are the same for modules
 		x enforce package name and package symbol are the same for packages
@@ -114,40 +114,7 @@ x Surjective to C
 	x type inference for module, packages, and types
 	x move restriction to before the symbol
 	x change MANIFEST files to <pkg name>.orng files
-	- doc generation
-		- packages:
-			- package docstring
-			- what includes does this package have?
-			- what other packages does this package depend on
-			- public build symbols?
-			- position?
-		- modules:
-			- docstring
-			- what are the public functions, variables, types, and maybe even other modules in this module
-			- what other modules does this module see
-			- position?
-		- types:
-			- docstring
-			- what is its type?
-			- is it external? What is it's extern name?
-			- position?
-			- orange definition (with CFG highlighting!)
-		- variables:
-			- docstring
-			- what is its type?
-			- is it external? What is it's extern name?
-			- position?
-			- orange definition (with CFG highlighting!)
-		- functions:
-			- docstring
-				- what are the parameters
-				- what does it return
-			- what is its type?
-			- is it external? What is it's extern name?
-			- position?
-			- orange definition (with CFG highlighting!)
-		- call graph visualization?
-- fix varargs once and for all!
+x fix varargs once and for all!
 x ; to add multiple statements on one line
 x for loop uses ; instead of , 
 x 'else' for when a loop wasn't broken out of
@@ -275,7 +242,7 @@ x Rework the compiler to be better [ast-union-type]
 	x use a union for AST Nodes, like you would if you were to rewrite this in Orng
 		x create function to create an AST for every possible AST type
 		x no more guessing the child element in a list! Can now just use it
-- unions like in julia and haskell
+x unions like in julia and haskell
 	x Tagged union and enums
 		x generate union type structs
 		x coerce to union
@@ -284,7 +251,7 @@ x Rework the compiler to be better [ast-union-type]
 		x void type is implied if no type is given
 		x validate that members in union must have either a unique type, or the void type
 		- in field cases, make it so that you need to union name
-	- Maybe type union
+	x Maybe type union
 		x ?<Type> which is just shorthand for (|nothing,  just:<Type>)
 		x can use the name of the maybe variable as-is if the compiler can reason about whether or not the variable is nothing
 			x weak SAT model:
@@ -311,12 +278,99 @@ x Rework the compiler to be better [ast-union-type]
 		x generate nothing comparisons
 		x assumptions for for loops too
 		x orelse operator
+x Generate IR from AST
+	x basic block, call graph, etc
+x Generate C code from IR
+x IR optimizations
+	x constant propagation
+	x copy propagation
+		x requires symbol versioning
+	x dead code trimming
+		x requires symbol versioning, phi nodes etc
+	x default values
+	x arrays
+		x array literals, 
+		x default array literals
+		x indexing
+	x structs
+		x arglist literals
+		x default arglists
+		x dots
+		x slices (which are special arglists! no array literals!)
+		x deref inference for dots is a front-end thing, insert deref AST nodes
+	x index-copy
+	x dot-copy
+	x unops
+		x deref-copy
+	x and/or
+	x binops
+		x bit or
+		x bit xor
+		x bit and
+		x left shift
+		x right shift
+		x equals
+		x not equals
+		x greater
+		x lesser
+		x greater than or equal to
+		x less that or equal to
+		x add
+		x sub
+		x mult
+		x div
+		x mod
+	x make validateAST not do optimizations
+	x make validateAST require coerceType (why didn't I do this before? hmm)
+	x coalesce validateAST cases
+	x op-assign
+		x add &&= and ||=
+	x fun little optimizations for binops and unops
+		x bit or-ing 0
+		x left/right shifting 0
+		x adding/subbing 0
+		x multing/diving/modding 1
+		x multing 0
+		x known value computations for all binops
+	x 0 <= index < array size
+	x slice lower bound < slice upper bound
+	x cannot divide by zero
+	x x:[-3]Int causes infinite loop
+	x new
+		x new scalar types
+		x new array types
+		x new array types with init value
+		x new arglist types
+		x new arglist types with default values and init values
+	x free
+		x free array's data
+	x sizeof (for extern types)
+	x strings
+	x casts and type conversions
+	x calls
+		x function parameters already have a default definition (maybe first basic block takes them literally as parameter)
+		x function arguments
+	x open flood gates and test leetcode
+		x don't print out symbol versions that are void type
+		x calls to functions that are void are just calls, not evaluated
+		x don't print out a retval for a function that is void codomain typed
+		x call, arglist, array symbol versioning
+		x don't phi function parameters that aren't used
+		x make an IR_LOAD_STRING
+	x cases
+	x union literals & default union literals
+		x unique compile-global tag for each unique name/type combo
+		x Map(name:String, Set(type:&ASTNode))
+	x orelse, field cases (possibly for optimizations, too!)
+		x ? operator should require a maybe type
+		x change syntax so that only one field mapping can have one codomain thingy
+- Go back to adding errors and union type unions
 	- runtime errors
-		- || type operator that operates on any union sets
-			- combines left and right union sets
-			- ok for names to collide, so long as their types are EQUAL (not just subtype)
-			- how do tags work? How can I coerce a union literal?
-				- conversion instruction that maps sub union tags to super union tags
+		x || type operator that operates on any union sets
+			x combines left and right union sets
+			x ok for names to collide, so long as their types are EQUAL (not just subtype)
+			x how do tags work? How can I coerce a union literal?
+				x conversion instruction that maps sub union tags to super union tags
 			Color::Type = (|
 				red			-- tag = 0
 				orange		-- tag = 1
@@ -335,42 +389,110 @@ x Rework the compiler to be better [ast-union-type]
 				banana		-- tag = 4
 			)
 			x : Color || Fruit = Color.orange -- needs to be coerced up to superset
-		- <UnionSetType>!<Type> type operator
-			- shorthand for (|success:<Type>) || <UnionSetType>
-			- binds looser than ||
-			- errors are regular unions, become errors with the ! operator
-			- no global error set, but there is the AnyError type which is the union of all error unions
-		- can case on an error union just like any other union set
-			-- uses if-def idiom, very useful! implement it now!!!
-			file = case fileErr := openFile("filename.txt"); fileErr {
-				.Success -> fileErr
-				.FileNotFound -> {
-					std.system.println("could not find the file")
-					return fileErr
-				}
-				.FileInUse -> {
-					std.system.println("file is in use by another program")
-					return fileErr
-				}
-			}
-		- try unwraps value if no error, or returns the error
-		- catch unwraps value if no error, or evaluates to default expression
-		- errdefer is another return exit path if return is an error, a subset of defers (ie it defers all defers, and also errdefers if return is error)
-		- infer error set using !<Type> operator
-- do create an intermediate representation, but for generating C code
-	- So that optimzations can be made
-		- copy propagation, symbol versions, dead code trimming, all of it
-	- Should generate to C code still, with abstractions to make paramlist copying easier
-		- keep basic structures, so that MAYBE in the future I can generate assembly
-	- ease front-end optimizations, maybe none!
-		- all constant propagations can be done with IR, and better
-		- symbol versions offer a better way to track live fields for unions than the current way
-- &&= and ||= operator for &&= and ||=, do not make &= and |= polymorphic
+		x <UnionSetType>!<Type> type operator
+			x shorthand for (|success:<Type>) || <UnionSetType>
+			x binds looser than ||
+			x errors are regular enums, become errors with the ! operator
+		x catch unwraps value if no error, or evaluates to default expression
+		x try unwraps value if no error, or returns the error
+		x errdefer is another return exit path if return is an error, a subset of defers (ie it defers all defers, and also errdefers if return is error)
+			x if a return value is detected to not be a successful type, it should follow the error path
+		x coerce between if statement clauses for enum if coerced type is given
+			x check the coerce type in getType (?) (there is no coerced type)
+		x Arglists should accept coercion too
+		x Keep original type
+		x !<Type>
+			x infers the error enum set from RHS!
+		x New main function return type
+		x try should union error enum to function too
+		x panic messages
+			x stack trace
+				x After call, if returned an error, THEN push call pos string to stack
+				x                                   ELSE clear stack
+				x If main function returns an error, print out stack
+		x recursive::(x:Int)->() = recursive(x-1) -- Causes error generating phi nodes
+		x recursive::()->() = recursive() -- Doesn't generate call to self
+		x Remove pop/push functions, copy paste code instead
+		x Debug mode which:
+			x Checks indexes are within array bounds
+			x Checks that dots for enum literals have the correct tag
+		- If case is an enum type, require all fields to be accounted for
+- cleanup!
+	- replace for loops over lists with forall loops
+	- comments on everything
+		- Single line
+		- Assume reader fully understands entire program but what you're commenting
+	- fix enum and switch order to be consistent
+	- change references to "double" to "real"
+	- fix and consistify spelling of ASTs and IRs and Tokens and everything else
+	- write a markup to html program (in orange, add to github) and write tutorial/documentaiton
+		- hello world/comments
+		- declarations
+		- primitive types
+		- operations
+		- compile time constants
+		- blocks/if/for/case/return/break/continue/unreachable/defer
+		- addresses, new/free
+		- structs
+			- default params
+			- named vs position struct literals
+			- methods
+		- arrays/comptime collapse(?)
+		- slices
+		- strings
+		- enums
+			- enum literals
+			- enum unions
+			- maybe types
+				-nothing
+				- ? op
+				-orelse
+			-errors
+				-success
+				- try
+				- catch
+				- infered errors
+				- errdefer
+		- functions
+			- difference between comptime and variable
+			- default params
+			- named vs positional arguments
+			- inner functions
+		- structural type equivalence
+		- default values
+		- external symbol tag/interop with C
+		- restriction symbol tag
+		- packages and modules
+	- reorder functions to be in prefix order, fix header order
+	- variable name semantics
+		- 'type' for AST nodes that are types
+		- 'node' for other AST nodes
+		- 'ir' for IRs
+		- 'bb' for Basic Blocks
+		- 'token' for Tokens
+		- 'cfg' for a CFG
+		- 'pos' for a Position
+		- 'symbol' for a SymbolNode (not 'scope')
+	- fix prefixes for 'modules' in C code, as if they were generated by Orng
+	- move myItoa to a util file
+	- create predicate functions for identical conditions of multiple if statements (like "does this IR type use list data?")
+		- is this type a void error enum type
+	x change old references from "union set" type to "enum" (unions are an operation on enum types)
+	- free memory
+	- rework to be in "c++"
+		- use std::vector and std::map instead of my list and map
+		- some structures could be better represented as classes
+	- rename "expandTypeIdent" to just "expandType"
+	- remove words 'a', 'the', 'is/are' from error messages
+	- fix semantics in parsing functions (instead of prefix/term/factor etc just use child)
+	- remove 'symbol' field from block ast, should use scope field from common ast struct (right?)
+- Orange should compile the program for you, too
+	- No verbatims, instead write the C file and header, include it, and add it to be included when compiling
 - 'default' keyword which takes in a type and gives its default value
 	if x == default Int64 {
 		std.system.println("x is 0")
 	}
-	- useful for generics and allocators
+	- useful for variants and allocators
 	new::(T::Type, init::T=default T)->AllocationError!&T = {
 		malloc?::(size:Int64)->&Any
 		retval := malloc(sizeof T):&T
@@ -382,18 +504,57 @@ x Rework the compiler to be better [ast-union-type]
 		retval := try alloc.new(Whatever, ("This is the default\n", 34, 535.5))
 		
 	}
-- generics
+- implement == and != for struct types (field equality conjunction)
+	- Vector::Type = (x:Int, y:Int)
+	myPos:Vector = (0, 10)
+	yourPost:Vector = (0, 10)
+	if myPos == yourPos {
+		-- do something
+	}
+- change case arrow to fat arrow
+- cases should be able to operate on any types that have == and != defined
+	Col::Type = <A, B, C, D, E, F, G, H>
+	ChessSquare::Type = (col:Col, row:Int)
+	queenPos:ChessSquare = (Col.A, 4)
+	pawnPos:ChessSquare = (Col.B, 3)
+	case queenPos {
+		pawnPos => std.system.println("Queen captures pawn")
+		else    => std.system.println("Queen doesn't capture pawn")
+	}
+- add enum literal AST
+	Fruit::Type = <apple, orng, banana>
+	yum := getFruitType()
+	case yum {
+		<apple>		=> std.system.println("Ok!")
+		<orng>		=> std.system.println("love!")
+		<banana>	=> std.system.println("sometimes mushy...")
+	}
+- remove 'nothing' keyword, use <nothing> enum literal instead
+- remove field cases, should compare with enum equality
+	x:?Int = 4
+	case x {
+		<nothing>	=> std.system.println("nothing here")
+		else		=> std.system.println("something here")
+	}
+
+	Suit::Type = <Hearts, Diamonds, Clubs, Spades>
+	Card::Type = (suit:Suit, value:Char)
+	myCard:Card = (Suit.Hearts, '3')
+	suitRepr:Char = case myCard.suit { -- an enum comparison, like doing myCard.suit == Suit.Hearts
+		Suit.Hearts   => 'H'
+		Suit.Diamonds => 'D'
+		Suit.Clubs    => 'C'
+		Suit.Spades   => 'S'
+	}
+- for's with else clause, evaluates to type
+- if's and for's with no else case evaluate to a maybe type
+- parametric types
 	- you would need a function that 'returns' a type
-		- this would require a unification of type and value syntax
-		- can I find any instances where this leads to ambiguity that cannot be solved?
-			- addr-of type and addr-of value must be treated differently
-		- 'parameterized types', instead of a full blown function that returns a type
-	- if a function takes in all compile-time constant arguments and returns something compile-time constant, replace call with function definition
-		- can do this because:
-		- referential transparency- most function calls can simply be replaced with their definition
-		- all parameters are compile-time known, can simply replace references to the parameters with the arguments in the definition
-			- doesn't this imply we'd need to clone the def AST?
-	- rewrite util data structures to be generic
+		- use a token to 'switch' from expr syntax to type syntax, to return a type expression
+	- if a function takes in all compile-time constant arguments and returns something compile-time constant, run at compile-time
+		- create a 'stack frame' with symbols, and a strip of memory for data, use offsets for this
+		- should there be a way to force comptime evaluation, like in zig? comptime keyword?
+	- rewrite util data structures to be parametric
 	- typeof operator which gets the compiletime type of an expression
 	- subtype operator which does compile time type checking
 - interfaces (traits in rust https://theburningmonk.com/2015/05/rust-memory-safety-without-gc/)
@@ -410,27 +571,8 @@ x Rework the compiler to be better [ast-union-type]
 		)
 	- should be able to define NEW data types that OLD functions work with
 	- should be able to define NEW functions that apply to OLD data types
-- refinement types, contracts, pre/post conditions
-	- why?
-		- comments are useless
-		- often times code will change and the comments will become wrong
-		- comments are not checked by compiler
-		- comments are rarely checked by programmer
-		- refinement types WILL be checked by compiler, and pre/post conditions WILL be checked by compiler
-		- comments should be kept, but only used to provide a convenient way to enumerate what to document
-	- are an expression, need another expression after them
-	- can chain them and other expressions together
-	arcsin::(x:Real)->Real = 
-	|>	-1 <= x <= 1		-- this expression is evaluated, if its false program hard crashes
-	|<	y; sin(y) == x		-- post conditions capture the return value, then have the expression
-	{
-		-- do math here
-	}
-	- |> for pre condition (like input)
-	- |< for post condition (like output!)
-	- maybe a post condition built in expression for like "|< no IO output happened during this function"
-	- conceptually, |> evaluates itself, then evaluates child
-	- |< evaluates its child at the end of the chain, captures it and performs condition
+- redo string module in stdlib to be like that one Modern C video
+	- cool string formatting? may need comptime stuff and reflection :(
 - allocators and IO 'monads'
 	new::(T::Type)->?&T = 
 		if retval := calloc(sizeof T, 1):&T; (retval:Int) == 0 {
@@ -443,6 +585,13 @@ x Rework the compiler to be better [ast-union-type]
 	- variables are always "readers" of data
 	- mutable variables can be writers of data
 	- immutable variables cannot be writers of data
+	- f ::(x:Real)->Real = {y::Real = x; y} -- not possible, x isn't comptime known
+	  f`::(x:Real)->Real = {y:-Real = x; y} -- possible! y is runtime constant, ie always a reader and never a writer
+	- can enforce read-only through types!
+	  y:-Real = 0.4
+	  z:&-Real = &y
+	  g:-Real = *z -- maybe change deref token so its not confused with multiplication across newlines
+	  *z = 5.6 -- Cannot do! z is of type &-Real, *z is of type -Real, cannot reassign! Easy!
 - @attributes, then test suite
 	- define a type, can then congregate those symbols at compiletime in an array
 	- global namespace? or maybe a separate namespace from other identifiers
@@ -477,16 +626,15 @@ x Rework the compiler to be better [ast-union-type]
 	} else if node % 2 != 0 {
 		
 	}
-	INCREDIBLY USEFUL FOR DEFINING AN IDENT AS A DOT AND CHECKING FOR NOTHING!
-	since you we can't reason about dots, can only reason about ident symbols
-	can assign an ident to a dot, which then 
+- language server for visual studio code
 - quantifiers from Alloy- or maybe these would be better as interfaces?
 	- basically just iterators, use interface above
 	- should be expressions, generate as a function call
 	- for x : X  {}		# for each loop
 	- all x : X, P		# all x in X satisfy P
 	- some x : X, P		# one or more x in X satisfy P
-
+- LLVM
+- doc generation
 
 
 
@@ -496,21 +644,39 @@ x Rework the compiler to be better [ast-union-type]
 
 
 Maybe?
-- relational operator chainings ????
-	- wasn't possible before because of duplication of code. Now that can be inlined
-	- have to be transitive operators (== < <= > >=)
-		_0 = 0 -- init chain result as false
-		_1 = 0 -- init first child
+- Cool math syntax (i really like these and it should be done!)
+	- arglist-assign
+		Vec::Type = (x:Int, y:Int)
+		(x, y) = Vec_Create() -- Creates a Vec
+		x = 4
+		y = x + ys
+	- exponentiation (useful) instead of bitwise xor (not as useful)
+		- circleArea::(r:Real)->Real = 3.1415 * r ^ 2
+		- generates as pow() or powf() function
+		- bitwise xor should use ~ token
+	- adjacent multiplication
+		- circleArea::(r:Real)->Real = 3.1415 r^2
+		- factor::(x1:Real, x2:Real, x:Real)->Real = (x - x1)(x - x2)
+		- COUNTERPOINT:
+			x:()->Real = someFunctionPtr
+			(x)(4)(5) -- Horrible
+	- relational operator chaining
+		- 0 < x == y < 4
+		- exclusive with implicit eq above
+		- have to be transitive operators (== < <= > >=)
+			_0 = 0 -- init chain result as false
+			_1 = 0 -- init first child
 
-		_2 = x	-- basic pattern is init next child, comp with prev child
-		if !(_1 < _2) goto over_1 -- if any comparison is false, jump to false
+			_2 = x	-- basic pattern is init next child, comp with prev child
+			if !(_1 < _2) goto over_1 -- if any comparison is false, jump to false
 
-		_3 = 100 -- init next child
-		if !(_2 < 100) goto over_1
+			_3 = 100 -- init next child
+			if !(_2 < 100) goto over_1
 
-		_0 = 1	-- If we get here, result is true
-	over_1:; -- end of chain
-	- Syntax is weird to parse, need to loop over possible chains, but how to keep track of the symbols for each operator?
+			_0 = 1	-- If we get here, result is true
+		over_1:; -- end of chain
+		- Syntax is weird to parse, need to loop over possible chains, but how to keep track of the symbols for each operator?
+	- back tick	'`' as an identifier, similar to haskell '\'' for "prime" identifiers
 
 - implicit dereferencing, like how C++ uses references
 	- there is a sharp distinction between C++ references and pointers
@@ -524,3 +690,52 @@ Maybe?
 		- A pointer now can be marked as &:T, so that T is constant and cannot be changed by the callee
 		- however, this would require coercing T to :T, which is not possible
 		- maybe T <: :T, and &T = &:T ?? strange
+
+- structural type inference
+	- requires than '=', ')' and ',' are not in type alphabet, reasonable
+	- x:&               = giveMeAnAddress()    -- x is an address to ... something! Type is infered
+	- x::               = 5					   -- already supported! x is a compile time constant, type is infered
+	- x:-               = 4.3				   -- x is a runtime constant, type is infered (would be nice to have!!!!)
+	- x:[]              = [3, 4, 5]			   -- x is an array of any size, type is infered. Not as useful
+	- x:(a:Int, b:, c:) = (3, 4, 5)			   -- x is a struct with an int a field, and a b and c field that are type infered
+
+- Orange should be able to parse C header files
+	- would be cool if Orange was compatible with C both ways, especially if you were to switch to Orange in a C codebase
+	- finds types and functions, adds them as external with the name of the header file being the name of the module automatically and everything with externs happening automatically
+	- would be tricky with macros
+	
+- wildcards to be used for case pattern matching
+	Suit::Type = (|Hearts, Diamonds, Clubs, Spades)
+	Card::Type = (suit:Suit, value:Char)
+	myCard:Card = (Suit.Hearts, '3')
+	case myCard {
+		(Suit.Hearts, _)   -> 'H'
+		(Suit.Diamonds, _) -> 'D'
+		(Suit.Clubs, 4)    -> std.system.println("error state or something idk")
+		(Suit.Clubs, _)    -> 'C'
+		(Suit.Spades, _)   -> 'S'
+	}
+	-- Perhaps does the default value if ever generated, but if used for a comparison the comparison will be skipped/always result in true
+
+- refinement types, contracts, pre/post conditions
+	- why?
+		- comments are useless
+		- often times code will change and the comments will become wrong
+		- comments are not checked by compiler
+		- comments are rarely checked by programmer
+		- refinement types WILL be checked by compiler, and pre/post conditions WILL be checked by compiler
+		- comments should be kept, but only used to provide a convenient way to enumerate what to document
+	Evens::Type = {x : Int | x % 2 == 0} -- Would be checked for debug build, not checked for release build
+	- are an expression, need another expression after them
+	- can chain them and other expressions together
+	arcsin::(x:Real)->Real = 
+	|>	-1 <= x <= 1		-- this expression is evaluated, if its false program hard crashes
+	|<	y; sin(y) == x		-- post conditions capture the return value, then have the expression
+	{
+		-- do math here
+	}
+	- |> for pre condition (like input)
+	- |< for post condition (like output!)
+	- maybe a post condition built in expression for like "|< no IO output happened during this function"
+	- conceptually, |> evaluates itself, then evaluates child
+	- |< evaluates its child at the end of the chain, captures it and performs condition

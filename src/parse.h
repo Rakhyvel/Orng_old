@@ -1,6 +1,4 @@
-/*
-Parses out a queue of tokens into a symbol tree that represents the program
-*/
+// © 2021-2022 Joseph Shimel. All rights reserved.
 
 #ifndef PARSE_H
 #define PARSE_H

@@ -1,3 +1,5 @@
+// © 2021-2022 Joseph Shimel. All rights reserved.
+
 #ifndef SYMBOL_H
 #define SYMBOL_H
 
@@ -8,7 +10,7 @@ struct astNode;
 
 typedef enum symbolType {
     SYMBOL_PROGRAM,
-	SYMBOL_PACKAGE,
+    SYMBOL_PACKAGE,
     SYMBOL_MODULE,
     SYMBOL_FUNCTION,
     SYMBOL_TYPE, // typedef or struct def
@@ -28,17 +30,19 @@ typedef enum symbolType {
 typedef struct symbolNode {
     SymbolType symbolType;
     struct astNode* type;
+    struct astNode* originalType; // Is never expanded, used to print
     char name[255];
     char externName[255];
     char desc[255];
 
     struct astNode* def; // SymbolDefine ASTNode where this symbol is defined
-	
-	bool isDeclared;
+    struct IR* ir;
+
+    bool isError; // If the type of this symbol was constructed using the ! operator
+    bool isDeclared;
     bool isExtern;
     bool isRestricted;
     bool isVararg;
-    bool isReachable;
 
     // Parse tree
     struct symbolNode* parent;
@@ -46,11 +50,12 @@ typedef struct symbolNode {
     List* restrictionExpr; // list of symbol_expr
     List* restrictions; // list of symbol*
 
-	// Union sets
-    char* activeFieldName;
+    bool isVolatile;
+    List* versions; // Used to keep track of how many versions this symbol has, list of SymbolVersion*
 
-	// Defer/block
+    // Defer/block
     List* defers; // list of ast's, in order of declaration
+    List* errdefers; // list of ast's, in order of declaration for both defers and errdefers
     bool isLoop;
     int tempVars;
     int labels;

@@ -1,3 +1,5 @@
+// © 2021-2022 Joseph Shimel. All rights reserved.
+
 #ifndef TOKEN_H
 #define TOKEN_H
 
@@ -30,6 +32,8 @@ typedef enum {
     TOKEN_STAR_ASSIGN,
     TOKEN_SLASH_ASSIGN,
     TOKEN_PERCENT_ASSIGN,
+    TOKEN_DAMPERSAND_ASSIGN,
+    TOKEN_DBAR_ASSIGN,
     TOKEN_AMPERSAND_ASSIGN,
     TOKEN_BAR_ASSIGN,
     TOKEN_CARET_ASSIGN,
@@ -70,7 +74,7 @@ typedef enum {
     TOKEN_LSQUARE,
     TOKEN_RSQUARE,
     TOKEN_RESTRICT,
-	TOKEN_UNION,
+	TOKEN_ENUM,
     // Keywords
     TOKEN_IF,
     TOKEN_ELSE,
@@ -85,6 +89,10 @@ typedef enum {
     TOKEN_FREE,
 	TOKEN_SIZEOF,
 	TOKEN_ORELSE,
+	TOKEN_CATCH,
+	TOKEN_TRY,
+	TOKEN_ERRDEFER,
+	TOKEN_UNREACHABLE,
     // Types
     TOKEN_ARROW,
 	TOKEN_BIG_ARROW,
