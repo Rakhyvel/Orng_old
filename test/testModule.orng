@@ -1,12 +1,9 @@
 testModule::Module = (
-	someExtern?::Int
-
 	main::(args:[]String)->!() = {
-		std.system.getError()
-		if someExtern == 4 {
-			std.system.println("haha")
-		} else {
-			std.system.println("hahe")
+		myFile := std.system.open(args[0], "r")
+		case myFile {
+			std.system.Error.noSuchFileOrDirectory -> std.system.println("Cannot open '%s'", args[0])
 		}
+		{}
 	}
 )

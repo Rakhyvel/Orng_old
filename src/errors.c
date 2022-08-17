@@ -45,3 +45,17 @@ void restrictedOrUndefError(struct position pos1, struct position pos2, char* sy
         error(pos1, "symbol '%s' is undefined", symbolName);
     }
 }
+
+void expectedArray(struct position pos, struct astNode* actualType)
+{
+    char actualStr[255];
+    AST_TypeRepr(actualStr, actualType->originalType);
+    error(pos, "type mismatch: expected array type, got %s", actualStr);
+}
+
+void notMemberOfExpression(struct position pos, char* fieldName, struct astNode* paramlist)
+{
+    char actualStr[255];
+    AST_TypeRepr(actualStr, paramlist->originalType);
+    error(pos, "symbol '%s' is not a member of left-side expression, which is %s", fieldName, actualStr);
+}

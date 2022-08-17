@@ -853,15 +853,19 @@ int AST_TypeRepr(char* str, ASTNode* type)
         }
         break;
     case AST_ENUM:
-        str += sprintf(str, "(|");
-        for (struct listElem* elem = List_Begin(type->_enum.defines); elem != List_End(type->_enum.defines); elem = elem->next) {
+        str += sprintf(str, "<");
+        int i = 0;
+        for (struct listElem* elem = List_Begin(type->_enum.defines); elem != List_End(type->_enum.defines) && i < 5; elem = elem->next, i++) {
             ASTNode* param = elem->data;
             str += AST_TypeRepr(str, param);
             if (elem->next == List_End(type->_enum.defines)) {
-                str += sprintf(str, ")");
+                str += sprintf(str, ">");
             } else {
                 str += sprintf(str, ", ");
             }
+        }
+        if (i != type->_enum.defines->size) {
+            str += sprintf(str, "... >");
         }
         break;
     case AST_FUNCTION: {

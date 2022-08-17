@@ -13,4 +13,8 @@ void incompatibleTypesError(struct position pos, struct astNode* leftType, struc
 
 void restrictedOrUndefError(struct position pos1, struct position pos2, char* symbolName);
 
+void expectedArray(struct position pos, struct astNode* actualType);
+
+void notMemberOfExpression(struct position pos, char* fieldName, struct astNode* paramlist);
+
 #endif

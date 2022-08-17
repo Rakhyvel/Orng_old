@@ -417,13 +417,6 @@ x IR optimizations
 			x Checks indexes are within array bounds
 			x Checks that dots for enum literals have the correct tag
 - cleanup!
-	- replace for loops over lists with forall loops
-	- comments on everything
-		- Single line
-		- Assume reader fully understands entire program but what you're commenting
-	- fix enum and switch order to be consistent
-	- change references to "double" to "real"
-	- fix and consistify spelling of ASTs and IRs and Tokens and everything else
 	- write a markup to html program (in orange, add to github) and write tutorial/documentaiton
 		- hello world/comments
 		- declarations
@@ -431,12 +424,13 @@ x IR optimizations
 		- operations
 		- compile time constants
 		- blocks/if/for/case/return/break/continue/unreachable/defer
+			- compiletime collapse (add this lol)
 		- addresses, new/free
 		- structs
 			- default params
 			- named vs position struct literals
 			- methods
-		- arrays/comptime collapse(?)
+		- arrays
 		- slices
 		- strings
 			- comptime string concat
@@ -463,6 +457,14 @@ x IR optimizations
 		- external symbol tag/interop with C
 		- restriction symbol tag
 		- packages and modules
+	- fix symbol versioning for dots, indices, with a check if the symbol is temp symbol. If so, copy, else, new unversioned symbol
+	- replace for loops over lists with forall loops
+	- comments on everything
+		- Single line
+		- Assume reader fully understands entire program but what you're commenting
+	- fix enum and switch order to be consistent
+	- change references to "double" to "real"
+	- fix and consistify spelling of ASTs and IRs and Tokens and everything else
 	- reorder functions to be in prefix order, fix header order
 	- variable name semantics
 		- 'type' for AST nodes that are types
@@ -486,6 +488,11 @@ x IR optimizations
 	- remove words 'a', 'the', 'is/are' from error messages
 	- fix semantics in parsing functions (instead of prefix/term/factor etc just use child)
 	- remove 'symbol' field from block ast, should use scope field from common ast struct (right?)
+- struct method scope should be rebased to struct scope
+	(
+		x:Int
+		someMethod::(x:Int)->Char = 'd' -- parameter x should not refer/shadow field x, but does currently in implementation
+	)
 - Orange should compile the program for you, too
 	- No verbatims, instead write the C file and header, include it, and add it to be included when compiling
 - 'default' keyword which takes in a type and gives its default value
@@ -512,6 +519,8 @@ x IR optimizations
 		-- do something
 	}
 - change case arrow to fat arrow
+- change slice syntax to use double dot instead of semi-colon
+- cases need else mappings to be able to return values!
 - cases should be able to operate on any types that have == and != defined
 	Col::Type = <A, B, C, D, E, F, G, H>
 	ChessSquare::Type = (col:Col, row:Int)
@@ -548,12 +557,20 @@ x IR optimizations
 	}
 - for's with else clause, evaluates to type
 - if's and for's with no else case evaluate to a maybe type
+- `if let` from zig or odin or whatever
+	// Wrap if in a separate scope
+	if node := isASTStateful(symbol->def); node != NULL && symbol.symbolType == SYMBOL_FUNCTION {
+		
+	} else if node % 2 != 0 {
+		
+	}
 - parametric types
 	- you would need a function that 'returns' a type
 		- use a token to 'switch' from expr syntax to type syntax, to return a type expression
-	- if a function takes in all compile-time constant arguments and returns something compile-time constant, run at compile-time
+	- if a function has a comptime codomain, run at compile-time
+		- validate that ALL domain parameters MUST be comptime (cant return a comptime known value if it requires runtime parameters)
 		- create a 'stack frame' with symbols, and a strip of memory for data, use offsets for this
-		- should there be a way to force comptime evaluation, like in zig? comptime keyword?
+	- 
 	- rewrite util data structures to be parametric
 	- typeof operator which gets the compiletime type of an expression
 	- subtype operator which does compile time type checking
@@ -572,8 +589,13 @@ x IR optimizations
 	- should be able to define NEW data types that OLD functions work with
 	- should be able to define NEW functions that apply to OLD data types
 - redo string module in stdlib to be like that one Modern C video
-	- cool string formatting? may need comptime stuff and reflection :(
-- allocators and IO 'monads'
+	- add methods for equals, begins with, substring, etc
+- string interpolation
+	numApples:Int = 4
+	tax:Int = 2 -- 2 apples of tax
+	msg:String = "You have ${numApples - tax} apples"
+	print(msg)
+- allocators and IO monads
 	new::(T::Type)->?&T = 
 		if retval := calloc(sizeof T, 1):&T; (retval:Int) == 0 {
 			nothing
@@ -619,20 +641,7 @@ x IR optimizations
 				}
 			}
 		}
-- `if let` from zig or odin or whatever
-	// Wrap if in a separate scope
-	if node := isASTStateful(symbol->def); node != NULL && symbol.symbolType == SYMBOL_FUNCTION {
-		
-	} else if node % 2 != 0 {
-		
-	}
 - language server for visual studio code
-- quantifiers from Alloy- or maybe these would be better as interfaces?
-	- basically just iterators, use interface above
-	- should be expressions, generate as a function call
-	- for x : X  {}		# for each loop
-	- all x : X, P		# all x in X satisfy P
-	- some x : X, P		# one or more x in X satisfy P
 - LLVM
 - doc generation
 
@@ -739,3 +748,10 @@ Maybe?
 	- maybe a post condition built in expression for like "|< no IO output happened during this function"
 	- conceptually, |> evaluates itself, then evaluates child
 	- |< evaluates its child at the end of the chain, captures it and performs condition
+
+- quantifiers from Alloy- or maybe these would be better as interfaces?
+	- basically just iterators, use interface above
+	- should be expressions, generate as a function call
+	- for x : X  {}		# for each loop
+	- all x : X, P		# all x in X satisfy P
+	- some x : X, P		# one or more x in X satisfy P

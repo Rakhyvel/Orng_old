@@ -902,7 +902,7 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
         break;
     }
     case IR_CLEAR_STACK_TRACE: {
-        fprintf(out, "\errorTrace.length = 0;\n");
+        fprintf(out, "\terrorTrace.length = 0;\n");
         break;
     }
     case IR_ERROR: {
@@ -1042,7 +1042,12 @@ void generateFunctionDefinitions(FILE* out, CFG* callGraphNode)
         BasicBlock* bb = elem->data;
         for (IR* ir = bb->entry; ir != NULL; ir = ir->next) {
             SymbolVersion* symbver = ir->dest;
-            if (!symbver || !symbver->used || symbver->symbol->visited || symbver->type->astType == AST_VOID) { // Removed a check for symbver.symbol.visited, was that needed? why?
+            if (!symbver // Symbvers cant be null
+				|| !symbver->used // Symbols must be used of course
+				//|| symbver->symbol->visited // Uncommenting this prevents symbols in methods from being generated properly
+				|| symbver->type->astType == AST_VOID // Not allowed in C, sometimes allowable in Orng
+				|| symbver->def != ir // Prevents Phi noded symbols from having every def of them declared more than once
+				) { 
                 continue;
             }
             printVarDef(out, symbver);
@@ -1094,7 +1099,7 @@ void generateMainFunction(FILE* out, CFG* callGraph)
 
     fprintf(out, "\t\targs.data[i] = (");
     printType(out, STRING_TYPE);
-    fprintf(out, "){length, calloc(sizeof(char) * length, 1)};\n");
+    fprintf(out, "){length, calloc(sizeof(char) * (length + 1), 1)};\n");
 
     fprintf(out, "\t\tmemcpy(args.data[i].data, argv[i], length);\n");
 
@@ -1126,7 +1131,7 @@ void Generator_Generate(FILE* out, Program _program)
     srand(time(0));
     int randID = rand();
     fprintf(out, "/* Code generated using the Orng compiler http://josephs-projects.com */\n");
-    fprintf(out, "\n#ifndef ORNG_%s\n#define ORNG_%s\n\n", myItoa(randID), myItoa(randID));
+    fprintf(out, "\n#ifndef ORNG_%s\n#define ORNG_%s\n#define _CRT_SECURE_NO_WARNINGS\n\n", myItoa(randID), myItoa(randID));
     generateIncludes(out, program.includes);
     generateDebug(out);
     generateStructDefinitions(out, program.structDependencyGraph);
