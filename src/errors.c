@@ -57,5 +57,5 @@ void notMemberOfExpression(struct position pos, char* fieldName, struct astNode*
 {
     char actualStr[255];
     AST_TypeRepr(actualStr, paramlist->originalType);
-    error(pos, "symbol '%s' is not a member of left-side expression, which is %s", fieldName, actualStr);
+    error(pos, "symbol '%s' is not a member of left-side expression, which is of type %s", fieldName, actualStr);
 }

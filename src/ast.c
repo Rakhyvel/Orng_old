@@ -34,7 +34,7 @@ const ASTNode* NOTHING_AST = NULL;
 bool doDefTypes = false;
 
 // Generates common array type AST Nodes. `length` should be -1 if undefined
-ASTNode* createArrayTypeNode(ASTNode* baseType, int length)
+ASTNode* createArrayTypeNode(ASTNode* baseType, int length, struct position pos)
 {
     ASTNode* array = AST_Create_array(NULL, (Position) { NULL, 0, 0, 0 });
 
@@ -43,9 +43,9 @@ ASTNode* createArrayTypeNode(ASTNode* baseType, int length)
     ASTNode* lengthType = AST_Create_ident("Int", NULL, (Position) { NULL, 0, 0, 0 });
     ASTNode* lengthCode;
     if (length != -1) {
-        lengthCode = AST_Create_int(length, NULL, (Position) { NULL, 0, 0, 0 });
+        lengthCode = AST_Create_int(length, NULL, pos);
     } else {
-        lengthCode = AST_Create_undef(NULL, (Position) { NULL, 0, 0, 0 });
+        lengthCode = AST_Create_undef(NULL, pos);
     }
     lengthSymbol->def = lengthCode;
     lengthSymbol->type = lengthType;
@@ -91,9 +91,9 @@ void AST_Init()
     INT64_TYPE = AST_Create_ident("Int64", NULL, (Position) { NULL, 0, 0, 0 });
     CONST_CHAR_TYPE = AST_Create_ident("Char", NULL, (Position) { NULL, 0, 0, 0 });
     CHAR_TYPE = AST_Create_ident("Char", NULL, (Position) { NULL, 0, 0, 0 });
-    CONST_STRING_TYPE = createArrayTypeNode(CHAR_TYPE, -1, true);
-    STRING_TYPE = createArrayTypeNode(CHAR_TYPE, -1, false);
-    STRING_ARR_TYPE = createArrayTypeNode(STRING_TYPE, -1, true);
+    CONST_STRING_TYPE = createArrayTypeNode(CHAR_TYPE, -1, invalid_pos);
+    STRING_TYPE = createArrayTypeNode(CHAR_TYPE, -1, invalid_pos);
+    STRING_ARR_TYPE = createArrayTypeNode(STRING_TYPE, -1, invalid_pos);
     REAL32_TYPE = AST_Create_ident("Real32", NULL, (Position) { NULL, 0, 0, 0 });
     REAL64_TYPE = AST_Create_ident("Real64", NULL, (Position) { NULL, 0, 0, 0 });
     CONST_BOOL_TYPE = AST_Create_ident("Bool", NULL, (Position) { NULL, 0, 0, 0 });

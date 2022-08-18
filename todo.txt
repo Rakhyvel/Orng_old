@@ -364,8 +364,8 @@ x IR optimizations
 	x orelse, field cases (possibly for optimizations, too!)
 		x ? operator should require a maybe type
 		x change syntax so that only one field mapping can have one codomain thingy
-- Go back to adding errors and union type unions
-	- runtime errors
+x Go back to adding errors and union type unions
+	x runtime errors
 		x || type operator that operates on any union sets
 			x combines left and right union sets
 			x ok for names to collide, so long as their types are EQUAL (not just subtype)
@@ -457,12 +457,12 @@ x IR optimizations
 		- external symbol tag/interop with C
 		- restriction symbol tag
 		- packages and modules
-	- fix symbol versioning for dots, indices, with a check if the symbol is temp symbol. If so, copy, else, new unversioned symbol
+	x fix symbol versioning for dots, indices, with a check if the symbol is temp symbol. If so, copy, else, new unversioned symbol
 	- replace for loops over lists with forall loops
 	- comments on everything
 		- Single line
 		- Assume reader fully understands entire program but what you're commenting
-	- fix enum and switch order to be consistent
+	- fix enum and switch order to be consistent for tokens, asts, ir, symbols etc
 	- change references to "double" to "real"
 	- fix and consistify spelling of ASTs and IRs and Tokens and everything else
 	- reorder functions to be in prefix order, fix header order
@@ -479,7 +479,7 @@ x IR optimizations
 	- move myItoa to a util file
 	- create predicate functions for identical conditions of multiple if statements (like "does this IR type use list data?")
 		- is this type a void error enum type
-	x change old references from "union set" type to "enum" (unions are an operation on enum types)
+	- change old references from "enum" to sum type, "paramlist/struct/arglist" to product type
 	- free memory
 	- rework to be in "c++"
 		- use std::vector and std::map instead of my list and map
@@ -488,6 +488,9 @@ x IR optimizations
 	- remove words 'a', 'the', 'is/are' from error messages
 	- fix semantics in parsing functions (instead of prefix/term/factor etc just use child)
 	- remove 'symbol' field from block ast, should use scope field from common ast struct (right?)
+- subexpression elimination
+- 'register' allocation
+	- For each distinct type, have a list of registers, allocate symbol versions to use them to cut down on the amount of symbol versions emitted
 - struct method scope should be rebased to struct scope
 	(
 		x:Int

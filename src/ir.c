@@ -475,30 +475,54 @@ SymbolVersion* defaultValue(CFG* cfg, ASTNode* type)
         ASTNode* lengthCode = lengthSymbol->def;
         ASTNode* dataDefine = List_Get(type->paramlist.defines, 1);
         SymbolNode* dataSymbol = dataDefine->define.symbol;
-        ASTNode* dataType = dataSymbol->type->unop.expr;
+        ASTNode* dataAddrType = dataSymbol->type;
+        ASTNode* dataType = dataAddrType->unop.expr;
 
         SymbolVersion* temp = tempSymbolVersion(cfg, type);
-
-        IR* ir = createIR(IR_LOAD_ARRAY_LITERAL, temp, NULL, NULL, type->pos);
-        temp->def = ir;
-        ir->listData = List_Create();
+        IR* ir = NULL;
         if (dataType->astType == AST_ARRAY) {
             if (lengthCode->astType == AST_INT) {
+                ir = createIR(IR_LOAD_ARRAY_LITERAL, temp, NULL, NULL, type->pos);
+                temp->def = ir;
+                ir->listData = List_Create();
                 for (int i = 0; i < lengthCode->_int.data; i++) {
                     SymbolVersion* member = defaultValue(cfg, dataType);
                     List_Append(ir->listData, member);
                 }
             } else {
-                error(type->originalType->pos, "array length is not constant");
+                ir = createIR(IR_LOAD_ARGLIST, temp, NULL, NULL, type->pos);
+                temp->def = ir;
+                ir->listData = List_Create();
+
+                SymbolVersion* lengthSymbver = tempSymbolVersion(cfg, INT64_TYPE);
+                IR* lengthIR = createIR_int(IR_LOAD_INT, lengthSymbver, NULL, NULL, 0, type->pos);
+                lengthSymbver->def = lengthIR;
+                appendInstruction(cfg, lengthIR);
+
+                List_Append(ir->listData, lengthSymbver);
+                List_Append(ir->listData, defaultValue(cfg, dataAddrType));
             }
         } else {
-            SymbolVersion* member = defaultValue(cfg, dataType);
             if (lengthCode->astType == AST_INT) {
+                ir = createIR(IR_LOAD_ARRAY_LITERAL, temp, NULL, NULL, type->pos);
+                temp->def = ir;
+                ir->listData = List_Create();
+                SymbolVersion* member = defaultValue(cfg, dataType);
                 for (int i = 0; i < lengthCode->_int.data; i++) {
                     List_Append(ir->listData, member);
                 }
             } else {
-                error(type->originalType->pos, "array length is not constant");
+                ir = createIR(IR_LOAD_ARGLIST, temp, NULL, NULL, type->pos);
+                temp->def = ir;
+                ir->listData = List_Create();
+
+                SymbolVersion* lengthSymbver = tempSymbolVersion(cfg, INT64_TYPE);
+                IR* lengthIR = createIR_int(IR_LOAD_INT, lengthSymbver, NULL, NULL, 0, type->pos);
+                lengthSymbver->def = lengthIR;
+                appendInstruction(cfg, lengthIR);
+
+                List_Append(ir->listData, lengthSymbver);
+                List_Append(ir->listData, defaultValue(cfg, dataAddrType));
             }
         }
         appendInstruction(cfg, ir);
@@ -1364,7 +1388,7 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
                 IR* fieldError = createIR(IR_ERROR, NULL, NULL, NULL, node->pos);
                 char* fieldStr = calloc(255, sizeof(char));
                 sprintf(fieldStr, "field '%s' not active", node->dot.right->ident.data);
-				fieldError->strData = fieldStr;
+                fieldError->strData = fieldStr;
                 appendInstruction(cfg, fieldError);
                 appendInstruction(cfg, endLabel);
             }
@@ -1895,20 +1919,24 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
             // List of array type length symbol versions flattened from array type
             List* lengthCodeSymbvers = List_Create();
             ASTNode* arrType = node->binop.left;
-            while (arrType->astType == AST_ARRAY && ((ASTNode*)List_Get(arrType->paramlist.defines, 0))->define.symbol->def->astType != AST_UNDEF) {
+            while (arrType->astType == AST_ARRAY) {
                 SymbolVersion* lengthCodeSymbver = flattenAST(cfg, getArrayLengthAST(arrType), NULL, NULL, NULL, NULL, false);
                 if (lengthCodeSymbver) { // If getArrayLengthAST(arrType) is undef, this is NULL, ruins things when iterating over the ir's listData
                     List_Append(lengthCodeSymbvers, lengthCodeSymbver);
                 }
+                if (getArrayDataType(arrType)->astType == AST_ARRAY && getArrayLengthAST(getArrayDataType(arrType))->astType == AST_UNDEF) {
+                    break;
+                }
                 arrType = getArrayDataType(arrType);
             }
-            ASTNode* one = List_Get(node->type->paramlist.defines, 0);
-            ASTNode* two = List_Get(node->type->paramlist.defines, 1);
 
             IR* ir = NULL;
             if (node->binop.right->astType != AST_UNDEF) {
                 init = flattenAST(cfg, node->binop.right, NULL, NULL, NULL, NULL, false);
                 ir = createIR(IR_NEW_ARR, addr, NULL, init, node->pos);
+            } else if (arrType->astType == AST_ARRAY) {
+                init = defaultValue(cfg, getArrayDataType(arrType));
+                ir = createIR(IR_NEW_ARR, addr, init, NULL, node->pos);
             } else {
                 init = defaultValue(cfg, arrType);
                 ir = createIR(IR_NEW_ARR, addr, init, NULL, node->pos);
