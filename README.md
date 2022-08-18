@@ -1,78 +1,27 @@
-# Orange
-Orange is a simple, modular general-purpose programming language for hobby programmers.
+# Orng
+Orng is a simple, modular general-purpose programming language for hobby programmers. Hobbyist programmers continuously modify their projects as living-breathing documents. Orng has many constructs that are more aligned with this type of programming. Those include:
 
-## Emphasis on code re-use
-Waste less time configuring libraries and more time working on the projects you love.
-- No messing with complicated build configurations each time you start a new project
-- Package manifests use the same syntax as the rest of the language
+## Module and Package System
+Orng features a package and module system which makes it easy to re-use and organize code.
 
-## Simple language
-Things look like what they do, and do what they look like.
-- No ambiguity!
-- No hidden control flow
-- No hidden allocation/deallocations
+Modules and packages are first class in Orng, meaning they can be assigned to variables and passed around to functions. This is how imports are done.
+```
+myModule::Module = (
+    sys::Module = std.system -- import `system` module from `std` package as `sys`
 
-## Low friction
-As hobbyist programmers, our projects are living, breathing documents that change over time. Orange's syntax allows you to go from ...
+    main::(args:[]String)->!() = sys.println("Hello, World!")
+)
 ```
-myFunction::()->() = {
-    someVar := 4
-    someVar2 := '5'
-    someVar3 := false
 
-    {
-        // A block of code
-    }
-}
-```
-```
-myFunction::()->() = {
-    someVar := 4
-    someVar2 := '5'
-    someVar3 := false
+Packages in Orng are simply folders/directories with a `.pkg.orng` manifest file, and `.orng` source code files. This removes the need for a complex package manager. Package management can be done with pre-existing utilities like Git. This also allows for source-code libraries, which are more inline with a hobbyist style of programming.
 
-    -[someVar, someVar2]
-    {
-        // To a restricted block of code
-    }
-}
-```
-```
-myFunction::()->() = {
-    someVar := 4
-    someVar2 := '5'
-    someVar3 := false
+## Elegant Arithmetic Type System
 
-    myOtherFunction := (someVar, someVar2)->{
-        // To a lambda
-    }
-}
-```
-```
-myFunction::()->() = {
-    someVar := 4
-    someVar2 := '5'
-    someVar3 := false
+## Strong Compile-time Evaluation
+Orng features a strong 
 
-    myOtherFunction::(someVar:Int, someVar2:Char)->() = {
-        // To an inner function
-    }
-}
-```
-```
-myFunction::()->() = {
-    someVar := 4
-    someVar2 := '5'
-    someVar3 := false
-}
+## Perfect Interoperability With C/C++ ABI
 
-myOtherFunction::(someVar:Int, someVar2:Char)->() = {
-    // To an outer function
-}
-```
-All with minimal code changes.
+## What's Not In Orng
 
-## Planned features
-- Union types
-- Compile time evaluation
-- First-class-type based generics
+## Planned Features
