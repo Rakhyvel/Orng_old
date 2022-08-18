@@ -17,8 +17,9 @@ testFn::()->() = {
     -- A 'typedef' in Orng:
     Vector::Type = (x:Real, y:Real)
 
-    myPosition  :Vector           = (3, 4)
-    yourPosition:(x:Real, y:Real) = myPosition -- This is allowed because both variables have the same structure!
+    myPosition:Vector = (3, 4)
+    -- This is allowed!
+    yourPosition:(x:Real, y:Real) = myPosition 
 }
 ```
 Orng has sum types in the form of tagged unions. These act like both classic enums and unions in one type.
@@ -41,8 +42,8 @@ x:?Int = 3
 -- x is equivalent to:
 x:<something:Int, nothing> = 3
 ```
-### Error unions
-Errors capture the idea that a function can either return a successful value, or an error. Errors are sum data types, with extra semantics.
+### Error Returns
+Errors capture the idea that a function can either return a successful value, or an error.
 ```
 -- Some possible errors a function may return
 MyError::Type = <arithmeticError, typeError, computerOnFireError>
