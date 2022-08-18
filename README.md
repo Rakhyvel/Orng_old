@@ -14,7 +14,7 @@ myModule::Module = (
 )
 ```
 
-Packages in Orng are simply folders/directories with a `.pkg.orng` manifest file, and `.orng` source code files. Package management can be done with pre-existing utilities like Git. This also allows for source-code libraries, which are more in line with a hobbyist style of programming.
+Packages in Orng are simply folders/directories with a `.pkg.orng` manifest file, and `.orng` source code files. Package description is done using Orng itself, so there's no need to learn another complicated package management utility.
 
 ## Elegant Arithmetic Type System
 Unlike most languages, Orng has structural type equivalence, which means two types are equivalent if they have the same structure. This is contrary to languages like C, where types are equivalent if they have the same name. Types are also first class in Orng, meaning you can assign and pass them as values.
@@ -39,12 +39,31 @@ PlayingCard::Type = <
     courtCard:(letter:Char, suit:CardSuit)
 >
 ```
+### Maybe Types
+Tony Hoare called the null reference his 'billion dollar mistake'. There is no concept of a null reference in Orng. Instead, Orng uses a monadic Maybe Type, like in Zig, Haskell, or Rust. This allows for existence semantics to be statically checked, which increases security and readibility.
+```
+-- Either an Int, or nothing
+x:?Int = 3
+-- x is equivalent to:
+x:<something:Int, nothing> = 3
+```
+### Error unions
+Errors capture the idea that a function can either return a successful value, or an error. Errors are sum data types, with extra semantics.
+```
+-- Some possible errors a function may return
+MyError::Type = <arithmeticError, typeError, computerOnFireError>
 
-## Strong Compile-time Evaluation
-Orng features a strong 
+-- This function returns either a MyError sum type as an error, or an Int
+myFunc::()->FileError!Int = 4
+
+-- myFunc is equivalent to this function:
+myFunc::()-><success:Int, arithmeticError, typeError, computerOnFireError> = 4
+```
 
 ## Perfect Interoperability With C/C++ ABI
-
-## What's Not In Orng
+Orng compiles to C, and allows for C functions to be called from Orng code, offering perfect bidirectional interoperability with C. You can use pre-exisiting C libraries, or drop in Orng into your pre-exisiting C project.
 
 ## Planned Features
+- [ ] test
+- [-] test 2
+- [x] test 3
