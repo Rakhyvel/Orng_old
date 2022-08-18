@@ -11,14 +11,14 @@ Modules and packages are first class in Orng, meaning they can be assigned to va
 Packages in Orng are simply folders/directories with a `.pkg.orng` manifest file, and `.orng` source code files. Package description is done using Orng itself, so there's no need to learn another complicated package management utility.
 
 ## Elegant Arithmetic Type System
-Unlike most languages, Orng has structural type equivalence, which means two types are equivalent if they have the same structure. This is contrary to languages like C, where types are equivalent if they have the same name. Types are also first class in Orng, meaning you can assign and pass them as values.
+Unlike most languages, Orng has structural type equivalence, which means two types are equivalent if they have the same structure. Types are also first class in Orng, meaning you can assign and pass them as values.
 ```
 testFn::()->() = {
     -- A 'typedef' in Orng:
     Vector::Type = (x:Real, y:Real)
 
-    myPosition:Vector = (3, 4)
-    yourPosition:(x:Real, y:Real) = myPosition -- This is allowed! Same types because same structure
+    myPosition  :Vector           = (3, 4)
+    yourPosition:(x:Real, y:Real) = myPosition -- This is allowed because both variables have the same structure!
 }
 ```
 Orng has sum types in the form of tagged unions. These act like both classic enums and unions in one type.
