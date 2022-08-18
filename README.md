@@ -64,6 +64,23 @@ myFunc::()-><success:Int, arithmeticError, typeError, computerOnFireError> = 4
 Orng compiles to C, and allows for C functions to be called from Orng code, offering perfect bidirectional interoperability with C. You can use pre-exisiting C libraries, or drop in Orng into your pre-exisiting C project.
 
 ## Planned Features
-- [ ] test
-- [-] test 2
-- [x] test 3
+- [x] Default parameters, named arguments
+- [x] Sum data types
+- [x] Inner functions, methods for product and sum data type
+- [x] Support for `maybe` monadic sum data types
+- [x] Support for `error` monadic sum data types
+- [ ] Parametric types
+- [ ] Interfaces/typeclasses/traits
+- [ ] String interpolation
+- [ ] Runtime constancy (immutability)
+- [ ] Attributes
+- [ ] Test suite
+- [ ] Visual Studio language server
+- [ ] LLVM code generation
+
+### Maybe?
+- [ ] Pattern matching
+- [ ] Exponentiation
+- [ ] Relational operator chaining
+- [ ] Refinement types
+- [ ] Quantifiers `some`, `all`, `none` for iterators
