@@ -6,15 +6,7 @@ Orng is a simple, modular general-purpose programming language for hobby program
 ## Module and Package System
 Orng features a package and module system which makes it easy to re-use and organize code.
 
-Modules and packages are first class in Orng, meaning they can be assigned to variables and passed around to functions. This is how imports are done.
-```
-myModule::Module = ( 
-    -- import `system` module from `std` package as `sys`
-    sys::Module = std.system
-
-    main::(args:[]String)->!() = sys.println("Hello, World!")
-)
-```
+Modules and packages are first class in Orng, meaning they can be assigned to variables and passed around to functions. This is how imports are done in Orng.
 
 Packages in Orng are simply folders/directories with a `.pkg.orng` manifest file, and `.orng` source code files. Package description is done using Orng itself, so there's no need to learn another complicated package management utility.
 
