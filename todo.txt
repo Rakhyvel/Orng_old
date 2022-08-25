@@ -457,6 +457,7 @@ x Go back to adding errors and union type unions
 		- external symbol tag/interop with C
 		- restriction symbol tag
 		- packages and modules
+	- replace bit xor symbol with ~, add exponent ^
 	x fix symbol versioning for dots, indices, with a check if the symbol is temp symbol. If so, copy, else, new unversioned symbol
 	- replace for loops over lists with forall loops
 	- comments on everything
@@ -523,6 +524,12 @@ x Go back to adding errors and union type unions
 	}
 - change case arrow to fat arrow
 - change slice syntax to use double dot instead of semi-colon
+- add assign expression <-, make = assign a statement
+	- To holisitically fix this long standing issue of assignment
+	- Maybe it's actually a type operator that overrides the default value of a type
+	- x := 4 <- 5 -- x will equal 5
+	- x := new Int <- 5 -- address of x will equal 5
+	- x := Node.header <- (.size=4, .text="Hello, World!")
 - cases need else mappings to be able to return values!
 - cases should be able to operate on any types that have == and != defined
 	Col::Type = <A, B, C, D, E, F, G, H>
