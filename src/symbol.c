@@ -72,7 +72,7 @@ void Symbol_Print(SymbolNode* root, wchar_t* prefix, wchar_t* childrenPrefix)
     List* children = root->children->keyList;
     char newPrefix[255];
     char newChildrenPrefix[255];
-    for (ListElem* elem = List_Begin(children); elem != List_End(children); elem = elem->next) {
+    forall (elem, children) {
         bool hasNext = elem->next != List_End(children);
         if (hasNext) {
             strncpy_s(newPrefix, 254, childrenPrefix, 254);

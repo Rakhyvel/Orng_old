@@ -20,10 +20,9 @@ static void generateEnum(FILE* out, DGraph* graphNode);
 static void generateIncludes(FILE* out, Map* includes)
 {
     fprintf(out, "/* Includes */\n");
-    List* keys = includes->keyList;
-    ListElem* e = List_Begin(keys);
-    for (; e != List_End(keys); e = e->next) {
-        char* include = e->data;
+    forall(elem, includes->keyList)
+    {
+        char* include = elem->data;
         if (include[0] == '<') {
             fprintf(out, "#include %s\n", include);
         } else {
@@ -185,13 +184,13 @@ static void printPath(FILE* out, SymbolNode* symbol)
 
 static void generateParamList(FILE* out, ASTNode* parameters)
 {
-    ListElem* paramElem = List_Begin(parameters->paramlist.defines);
     // For each parameter in the procedure's parameter list, print it out
-    for (; paramElem != List_End(parameters->paramlist.defines); paramElem = paramElem->next) {
-        ASTNode* define = paramElem->data;
+    forall(elem, parameters->paramlist.defines)
+    {
+        ASTNode* define = elem->data;
         SymbolNode* var = define->define.symbol;
         generateDefine(out, var, true, false);
-        if (paramElem != List_End(parameters->paramlist.defines)->prev) {
+        if (elem != List_End(parameters->paramlist.defines)->prev) {
             fprintf(out, ", ");
         }
     }
@@ -233,8 +232,8 @@ static void generateStruct(FILE* out, DGraph* graphNode)
     }
 
     // Print out all dependencies
-    ListElem* elem = List_Begin(graphNode->dependencies);
-    for (; elem != List_End(graphNode->dependencies); elem = elem->next) {
+    forall(elem, graphNode->dependencies)
+    {
         DGraph* child = elem->data;
         if (child->structDef->astType == AST_ENUM) {
             generateEnum(out, child);
@@ -246,10 +245,10 @@ static void generateStruct(FILE* out, DGraph* graphNode)
     ASTNode* _struct = graphNode->structDef;
     fprintf(out, "struct struct_%d {\n", graphNode->ordinal + 1);
 
-    ListElem* paramElem = List_Begin(_struct->paramlist.defines);
     // For each parameter in the procedure's parameter list, print it out
-    for (; paramElem != List_End(_struct->paramlist.defines); paramElem = paramElem->next) {
-        ASTNode* define = paramElem->data;
+    forall(elem, _struct->paramlist.defines)
+    {
+        ASTNode* define = elem->data;
         SymbolNode* var = define->define.symbol;
         if (!(var->symbolType == SYMBOL_FUNCTION && var->type->isConst)) {
             fprintf(out, "\t");
@@ -269,8 +268,8 @@ static void generateEnum(FILE* out, DGraph* graphNode)
     }
 
     // Print out all dependencies
-    ListElem* elem = List_Begin(graphNode->dependencies);
-    for (; elem != List_End(graphNode->dependencies); elem = elem->next) {
+    forall(elem, graphNode->dependencies)
+    {
         DGraph* child = elem->data;
         if (child->structDef->astType == AST_ENUM) {
             generateEnum(out, child);
@@ -283,9 +282,9 @@ static void generateEnum(FILE* out, DGraph* graphNode)
     fprintf(out, "struct struct_%d {\n\tint64_t tag;\n", graphNode->ordinal + 1);
 
     int numOfNonVoidMembers = 0;
-    ListElem* paramElem = List_Begin(_enum->_enum.defines);
-    for (; paramElem != List_End(_enum->_enum.defines); paramElem = paramElem->next) {
-        ASTNode* define = paramElem->data;
+    forall(elem, _enum->_enum.defines)
+    {
+        ASTNode* define = elem->data;
         SymbolNode* var = define->define.symbol;
         if (var->type->astType != AST_VOID) {
             numOfNonVoidMembers = 1;
@@ -296,10 +295,10 @@ static void generateEnum(FILE* out, DGraph* graphNode)
     if (numOfNonVoidMembers > 0) {
         fprintf(out, "\tunion {\n");
 
-        paramElem = List_Begin(_enum->_enum.defines);
         // For each parameter in the procedure's parameter list, print it out
-        for (; paramElem != List_End(_enum->_enum.defines); paramElem = paramElem->next) {
-            ASTNode* define = paramElem->data;
+        forall(elem, _enum->_enum.defines)
+        {
+            ASTNode* define = elem->data;
             SymbolNode* var = define->define.symbol;
             if (!(var->symbolType == SYMBOL_FUNCTION && var->type->isConst) && var->type->astType != AST_VOID) {
                 fprintf(out, "\t\t");
@@ -315,8 +314,8 @@ static void generateEnum(FILE* out, DGraph* graphNode)
 static void generateStructDefinitions(FILE* out, List* depenGraph)
 {
     fprintf(out, "/* Struct definitions */\n");
-    ListElem* elem = List_Begin(depenGraph);
-    for (; elem != List_End(depenGraph); elem = elem->next) {
+    forall(elem, depenGraph)
+    {
         DGraph* graphNode = elem->data;
         if (graphNode->structDef->astType == AST_ENUM) {
             generateEnum(out, graphNode);
@@ -329,8 +328,8 @@ static void generateStructDefinitions(FILE* out, List* depenGraph)
 void generateVerbatims(FILE* out, List* verbatims)
 {
     fprintf(out, "/* Verbatim code */\n");
-    ListElem* elem = List_Begin(verbatims);
-    for (; elem != List_End(verbatims); elem = elem->next) {
+    forall(elem, verbatims)
+    {
         fprintf(out, (char*)elem->data);
         fprintf(out, "\n");
     }
@@ -736,6 +735,15 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
         fprintf(out, ";\n");
         break;
     }
+    case IR_EXPONENT: {
+        printVarAssign(out, ir->dest);
+        fprintf(out, "powf(");
+        printVar(out, ir->src1);
+        fprintf(out, ", ");
+        printVar(out, ir->src2);
+        fprintf(out, ");\n");
+        break;
+    }
     case IR_NOT: {
         printVarAssign(out, ir->dest);
         fprintf(out, "!");
@@ -1043,11 +1051,11 @@ void generateFunctionDefinitions(FILE* out, CFG* callGraphNode)
         for (IR* ir = bb->entry; ir != NULL; ir = ir->next) {
             SymbolVersion* symbver = ir->dest;
             if (!symbver // Symbvers cant be null
-				|| !symbver->used // Symbols must be used of course
-				//|| symbver->symbol->visited // Uncommenting this prevents symbols in methods from being generated properly
-				|| symbver->type->astType == AST_VOID // Not allowed in C, sometimes allowable in Orng
-				|| symbver->def != ir // Prevents Phi noded symbols from having every def of them declared more than once
-				) { 
+                || !symbver->used // Symbols must be used of course
+                //|| symbver->symbol->visited // Uncommenting this prevents symbols in methods from being generated properly
+                || symbver->type->astType == AST_VOID // Not allowed in C, sometimes allowable in Orng
+                || symbver->def != ir // Prevents Phi noded symbols from having every def of them declared more than once
+            ) {
                 continue;
             }
             printVarDef(out, symbver);

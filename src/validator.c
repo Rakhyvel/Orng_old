@@ -64,7 +64,8 @@ int getTypeSize(ASTNode* type)
     case AST_PARAMLIST: {
         int prevAlign = 0;
         int size = 0;
-        for (ListElem* elem = List_Begin(type->paramlist.defines); elem != List_End(type->paramlist.defines); elem = elem->next) {
+        forall(elem, type->paramlist.defines)
+        {
             ASTNode* memberDefine = elem->data;
             SymbolNode* memberSymbol = memberDefine->define.symbol;
             int typeSize = getTypeSize(memberSymbol->type);
@@ -78,7 +79,8 @@ int getTypeSize(ASTNode* type)
     }
     case AST_ENUM: {
         int maxMemberSize = 0;
-        for (ListElem* elem = List_Begin(type->_enum.defines); elem != List_End(type->_enum.defines); elem = elem->next) {
+        forall(elem, type->_enum.defines)
+        {
             ASTNode* memberDefine = elem->data;
             SymbolNode* memberSymbol = memberDefine->define.symbol;
             int typeSize = getTypeSize(memberSymbol->type);
@@ -534,7 +536,8 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
     case AST_SUBTRACT:
     case AST_MULTIPLY:
     case AST_DIVIDE:
-    case AST_MODULUS: {
+    case AST_MODULUS:
+    case AST_EXPONENT: {
         ASTNode* left = node->binop.left;
         ASTNode* right = node->binop.right;
         ASTNode* leftType = getType(left, false, false);
@@ -1530,7 +1533,8 @@ void namedArgsMatch(ASTNode* expr, ASTNode* args, ASTNode* params)
 {
     Map* argNames = Map_Create(); // maps param names:String -> arg expressions:&ASTNode
 
-    for (ListElem* elem = List_Begin(args->arglist.args); elem != List_End(args->arglist.args); elem = elem->next) {
+    forall(elem, args->arglist.args)
+    {
         ASTNode* namedArg = elem->data;
         if (namedArg->astType != AST_NAMED_ARG) {
             error(namedArg->pos, "positional argument specified in named argument list");
@@ -1556,7 +1560,8 @@ void namedArgsMatch(ASTNode* expr, ASTNode* args, ASTNode* params)
         }
     }
 
-    for (ListElem* elem = List_Begin(params->paramlist.defines); elem != List_End(params->paramlist.defines); elem = elem->next) {
+    forall(elem, params->paramlist.defines)
+    {
         ASTNode* define = elem->data;
         SymbolNode* symbol = define->define.symbol;
         inferTypes(symbol);
@@ -1829,7 +1834,8 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
     }
     case AST_ARGLIST: {
         List* validArgs = List_Create();
-        for (ListElem* elem = List_Begin(node->arglist.args); elem != List_End(node->arglist.args); elem = elem->next) {
+        forall(elem, node->arglist.args)
+        {
             ASTNode* arg = elem->data;
             List_Append(validArgs, validateAST(arg, NULL));
         }
@@ -1853,7 +1859,8 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
     case AST_BLOCK: {
         node->block.returnEval = lastEval;
         List* validChildren = List_Create();
-        for (ListElem* elem = List_Begin(node->block.children); elem != List_End(node->block.children); elem = elem->next) {
+        forall(elem, node->block.children)
+        {
             ASTNode* child = elem->data;
             if (elem->next == List_End(node->block.children)) {
                 lastEval = true;
@@ -1922,7 +1929,8 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
         errorHandled = oldErrorHandled; // TODO: require full field for errors
 
         List* validMappings = List_Create();
-        for (ListElem* elem = List_Begin(node->_case.mappings); elem != List_End(node->_case.mappings); elem = elem->next) {
+        forall(elem, node->_case.mappings)
+        {
             ASTNode* mapping = elem->data;
             List_Append(validMappings, validateAST(mapping, coerceType));
         }
@@ -1957,7 +1965,8 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
         }
 
         List* validMappings = List_Create();
-        for (ListElem* elem = List_Begin(node->_case.mappings); elem != List_End(node->_case.mappings); elem = elem->next) {
+        forall(elem, node->_case.mappings)
+        {
             ASTNode* mapping = elem->data;
             ASTNode* validMapping = NULL;
             SymbolNode* var = NULL;
@@ -1996,7 +2005,8 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
     }
     case AST_MAPPING: {
         List* validExprs = List_Create();
-        for (ListElem* elem = List_Begin(node->mapping.exprs); elem != List_End(node->mapping.exprs); elem = elem->next) {
+        forall(elem, node->mapping.exprs)
+        {
             ASTNode* mapping = elem->data;
             List_Append(validExprs, validateAST(mapping, NULL));
         }
@@ -2262,7 +2272,8 @@ ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
     case AST_ADD:
     case AST_SUBTRACT:
     case AST_MULTIPLY:
-    case AST_DIVIDE: {
+    case AST_DIVIDE:
+    case AST_EXPONENT: {
         node->binop.left = validateAST(node->binop.left, REAL64_TYPE);
         node->binop.right = validateAST(node->binop.right, REAL64_TYPE);
         retval = node;
@@ -2875,7 +2886,8 @@ Program Validator_Validate(SymbolNode* symbol)
         validateType(symbol->def, true);
         // if def ast type is param list then for all define in paramlist children, define symbol is not extern
         if (symbol->def->astType == AST_PARAMLIST || symbol->def->astType == AST_ENUM) {
-            for (ListElem* elem = List_Begin(symbol->def->paramlist.defines); elem != List_End(symbol->def->paramlist.defines); elem = elem->next) {
+            forall(elem, symbol->def->paramlist.defines)
+            {
                 ASTNode* define = elem->data;
                 SymbolNode* var = define->define.symbol;
                 if (var && var->isExtern) {

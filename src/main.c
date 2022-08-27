@@ -275,9 +275,9 @@ SymbolNode* readPackage(char* packagePath, SymbolNode* program)
         error(packageAST->pos, "package symbol differs from package directory");
     }
 
-    List* dependencies = packageSymbol->restrictionExpr;
-    for (ListElem* e = List_Begin(dependencies); e != List_End(dependencies); e = e->next) {
-        ASTNode* packageAST = e->data;
+    forall(elem, packageSymbol->restrictionExpr)
+    {
+        ASTNode* packageAST = elem->data;
         if (packageAST->astType != AST_IDENT) {
             error(packageAST->pos, "package restrict list must be identifiers only");
         }
@@ -471,7 +471,7 @@ void printPos(FILE* out, struct position pos)
     if (pos.filename) {
         fprintf(out, "%s: ", getRelPath(pos.filename));
         fprintf(out, "%s", newLine);
-       // fprintf(out, "      |");
+        // fprintf(out, "      |");
         //fprintf(out, "%s", newLine);
         int minWhiteSpace = 100000;
         int maxLineLength = 0;

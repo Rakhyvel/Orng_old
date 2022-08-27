@@ -417,49 +417,10 @@ x Go back to adding errors and union type unions
 			x Checks indexes are within array bounds
 			x Checks that dots for enum literals have the correct tag
 - cleanup!
-	- write a markup to html program (in orange, add to github) and write tutorial/documentaiton
-		- hello world/comments
-		- declarations
-		- primitive types
-		- operations
-		- compile time constants
-		- blocks/if/for/case/return/break/continue/unreachable/defer
-			- compiletime collapse (add this lol)
-		- addresses, new/free
-		- structs
-			- default params
-			- named vs position struct literals
-			- methods
-		- arrays
-		- slices
-		- strings
-			- comptime string concat
-		- enums
-			- enum literals
-			- enum unions
-			- maybe types
-				-nothing
-				- ? op
-				-orelse
-			-errors
-				-success
-				- try
-				- catch
-				- infered errors
-				- errdefer
-		- functions
-			- difference between comptime and variable
-			- default params
-			- named vs positional arguments
-			- inner functions
-		- structural type equivalence
-		- default values
-		- external symbol tag/interop with C
-		- restriction symbol tag
-		- packages and modules
-	- replace bit xor symbol with ~, add exponent ^
+	x write a markup to html program (in orange, add to github) and write tutorial/documentaiton
+	x replace bit xor symbol with ~, add exponent ^
 	x fix symbol versioning for dots, indices, with a check if the symbol is temp symbol. If so, copy, else, new unversioned symbol
-	- replace for loops over lists with forall loops
+	x replace for loops over lists with forall loops
 	- comments on everything
 		- Single line
 		- Assume reader fully understands entire program but what you're commenting

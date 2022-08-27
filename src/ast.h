@@ -32,6 +32,7 @@ enum astType {
     AST_MULTIPLY,
     AST_DIVIDE,
     AST_MODULUS,
+	AST_EXPONENT,
     AST_PAREN,
     // Memory
     AST_DEREF,
@@ -358,6 +359,7 @@ ASTNode* AST_Create_subtract(struct astNode* left, struct astNode* right, struct
 ASTNode* AST_Create_multiply(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_divide(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_modulus(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_exponent(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_orelse(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_catch(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_try(struct astNode* expr, struct symbolNode* scope, struct position pos);

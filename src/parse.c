@@ -485,17 +485,30 @@ static ASTNode* parsePrefix(SymbolNode* scope)
     return prefix;
 }
 
-static ASTNode* parseTerm(SymbolNode* scope)
+static ASTNode* parseExponent(SymbolNode* scope)
 {
     ASTNode* term = parsePrefix(scope);
     struct token* token = NULL;
     while (true) {
+        if ((token = accept(TOKEN_CARET)) != NULL) {
+            term = AST_Create_exponent(term, parsePrefix(scope), scope, token->pos);
+        } else {
+            return term;
+        }
+    }
+}
+
+static ASTNode* parseTerm(SymbolNode* scope)
+{
+    ASTNode* term = parseExponent(scope);
+    struct token* token = NULL;
+    while (true) {
         if ((token = accept(TOKEN_STAR)) != NULL) {
-            term = AST_Create_multiply(term, parsePrefix(scope), scope, token->pos);
+            term = AST_Create_multiply(term, parseExponent(scope), scope, token->pos);
         } else if ((token = accept(TOKEN_SLASH)) != NULL) {
-            term = AST_Create_divide(term, parsePrefix(scope), scope, token->pos);
+            term = AST_Create_divide(term, parseExponent(scope), scope, token->pos);
         } else if ((token = accept(TOKEN_PERCENT)) != NULL) {
-            term = AST_Create_modulus(term, parsePrefix(scope), scope, token->pos);
+            term = AST_Create_modulus(term, parseExponent(scope), scope, token->pos);
         } else {
             return term;
         }
@@ -583,7 +596,7 @@ static ASTNode* parseBitXorExpr(SymbolNode* scope)
     ASTNode* child = parseBitAndExpr(scope);
     struct token* token = NULL;
     while (true) {
-        if ((token = accept(TOKEN_CARET)) != NULL) {
+        if ((token = accept(TOKEN_TILDE)) != NULL) {
             child = AST_Create_bitXor(child, parseBitAndExpr(scope), scope, token->pos);
         } else {
             return child;

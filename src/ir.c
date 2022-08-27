@@ -289,7 +289,8 @@ IR* createIR_label(struct position pos)
 
 void putSymbolVersion(List* symbolVersions, SymbolVersion* symver)
 {
-    for (ListElem* elem = List_Begin(symbolVersions); elem != List_End(symbolVersions); elem = elem->next) {
+    forall(elem, symbolVersions)
+    {
         SymbolVersion* data = elem->data;
         if (data->symbol == symver->symbol && data->version == symver->version) {
             return;
@@ -535,7 +536,8 @@ SymbolVersion* defaultValue(CFG* cfg, ASTNode* type)
         temp->def = ir;
         ir->listData = List_Create();
 
-        for (ListElem* elem = List_Begin(type->paramlist.defines); elem != List_End(type->paramlist.defines); elem = elem->next) {
+        forall(elem, type->paramlist.defines)
+        {
             ASTNode* define = elem->data;
             SymbolNode* var = define->define.symbol;
             if (var->def->astType == AST_UNDEF) {
@@ -792,7 +794,8 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
         int errDeferLabelIndex = 0;
 
         SymbolVersion* var = NULL;
-        for (ListElem* elem = List_Begin(node->block.children); elem != List_End(node->block.children); elem = elem->next) {
+        forall(elem, node->block.children)
+        {
             ASTNode* child = elem->data;
             var = flattenAST(cfg, child, thisReturnLabel, thisBreakLabel, thisContinueLabel, thisErrorLabel, false);
             if (child->astType == AST_DEFER) {
@@ -1643,6 +1646,16 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
         SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
 
         IR* ir = createIR(IR_MODULUS, temp, left, right, node->pos);
+        temp->def = ir;
+        appendInstruction(cfg, ir);
+        return temp;
+    }
+    case AST_EXPONENT: {
+        SymbolVersion* left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel, errorLabel, false);
+        SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
+        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
+
+        IR* ir = createIR(IR_EXPONENT, temp, left, right, node->pos);
         temp->def = ir;
         appendInstruction(cfg, ir);
         return temp;

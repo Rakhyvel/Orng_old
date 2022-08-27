@@ -45,6 +45,7 @@ typedef enum ir_type {
     IR_MULTIPLY,
     IR_DIVIDE,
     IR_MODULUS,
+	IR_EXPONENT,
 
     // One parameter instructions
     IR_PHONY,

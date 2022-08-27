@@ -275,6 +275,14 @@ ASTNode* AST_Create_modulus(struct astNode* left, struct astNode* right, struct 
     return retval;
 }
 
+ASTNode* AST_Create_exponent(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos)
+{
+    ASTNode* retval = AST_Create(AST_EXPONENT, scope, pos);
+    retval->binop.left = left;
+    retval->binop.right = right;
+    return retval;
+}
+
 ASTNode* AST_Create_orelse(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_ORELSE, scope, pos);
@@ -842,7 +850,7 @@ int AST_TypeRepr(char* str, ASTNode* type)
         break;
     case AST_PARAMLIST:
         str += sprintf(str, "(");
-        for (struct listElem* elem = List_Begin(type->paramlist.defines); elem != List_End(type->paramlist.defines); elem = elem->next) {
+        forall (elem,type->paramlist.defines) {
             ASTNode* param = elem->data;
             str += AST_TypeRepr(str, param);
             if (elem->next == List_End(type->paramlist.defines)) {
