@@ -215,6 +215,8 @@ const char* Token_GetRepr(_TokenType type)
         return "/=";
     case TOKEN_PERCENT_ASSIGN:
         return "%=";
+    case TOKEN_CARET_ASSIGN:
+        return "^=";
     case TOKEN_DAMPERSAND_ASSIGN:
         return "&&=";
     case TOKEN_DBAR_ASSIGN:
@@ -223,8 +225,8 @@ const char* Token_GetRepr(_TokenType type)
         return "&=";
     case TOKEN_BAR_ASSIGN:
         return "|=";
-    case TOKEN_CARET_ASSIGN:
-        return "^=";
+    case TOKEN_TILDE_ASSIGN:
+        return  "~=";
     case TOKEN_DLSR_ASSIGN:
         return "<<=";
     case TOKEN_DGTR_ASSIGN:

@@ -336,21 +336,25 @@ static ASTNode* parseFactor(SymbolNode* scope)
     } else if ((token = accept(TOKEN_BIN)) != NULL) {
         int data = strtol(token->data + 2, NULL, 2);
         child = AST_Create_int(data, scope, token->pos);
-    } else if ((token = accept(TOKEN_NOTHING)) != NULL) {
-        child = AST_Create_nothing(scope, token->pos);
+    } else if ((token = accept(TOKEN_CHAR)) != NULL) {
+        child = AST_Create_char(token->data, scope, token->pos);
+    } else if ((token = accept(TOKEN_TRUE)) != NULL) {
+        child = AST_Create_true(scope, token->pos);
+    } else if ((token = accept(TOKEN_FALSE)) != NULL) {
+        child = AST_Create_false(scope, token->pos);
     } else if ((token = accept(TOKEN_REAL)) != NULL) {
         float data = atof(token->data);
         child = AST_Create_real(data, scope, token->pos);
-    } else if ((token = accept(TOKEN_STR)) != NULL) {
-        child = AST_Create_string(token->data, scope, token->pos);
-        while (accept(TOKEN_DPLUS)) {
-            token = expect(TOKEN_STR);
-            strcat(child->string.data, token->data);
-        }
-    } else if ((token = accept(TOKEN_CHAR)) != NULL) {
-        child = AST_Create_char(token->data, scope, token->pos);
     } else if ((token = accept(TOKEN_LPAREN)) != NULL) {
         child = parseArgList(scope);
+    } else if ((token = accept(TOKEN_DOT)) != NULL) {
+        struct token* ident = expect(TOKEN_IDENT);
+        expect(TOKEN_ASSIGN);
+        char* text = malloc(sizeof(char) * 255);
+        strncpy_s(text, 255, ident->data, 254);
+        child = AST_Create_namedArg(text, parseExpr(scope), scope, token->pos);
+    } else if ((token = accept(TOKEN_NOTHING)) != NULL) {
+        child = AST_Create_nothing(scope, token->pos);
     } else if ((token = accept(TOKEN_LSQUARE)) != NULL) {
         child = AST_Create_arrayLiteral(scope, token->pos);
         while (!(token = accept(TOKEN_RSQUARE))) {
@@ -358,10 +362,12 @@ static ASTNode* parseFactor(SymbolNode* scope)
             accept(TOKEN_COMMA);
         }
         child->pos = merge(child->pos, token->pos);
-    } else if ((token = accept(TOKEN_TRUE)) != NULL) {
-        child = AST_Create_true(scope, token->pos);
-    } else if ((token = accept(TOKEN_FALSE)) != NULL) {
-        child = AST_Create_false(scope, token->pos);
+    } else if ((token = accept(TOKEN_STR)) != NULL) {
+        child = AST_Create_string(token->data, scope, token->pos);
+        while (accept(TOKEN_DPLUS)) {
+            token = expect(TOKEN_STR);
+            strcat(child->string.data, token->data);
+        }
     } else if ((token = accept(TOKEN_NEW)) != NULL) {
         char* str = calloc(255, 1);
         strcat_s(str, 255, myItoa(arrayUID++));
@@ -375,12 +381,6 @@ static ASTNode* parseFactor(SymbolNode* scope)
             init = AST_Create_undef(scope, nextToken()->pos);
         }
         child = AST_Create_new(type, init, scope, token->pos);
-    } else if ((token = accept(TOKEN_DOT)) != NULL) {
-        struct token* ident = expect(TOKEN_IDENT);
-        expect(TOKEN_ASSIGN);
-        char* text = malloc(sizeof(char) * 255);
-        strncpy_s(text, 255, ident->data, 254);
-        child = AST_Create_namedArg(text, parseExpr(scope), scope, token->pos);
     } else if (accept(TOKEN_LBRACE)) {
         return parseBlock(scope);
     } else if (accept(TOKEN_IF)) {
@@ -402,7 +402,11 @@ static ASTNode* parsePostfix(SymbolNode* scope)
     ASTNode* child = parseFactor(scope);
     struct token* token = NULL;
     while (true) {
-        if (nextTokenMaybeNewline()->type != TOKEN_NEWLINE && (token = accept(TOKEN_LPAREN)) != NULL) {
+        if ((token = accept(TOKEN_CATCH)) != NULL) {
+            child = AST_Create_catch(child, parseStatement(scope), scope, token->pos);
+        } else if ((token = accept(TOKEN_ORELSE)) != NULL) {
+            child = AST_Create_orelse(child, parseStatement(scope), scope, token->pos);
+        } else if (nextTokenMaybeNewline()->type != TOKEN_NEWLINE && (token = accept(TOKEN_LPAREN)) != NULL) {
             child = AST_Create_call(child, parseArgList(scope), scope, token->pos);
         } else if ((token = accept(TOKEN_LSQUARE)) != NULL) {
             // [ <expr>? :? <expr>? ]
@@ -440,8 +444,6 @@ static ASTNode* parsePostfix(SymbolNode* scope)
             }
             parent->pos = merge(parent->pos, token->pos);
             child = parent;
-        } else if ((token = accept(TOKEN_COLON)) != NULL) {
-            child = AST_Create_cast(child, parseType(scope, false), scope, token->pos);
         } else if ((token = accept(TOKEN_DOT)) != NULL) {
             token = expect(TOKEN_IDENT);
             char* text = malloc(sizeof(char) * 255);
@@ -450,10 +452,8 @@ static ASTNode* parsePostfix(SymbolNode* scope)
             child = AST_Create_dot(child, ident, scope, token->pos, false);
         } else if ((token = accept(TOKEN_QMARK)) != NULL) {
             child = AST_Create_maybe(child, scope, token->pos);
-        } else if ((token = accept(TOKEN_ORELSE)) != NULL) {
-            child = AST_Create_orelse(child, parseStatement(scope), scope, token->pos);
-        } else if ((token = accept(TOKEN_CATCH)) != NULL) {
-            child = AST_Create_catch(child, parseStatement(scope), scope, token->pos);
+        } else if ((token = accept(TOKEN_COLON)) != NULL) {
+            child = AST_Create_cast(child, parseType(scope, false), scope, token->pos);
         } else {
             break;
         }
@@ -467,16 +467,16 @@ static ASTNode* parsePrefix(SymbolNode* scope)
     ASTNode* prefix = NULL;
     if ((token = accept(TOKEN_EMARK)) != NULL) {
         prefix = AST_Create_not(parsePrefix(scope), scope, token->pos);
-    } else if ((token = accept(TOKEN_AMPERSAND)) != NULL) {
-        prefix = AST_Create_addrOf(parsePrefix(scope), scope, token->pos);
-    } else if ((token = accept(TOKEN_STAR)) != NULL) {
-        prefix = AST_Create_deref(parsePrefix(scope), scope, token->pos);
     } else if ((token = accept(TOKEN_MINUS)) != NULL) {
         prefix = AST_Create_neg(parsePrefix(scope), scope, token->pos);
     } else if ((token = accept(TOKEN_TILDE)) != NULL) {
         prefix = AST_Create_bitNot(parsePrefix(scope), scope, token->pos);
+    } else if ((token = accept(TOKEN_AMPERSAND)) != NULL) {
+        prefix = AST_Create_addrOf(parsePrefix(scope), scope, token->pos);
     } else if ((token = accept(TOKEN_SIZEOF)) != NULL) {
         prefix = AST_Create_sizeof(parseType(scope, false), scope, token->pos);
+    } else if ((token = accept(TOKEN_STAR)) != NULL) {
+        prefix = AST_Create_deref(parsePrefix(scope), scope, token->pos);
     } else if ((token = accept(TOKEN_TRY)) != NULL) {
         prefix = AST_Create_try(parseExpr(scope), scope, token->pos);
     } else {
@@ -661,6 +661,8 @@ static ASTNode* parseExpr(SymbolNode* scope)
         child = AST_Create_divAssign(child, parseOrExpr(scope), scope, token->pos);
     } else if ((token = accept(TOKEN_PERCENT_ASSIGN)) != NULL) {
         child = AST_Create_modAssign(child, parseOrExpr(scope), scope, token->pos);
+    } else if ((token = accept(TOKEN_CARET_ASSIGN)) != NULL) {
+        child = AST_Create_exponentAssign(child, parseOrExpr(scope), scope, token->pos);
     } else if ((token = accept(TOKEN_DAMPERSAND_ASSIGN)) != NULL) {
         child = AST_Create_andAssign(child, parseOrExpr(scope), scope, token->pos);
     } else if ((token = accept(TOKEN_DBAR_ASSIGN)) != NULL) {
@@ -669,7 +671,7 @@ static ASTNode* parseExpr(SymbolNode* scope)
         child = AST_Create_bitAndAssign(child, parseOrExpr(scope), scope, token->pos);
     } else if ((token = accept(TOKEN_BAR_ASSIGN)) != NULL) {
         child = AST_Create_bitOrAssign(child, parseOrExpr(scope), scope, token->pos);
-    } else if ((token = accept(TOKEN_CARET_ASSIGN)) != NULL) {
+    } else if ((token = accept(TOKEN_TILDE_ASSIGN)) != NULL) {
         child = AST_Create_bitXorAssign(child, parseOrExpr(scope), scope, token->pos);
     } else if ((token = accept(TOKEN_DLSR_ASSIGN)) != NULL) {
         child = AST_Create_lshiftAssign(child, parseOrExpr(scope), scope, token->pos);

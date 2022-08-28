@@ -249,6 +249,9 @@ For two arrays `A` and `B`, then `A <: B` when:
 * The element data types of `A` are a subtype of the element data types of `B`.
 * If `B` has a defined length, the length of `B` is equal as an integer to the length of `B` as an integer.
 
+#### Array Literals
+TODO
+
 #### Slices
 Slices are limited view of an array from an inclusive lower-bound, to an exclusive upper-bound. They are zero-indexed as if they were a separate array themselves.
 ```
@@ -533,10 +536,10 @@ Below is a list of operators in order of lowest precedence to highest.
 | a % b        | `typeof` a <: Real64; `typeof` b <: Real64                  | if `typeof` a <: `typeof` b {`typeof` b} else {`typeof` a} | Modulus                                                                           |
 | a ^ b        | `typeof` a <: Real64; `typeof` b <: Real64                  | if `typeof` a <: `typeof` b {`typeof` b} else {`typeof` a} | Exponentiation                                                                    |
 | !a           | `typeof` a <: Bool                                          | Bool                                                       | Boolean negation                                                                  |
-| &a           |  -                                                          | &`typeof` a                                                | Address-of                                                                        |
-| *a           | `typeof` a <: &T                                            | T                                                          | Dereference                                                                       |
 | -a           | `typeof` a <: Real64                                        | `typeof` a                                                 | Scalar negation                                                                   |
 | ~a           | `typeof` a <: Int64                                         | `typeof` a                                                 | Bitwise negation                                                                  |
+| &a           |  -                                                          | &`typeof` a                                                | Address-of                                                                        |
+| *a           | `typeof` a <: &T                                            | T                                                          | Dereference                                                                       |
 | `sizeof` T   | `typeof` T <: Type                                          | Int64                                                      | Size of type in bytes                                                             |
 | `try` a      | a is a sum type with a .success field                       | `typeof` a                                                 | if `a` is successful, `a.success`, else returns `a` from function as error        |
 | `typeof` a   | -                                                           | Type                                                       | Compile-time type of expression                                                   |
@@ -581,6 +584,9 @@ All comparison operators except `!=` can be chained together.
 0 < x > -4 == y
 -- is equivalent to: (0 < x) && (x > -4) && (5 == y)
 ```
+
+### L-Values
+TODO
 
 
 ## Control Flow and Allocations

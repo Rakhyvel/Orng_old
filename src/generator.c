@@ -95,7 +95,7 @@ static void printStructOrd(FILE* out, ASTNode* type)
 static void printType(FILE* out, ASTNode* type)
 {
     switch (type->astType) {
-    case AST_IDENT:
+    case AST_IDENT: {
         if (!strcmp(type->ident.data, "Int8") || !strcmp(type->ident.data, "Char")) {
             fprintf(out, "%s", "int8_t");
         } else if (!strcmp(type->ident.data, "Int16")) {
@@ -116,7 +116,8 @@ static void printType(FILE* out, ASTNode* type)
             fprintf(out, "%s", type->ident.data);
         }
         break;
-    case AST_DOT:
+    }
+    case AST_DOT: {
         SymbolNode* var = type->dot.symbol;
         if (var->isExtern) {
             fprintf(out, "%s", var->externName);
@@ -124,20 +125,22 @@ static void printType(FILE* out, ASTNode* type)
             printType(out, type->type);
         }
         break;
-    case AST_ADDR:
-        printType(out, type->unop.expr);
-        fprintf(out, "*");
-        break;
-    case AST_ENUM:
-    case AST_ARRAY:
-    case AST_PARAMLIST: {
-        fprintf(out, "struct ");
-        printStructOrd(out, type);
-    } break;
+    }
     case AST_VOID: {
         fprintf(out, "void");
         break;
     }
+    case AST_ADDR: {
+        printType(out, type->unop.expr);
+        fprintf(out, "*");
+        break;
+    }
+    case AST_PARAMLIST:
+    case AST_ARRAY:
+    case AST_ENUM: {
+        fprintf(out, "struct ");
+        printStructOrd(out, type);
+    } break;
     case AST_FUNCTION:
         // The second child in a function is the return type
         ASTNode* ret = type->function.codomainType;
@@ -429,6 +432,18 @@ static void generateLValueIR(FILE* out, SymbolVersion* version)
             printPath(out, version->def->symbol);
             break;
         }
+        case IR_ADDR_OF: {
+            fprintf(out, "(&");
+            generateLValueIR(out, version->def->src1);
+            fprintf(out, ")");
+            break;
+        }
+        case IR_DEREF: {
+            fprintf(out, "(*");
+            generateLValueIR(out, version->def->src1);
+            fprintf(out, ")");
+            break;
+        }
         case IR_INDEX: {
             fprintf(out, "(");
             generateLValueIR(out, version->def->src1);
@@ -443,18 +458,6 @@ static void generateLValueIR(FILE* out, SymbolVersion* version)
             fprintf(out, ".%s)", version->def->strData);
             break;
         }
-        case IR_DEREF: {
-            fprintf(out, "(*");
-            generateLValueIR(out, version->def->src1);
-            fprintf(out, ")");
-            break;
-        }
-        case IR_ADDR_OF: {
-            fprintf(out, "(&");
-            generateLValueIR(out, version->def->src1);
-            fprintf(out, ")");
-            break;
-        }
         }
     }
 }
@@ -467,8 +470,8 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
     }
 
     switch (ir->irType) {
-    case IR_LOAD_EXTERN:
-    case IR_LOAD_SYMBOL: {
+    case IR_LOAD_SYMBOL:
+    case IR_LOAD_EXTERN: {
         printVarAssign(out, ir->dest);
         printPath(out, ir->symbol);
         fprintf(out, ";\n");
@@ -482,6 +485,24 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
     case IR_LOAD_REAL: {
         printVarAssign(out, ir->dest);
         fprintf(out, "%f;\n", ir->doubleData);
+        break;
+    }
+    case IR_LOAD_ARGLIST:
+    case IR_SLICE: {
+        printVarAssign(out, ir->dest);
+        fprintf(out, "(");
+        printType(out, ir->dest->type);
+        fprintf(out, ") {");
+        forall(elem, ir->listData)
+        {
+            SymbolVersion* symbver = elem->data;
+            printVar(out, symbver);
+            if (elem->next != List_End(ir->listData)) {
+                fprintf(out, ", ");
+            } else {
+                fprintf(out, "};\n");
+            }
+        }
         break;
     }
     case IR_LOAD_ARRAY_LITERAL: {
@@ -520,91 +541,12 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
         fprintf(out, ") {%d, \"%s\"};\n", strlen(ir->strData), ir->strData);
         break;
     }
-    case IR_SLICE:
-    case IR_LOAD_ARGLIST: {
-        printVarAssign(out, ir->dest);
-        fprintf(out, "(");
-        printType(out, ir->dest->type);
-        fprintf(out, ") {");
-        forall(elem, ir->listData)
-        {
-            SymbolVersion* symbver = elem->data;
-            printVar(out, symbver);
-            if (elem->next != List_End(ir->listData)) {
-                fprintf(out, ", ");
-            } else {
-                fprintf(out, "};\n");
-            }
-        }
-        break;
-    }
     case IR_COPY: {
         if (ir->dest->type->astType != AST_VOID) {
             printVarAssign(out, ir->dest);
             printVar(out, ir->src1);
             fprintf(out, ";\n");
         }
-        break;
-    }
-    case IR_DECLARE_LABEL: // Just don't do anything... these instructions are generated at the end of a basic block
-    case IR_JUMP:
-    case IR_BRANCH_IF_FALSE: {
-        break;
-    }
-    case IR_CALL: {
-        stackTracePush(out, "(&stackTrace)");
-        fprintf(out, "\"");
-        printPos(out, ir->pos);
-        fprintf(out, "\";\n");
-        if (ir->dest->type->astType != AST_VOID) {
-            printVarAssign(out, ir->dest);
-        } else {
-            fprintf(out, "\t");
-        }
-        printVar(out, ir->src1);
-        fprintf(out, "(");
-        forall(elem, ir->listData)
-        {
-            SymbolVersion* arg = elem->data;
-            printVar(out, arg);
-            if (elem->next != List_End(ir->listData)) {
-                fprintf(out, ", ");
-            }
-        }
-        fprintf(out, ");\n");
-        fprintf(out, "\tstackTrace.length--;\n");
-        break;
-    }
-    case IR_INDEX: {
-        printVarAssign(out, ir->dest);
-        printVar(out, ir->src1);
-        fprintf(out, ".data[");
-        printVar(out, ir->src2);
-        fprintf(out, "];\n");
-        break;
-    }
-    case IR_INDEX_COPY: {
-        fprintf(out, "\t");
-        generateLValueIR(out, ir->src1);
-        fprintf(out, ".data[");
-        printVar(out, ir->src2);
-        fprintf(out, "] = ");
-        printVar(out, ir->src3);
-        fprintf(out, ";\n");
-        break;
-    }
-    case IR_DOT: {
-        printVarAssign(out, ir->dest);
-        printVar(out, ir->src1);
-        fprintf(out, ".%s;\n", ir->strData);
-        break;
-    }
-    case IR_DOT_COPY: {
-        fprintf(out, "\t");
-        generateLValueIR(out, ir->src1);
-        fprintf(out, ".%s = ", ir->strData);
-        printVar(out, ir->src2);
-        fprintf(out, ";\n");
         break;
     }
     case IR_BIT_OR: {
@@ -627,22 +569,6 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
         printVarAssign(out, ir->dest);
         printVar(out, ir->src1);
         fprintf(out, " & ");
-        printVar(out, ir->src2);
-        fprintf(out, ";\n");
-        break;
-    }
-    case IR_LSHIFT: {
-        printVarAssign(out, ir->dest);
-        printVar(out, ir->src1);
-        fprintf(out, " << ");
-        printVar(out, ir->src2);
-        fprintf(out, ";\n");
-        break;
-    }
-    case IR_RSHIFT: {
-        printVarAssign(out, ir->dest);
-        printVar(out, ir->src1);
-        fprintf(out, " >> ");
         printVar(out, ir->src2);
         fprintf(out, ";\n");
         break;
@@ -691,6 +617,22 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
         printVarAssign(out, ir->dest);
         printVar(out, ir->src1);
         fprintf(out, " <= ");
+        printVar(out, ir->src2);
+        fprintf(out, ";\n");
+        break;
+    }
+    case IR_LSHIFT: {
+        printVarAssign(out, ir->dest);
+        printVar(out, ir->src1);
+        fprintf(out, " << ");
+        printVar(out, ir->src2);
+        fprintf(out, ";\n");
+        break;
+    }
+    case IR_RSHIFT: {
+        printVarAssign(out, ir->dest);
+        printVar(out, ir->src1);
+        fprintf(out, " >> ");
         printVar(out, ir->src2);
         fprintf(out, ";\n");
         break;
@@ -751,7 +693,7 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
         fprintf(out, ";\n");
         break;
     }
-    case IR_NEGATE: {
+    case IR_NEG: {
         printVarAssign(out, ir->dest);
         fprintf(out, "-");
         printVar(out, ir->src1);
@@ -772,6 +714,13 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
         fprintf(out, ";\n");
         break;
     }
+    case IR_SIZEOF: {
+        printVarAssign(out, ir->dest);
+        fprintf(out, "\sizeof(");
+        printType(out, ir->fromType);
+        fprintf(out, ");\n");
+        break;
+    }
     case IR_DEREF: {
         printVarAssign(out, ir->dest);
         fprintf(out, "*");
@@ -787,7 +736,39 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
         fprintf(out, ";\n");
         break;
     }
-    case IR_CONVERT: {
+    case IR_INDEX: {
+        printVarAssign(out, ir->dest);
+        printVar(out, ir->src1);
+        fprintf(out, ".data[");
+        printVar(out, ir->src2);
+        fprintf(out, "];\n");
+        break;
+    }
+    case IR_INDEX_COPY: {
+        fprintf(out, "\t");
+        generateLValueIR(out, ir->src1);
+        fprintf(out, ".data[");
+        printVar(out, ir->src2);
+        fprintf(out, "] = ");
+        printVar(out, ir->src3);
+        fprintf(out, ";\n");
+        break;
+    }
+    case IR_DOT: {
+        printVarAssign(out, ir->dest);
+        printVar(out, ir->src1);
+        fprintf(out, ".%s;\n", ir->strData);
+        break;
+    }
+    case IR_DOT_COPY: {
+        fprintf(out, "\t");
+        generateLValueIR(out, ir->src1);
+        fprintf(out, ".%s = ", ir->strData);
+        printVar(out, ir->src2);
+        fprintf(out, ";\n");
+        break;
+    }
+    case IR_CAST: {
         if (ir->toType->astType == AST_ENUM) {
             printVarAssign(out, ir->dest);
             fprintf(out, "*((");
@@ -803,16 +784,6 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
             printVar(out, ir->src1);
             fprintf(out, ";\n");
         }
-        break;
-    }
-    case IR_PHONY: {
-        break;
-    }
-    case IR_SIZEOF: {
-        printVarAssign(out, ir->dest);
-        fprintf(out, "\sizeof(");
-        printType(out, ir->fromType);
-        fprintf(out, ");\n");
         break;
     }
     case IR_NEW: {
@@ -900,6 +871,38 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
         fprintf(out, "\tfree(");
         printVar(out, ir->src1);
         fprintf(out, ");\n");
+        break;
+    }
+    case IR_PHONY: {
+        break;
+    }
+    case IR_DECLARE_LABEL: // Just don't do anything... these instructions are generated at the end of a basic block
+    case IR_JUMP:
+    case IR_BRANCH_IF_FALSE: {
+        break;
+    }
+    case IR_CALL: {
+        stackTracePush(out, "(&stackTrace)");
+        fprintf(out, "\"");
+        printPos(out, ir->pos);
+        fprintf(out, "\";\n");
+        if (ir->dest->type->astType != AST_VOID) {
+            printVarAssign(out, ir->dest);
+        } else {
+            fprintf(out, "\t");
+        }
+        printVar(out, ir->src1);
+        fprintf(out, "(");
+        forall(elem, ir->listData)
+        {
+            SymbolVersion* arg = elem->data;
+            printVar(out, arg);
+            if (elem->next != List_End(ir->listData)) {
+                fprintf(out, ", ");
+            }
+        }
+        fprintf(out, ");\n");
+        fprintf(out, "\tstackTrace.length--;\n");
         break;
     }
     case IR_PUSH_STACK_TRACE: {
