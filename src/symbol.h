@@ -67,10 +67,11 @@ typedef struct symbolNode {
 struct symbolNode* rejectingSymbol; // When symbol_find fails, this is the symbol that rejected it
 
 struct symbolNode* Symbol_Create(char* name, SymbolType symbolType, struct symbolNode* parent, struct position pos);
-void Symbol_Print(SymbolNode* root, char* prefix, char* childrenPrefix);
 struct symbolNode* Symbol_Find(const char* symbolName, const struct symbolNode* scope);
-struct symbolNode* Symbol_Root(const struct symbolNode* scope);
 struct symbolNode* Symbol_TypeAncestor(struct symbolNode* scope, SymbolType type);
+void Symbol_Print(SymbolNode* root, char* prefix, char* childrenPrefix);
+void unVisitSymbolTree(SymbolNode* node);
 struct symbolNode* Symbol_MostRecentNonBlock(struct symbolNode* scope);
+struct symbolNode* Symbol_Root(const struct symbolNode* scope);
 
 #endif

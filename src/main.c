@@ -58,6 +58,81 @@ bool isDebug = true;
 Map* files;
 Map* files_whitespace; // Map(String, List(Int))
 
+char* getRelPath(char* absPath)
+{
+    char* recentSlash = absPath - 1;
+    char* secondRecentSlash = absPath - 1;
+    for (int i = 0; absPath[i]; i++) {
+        if (absPath[i] == '/' || absPath[i] == '\\') {
+            secondRecentSlash = recentSlash;
+            recentSlash = absPath + i;
+        }
+    }
+    return secondRecentSlash + 1;
+}
+
+char* pathToFilename(char* path)
+{
+    char* recentSlash = path - 1;
+    for (int i = 0; path[i]; i++) {
+        if (path[i] == '/' || path[i] == '\\') {
+            recentSlash = path + i;
+        }
+    }
+    return recentSlash + 1;
+}
+
+static char* getUserDirectory()
+{
+#ifdef _WIN32
+    char* userDir = NULL;
+    size_t sz = 0;
+    if (_dupenv_s(&userDir, &sz, "USERPROFILE") || userDir == NULL) {
+        gen_error("user profile environment variable not defined\n");
+    }
+    return userDir;
+#else
+    return getenv("HOME");
+#endif
+}
+
+/*
+Takes in a parent absolute directory, and a sub directory path.
+Creates the subdirectory if it does not exist
+Returns the concatonated path length
+*/
+static char* createIfNotExist(char* parentAbsDir, char* subDirPath)
+{
+    int userDirLen = strlen(parentAbsDir);
+    int subDirLen = userDirLen + strlen(subDirPath) + 1;
+    char* subDir = calloc(subDirLen, sizeof(char));
+    if (!subDir) {
+        gen_error("mem error");
+        return;
+    }
+    strcpy_s(subDir, subDirLen, parentAbsDir);
+    strcat_s(subDir, subDirLen, subDirPath);
+
+    bool exists = false;
+    if (_access(subDir, 0) == 0) {
+        struct stat status;
+        stat(subDir, &status);
+        exists = (status.st_mode & S_IFDIR) != 0;
+    } else {
+        exists = false;
+    }
+
+    if (!exists) {
+#ifdef _WIN32
+        _mkdir(subDir);
+#else
+        mkdir(subDir, 0700);
+#endif
+    }
+
+    return subDir;
+}
+
 static void readLines(FILE* in)
 {
     int nextChar, lineLength = 0, lineCapacity = 80;
@@ -87,43 +162,6 @@ static void readLines(FILE* in)
     List_Append(lines, line);
 
     Map_Put(files, filename, lines);
-}
-
-//
-char* getRelPath(char* absPath)
-{
-    char* recentSlash = absPath - 1;
-    char* secondRecentSlash = absPath - 1;
-    for (int i = 0; absPath[i]; i++) {
-        if (absPath[i] == '/' || absPath[i] == '\\') {
-            secondRecentSlash = recentSlash;
-            recentSlash = absPath + i;
-        }
-    }
-    return secondRecentSlash + 1;
-}
-
-char* pathToFilename(char* path)
-{
-    char* recentSlash = path - 1;
-    for (int i = 0; path[i]; i++) {
-        if (path[i] == '/' || path[i] == '\\') {
-            recentSlash = path + i;
-        }
-    }
-    return recentSlash + 1;
-}
-
-// Returns whether or not a relative path begins with a string
-static char isSubStr(char* relPath, char* symbolName)
-{
-    int i;
-    for (i = 0; symbolName[i]; i++) {
-        if (symbolName[i] != relPath[i]) {
-            return false;
-        }
-    }
-    return relPath[i];
 }
 
 static ASTNode* readFile(char* _filename, SymbolNode* program)
@@ -159,58 +197,19 @@ static ASTNode* readFile(char* _filename, SymbolNode* program)
     return retval;
 }
 
-char* getUserDirectory()
+// Returns whether or not a relative path begins with a string
+static char isSubStr(char* relPath, char* symbolName)
 {
-#ifdef _WIN32
-    char* userDir = NULL;
-    size_t sz = 0;
-    if (_dupenv_s(&userDir, &sz, "USERPROFILE") || userDir == NULL) {
-        gen_error("user profile environment variable not defined\n");
+    int i;
+    for (i = 0; symbolName[i]; i++) {
+        if (symbolName[i] != relPath[i]) {
+            return false;
+        }
     }
-    return userDir;
-#else
-    return getenv("HOME");
-#endif
+    return relPath[i];
 }
 
-/*
-Takes in a parent absolute directory, and a sub directory path.
-Creates the subdirectory if it does not exist
-Returns the concatonated path length
-*/
-char* createIfNotExist(char* parentAbsDir, char* subDirPath)
-{
-    int userDirLen = strlen(parentAbsDir);
-    int subDirLen = userDirLen + strlen(subDirPath) + 1;
-    char* subDir = calloc(subDirLen, sizeof(char));
-    if (!subDir) {
-        gen_error("mem error");
-        return;
-    }
-    strcpy_s(subDir, subDirLen, parentAbsDir);
-    strcat_s(subDir, subDirLen, subDirPath);
-
-    bool exists = false;
-    if (_access(subDir, 0) == 0) {
-        struct stat status;
-        stat(subDir, &status);
-        exists = (status.st_mode & S_IFDIR) != 0;
-    } else {
-        exists = false;
-    }
-
-    if (!exists) {
-#ifdef _WIN32
-        _mkdir(subDir);
-#else
-        mkdir(subDir, 0700);
-#endif
-    }
-
-    return subDir;
-}
-
-wchar_t* charToWChar(char* orig)
+static wchar_t* charToWChar(char* orig)
 {
     size_t newsize = strlen(orig) + 1;
 
@@ -222,7 +221,7 @@ wchar_t* charToWChar(char* orig)
     return wcstring;
 }
 
-char* wCharToChar(wchar_t* orig)
+static char* wCharToChar(wchar_t* orig)
 {
     size_t origsize = wcslen(orig) + 1;
     size_t convertedChars = 0;
@@ -250,7 +249,7 @@ to read package
     read in all module files from package dir
 	set package symbol to be visited
 */
-SymbolNode* readPackage(char* packagePath, SymbolNode* program)
+static SymbolNode* readPackage(char* packagePath, SymbolNode* program)
 {
     // Create manifest filename
     int manifestFilenameLen = strlen(packagePath) + 50;
@@ -331,21 +330,6 @@ bail:
     return packageSymbol;
 }
 
-void unVisitSymbolTree(SymbolNode* node)
-{
-    if (node == NULL) {
-        return;
-    }
-    node->visited = false;
-
-    List* children = node->children->keyList;
-    ListElem* elem = List_Begin(children);
-    for (; elem != List_End(children); elem = elem->next) {
-        SymbolNode* child = Map_Get(node->children, elem->data);
-        unVisitSymbolTree(child);
-    }
-}
-
 /*
 Translates an input file to a C output file
 */
@@ -411,180 +395,4 @@ int main(int argc, char** argv)
     printf("%d ms\n", (int)(time_taken * 1000.0));
 
     system("pause");
-}
-
-/*
-prints out a general error message about the program with no position given
-*/
-void gen_error(const char* message, ...)
-{
-    va_list args;
-    fprintf(stderr, "error: ");
-    va_start(args, message);
-    vfprintf(stderr, message, args);
-    va_end(args);
-    fprintf(stderr, "\n");
-
-    system("pause");
-    exit(1);
-}
-
-static char* firstNonSpace(char* str)
-{
-    int i = 0;
-    for (; str[i] != '\0' && isspace(str[i]); i++)
-        ;
-    return str + i;
-}
-
-static int countLeadingWhitespace(char* str)
-{
-    int count = 0;
-    for (int i = 0; str[i] != '\0' && isspace(str[i]); i++) {
-        if (str[i] == ' ') {
-            count++;
-        } else if (str[i] == '\t') {
-            count += 4;
-        }
-    }
-    return count;
-}
-
-static void printPosChar(FILE* out, char c)
-{
-    if (out != stderr) {
-        if (c == '"') {
-            fprintf(out, "\\\"");
-        } else if (c == '\\') {
-            fprintf(out, "\\");
-        } else {
-            fprintf(out, "%c", c);
-        }
-    } else {
-        fprintf(out, "%c", c);
-    }
-}
-
-void printPos(FILE* out, struct position pos)
-{
-    char* newLine = out == stderr ? "\n" : "\\n";
-    if (pos.filename) {
-        fprintf(out, "%s: ", getRelPath(pos.filename));
-        fprintf(out, "%s", newLine);
-        // fprintf(out, "      |");
-        //fprintf(out, "%s", newLine);
-        int minWhiteSpace = 100000;
-        int maxLineLength = 0;
-        for (int i = pos.start_line; i <= pos.end_line; i++) {
-            List* lines = Map_Get(files, pos.filename);
-            char* lineStr = List_Get(lines, i - 1);
-            minWhiteSpace = min(minWhiteSpace, countLeadingWhitespace(lineStr));
-        }
-        for (int i = pos.start_line; i <= pos.end_line; i++) {
-            fprintf(out, "%d", i);
-            for (int j = 0; j < 5 - (int)(log(i) / log(10)); j++) {
-                fprintf(out, " ");
-            }
-            List* lines = Map_Get(files, pos.filename);
-            char* lineStr = List_Get(lines, i - 1);
-            int spaces = countLeadingWhitespace(lineStr) - minWhiteSpace;
-            fprintf(out, "| ");
-            for (int j = 0; j < spaces; j++) {
-                fprintf(out, " ");
-            }
-            if (pos.start_line == pos.end_line || (i != pos.start_line && i != pos.end_line)) {
-                char* stripped = firstNonSpace(lineStr);
-                for (char* c = stripped; *c; c++) {
-                    printPosChar(out, *c);
-                }
-                maxLineLength = max(maxLineLength, strlen(stripped) + spaces);
-            } else {
-                bool seenNonWhiteSpace = false;
-                int start = i == pos.start_line ? pos.start_span : 1;
-                int end = i == pos.start_line ? strlen(lineStr) + 1 : pos.end_span + 1;
-                int charsPrinted = spaces;
-                for (int j = start; j <= end; j++) {
-                    char c = lineStr[j - 1];
-                    if (isspace(c) && !seenNonWhiteSpace) {
-                        continue;
-                    } else {
-                        seenNonWhiteSpace = true;
-                        printPosChar(out, c);
-                        charsPrinted++;
-                    }
-                }
-                maxLineLength = max(maxLineLength, charsPrinted - 1);
-            }
-            fprintf(out, "%s", newLine);
-        }
-
-        fprintf(out, "      | ");
-        if (pos.start_line == pos.end_line) {
-            for (int i = 0; i < pos.start_span - 1; i++) {
-                fprintf(out, " ");
-            }
-            for (int i = pos.start_span; i < pos.end_span; i++) {
-                fprintf(out, "^");
-            }
-        } else {
-            for (int i = 0; i < maxLineLength; i++) {
-                fprintf(out, "^");
-            }
-        }
-        fprintf(out, "%s", newLine);
-    }
-}
-
-/*
-Prints out an error message, with a filename and line number
-*/
-void error(struct position pos, const char* message, ...)
-{
-    va_list args;
-    fprintf(stderr, "error: ");
-
-    va_start(args, message);
-    vfprintf(stderr, message, args);
-    va_end(args);
-    fprintf(stderr, "\n");
-
-    printPos(stderr, pos);
-
-    system("pause");
-    exit(1);
-}
-
-void error2(Position pos1, Position pos2, const char* message, ...)
-{
-    va_list args;
-    fprintf(stderr, "error: ");
-
-    va_start(args, message);
-    vfprintf(stderr, message, args);
-    va_end(args);
-    fprintf(stderr, "\n");
-
-    printPos(stderr, pos1);
-    printPos(stderr, pos2);
-
-    system("pause");
-    exit(1);
-}
-
-void error3(Position pos1, Position pos2, Position pos3, const char* message, ...)
-{
-    va_list args;
-    fprintf(stderr, "error: ");
-
-    va_start(args, message);
-    vfprintf(stderr, message, args);
-    va_end(args);
-    fprintf(stderr, "\n");
-
-    printPos(stderr, pos1);
-    printPos(stderr, pos2);
-    printPos(stderr, pos3);
-
-    system("pause");
-    exit(1);
 }

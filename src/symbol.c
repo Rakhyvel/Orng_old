@@ -13,7 +13,7 @@
 #include <string.h>
 
 /*
-Allocates and initializes the program struct
+Allocates and initializes a symbol
 */
 struct symbolNode* Symbol_Create(char* name, SymbolType symbolType, struct symbolNode* parent, struct position pos)
 {
@@ -42,51 +42,6 @@ struct symbolNode* Symbol_Create(char* name, SymbolType symbolType, struct symbo
     }
 
     return retval;
-}
-
-/*
-Prints out the symbol tree
-*/
-void Symbol_Print(SymbolNode* root, wchar_t* prefix, wchar_t* childrenPrefix)
-{
-    ASSERT(root != NULL);
-
-    printf("%s%s", prefix, root->name);
-    switch (root->symbolType) {
-    case SYMBOL_MODULE:
-        printf("[SYMBOL_MODULE]\n");
-        break;
-    case SYMBOL_FUNCTION:
-        printf("[SYMBOL_FUNCTION]\n");
-        break;
-    case SYMBOL_VARIABLE:
-        printf("[SYMBOL_VARIABLE]\n");
-        break;
-    case SYMBOL_BLOCK:
-        printf("[SYMBOL_BLOCK]\n");
-        break;
-    default:
-        printf("[SYMBOL_TYPE]\n");
-        break;
-    }
-    List* children = root->children->keyList;
-    char newPrefix[255];
-    char newChildrenPrefix[255];
-    forall (elem, children) {
-        bool hasNext = elem->next != List_End(children);
-        if (hasNext) {
-            strncpy_s(newPrefix, 254, childrenPrefix, 254);
-            strncat_s(newPrefix, 254, "+--", 254);
-            strncpy_s(newChildrenPrefix, 254, childrenPrefix, 254);
-            strncat_s(newChildrenPrefix, 254, "|  ", 254);
-        } else {
-            strncpy_s(newPrefix, 254, childrenPrefix, 254);
-            strncat_s(newPrefix, 254, "\\--", 254);
-            strncpy_s(newChildrenPrefix, 254, childrenPrefix, 254);
-            strncat_s(newChildrenPrefix, 254, "   ", 254);
-        }
-        Symbol_Print(Map_Get(root->children, elem->data), newPrefix, newChildrenPrefix);
-    }
 }
 
 /*
@@ -129,15 +84,6 @@ struct symbolNode* Symbol_Find(const char* symbolName, const struct symbolNode* 
     }
 }
 
-struct symbolNode* Symbol_Root(const struct symbolNode* scope)
-{
-    if (scope->parent == NULL) {
-        return scope;
-    } else {
-        return Symbol_Root(scope->parent);
-    }
-}
-
 struct symbolNode* Symbol_TypeAncestor(struct symbolNode* scope, SymbolType type)
 {
     if (scope == NULL || scope->symbolType == type) {
@@ -147,11 +93,81 @@ struct symbolNode* Symbol_TypeAncestor(struct symbolNode* scope, SymbolType type
     }
 }
 
+/*
+Prints out the symbol tree
+*/
+void Symbol_Print(SymbolNode* root, wchar_t* prefix, wchar_t* childrenPrefix)
+{
+    ASSERT(root != NULL);
+
+    printf("%s%s", prefix, root->name);
+    switch (root->symbolType) {
+    case SYMBOL_MODULE:
+        printf("[SYMBOL_MODULE]\n");
+        break;
+    case SYMBOL_FUNCTION:
+        printf("[SYMBOL_FUNCTION]\n");
+        break;
+    case SYMBOL_VARIABLE:
+        printf("[SYMBOL_VARIABLE]\n");
+        break;
+    case SYMBOL_BLOCK:
+        printf("[SYMBOL_BLOCK]\n");
+        break;
+    default:
+        printf("[SYMBOL_TYPE]\n");
+        break;
+    }
+    List* children = root->children->keyList;
+    char newPrefix[255];
+    char newChildrenPrefix[255];
+    forall(elem, children)
+    {
+        bool hasNext = elem->next != List_End(children);
+        if (hasNext) {
+            strncpy_s(newPrefix, 254, childrenPrefix, 254);
+            strncat_s(newPrefix, 254, "+--", 254);
+            strncpy_s(newChildrenPrefix, 254, childrenPrefix, 254);
+            strncat_s(newChildrenPrefix, 254, "|  ", 254);
+        } else {
+            strncpy_s(newPrefix, 254, childrenPrefix, 254);
+            strncat_s(newPrefix, 254, "\\--", 254);
+            strncpy_s(newChildrenPrefix, 254, childrenPrefix, 254);
+            strncat_s(newChildrenPrefix, 254, "   ", 254);
+        }
+        Symbol_Print(Map_Get(root->children, elem->data), newPrefix, newChildrenPrefix);
+    }
+}
+
+void unVisitSymbolTree(SymbolNode* node)
+{
+    if (node == NULL) {
+        return;
+    }
+    node->visited = false;
+
+    List* children = node->children->keyList;
+    ListElem* elem = List_Begin(children);
+    for (; elem != List_End(children); elem = elem->next) {
+        SymbolNode* child = Map_Get(node->children, elem->data);
+        unVisitSymbolTree(child);
+    }
+}
+
 struct symbolNode* Symbol_MostRecentNonBlock(struct symbolNode* scope)
 {
     if (scope->symbolType != SYMBOL_BLOCK) {
         return scope;
     } else {
         return Symbol_MostRecentNonBlock(scope->parent);
+    }
+}
+
+struct symbolNode* Symbol_Root(const struct symbolNode* scope)
+{
+    if (scope->parent == NULL) {
+        return scope;
+    } else {
+        return Symbol_Root(scope->parent);
     }
 }

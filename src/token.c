@@ -162,32 +162,6 @@ const char* Token_GetString(_TokenType type)
     return "";
 }
 
-const char* Token_GetErrorMsgRepr(_TokenType type)
-{
-    switch (type) {
-    case TOKEN_IDENT:
-        return "identifier";
-    case TOKEN_STR:
-        return "string literal";
-    case TOKEN_CHAR:
-        return "character literal";
-    case TOKEN_INT:
-        return "integer literal";
-    case TOKEN_HEX:
-        return "hexadecimal literal";
-    case TOKEN_BIN:
-        return "binary literal";
-    case TOKEN_REAL:
-        return "real number literal";
-    case TOKEN_NEWLINE:
-        return "end of line";
-    case TOKEN_EOF:
-        return "end of file";
-    default:
-        return Token_GetRepr(type);
-    }
-}
-
 const char* Token_GetRepr(_TokenType type)
 {
     switch (type) {
@@ -344,5 +318,31 @@ const char* Token_GetRepr(_TokenType type)
     default:
         PANIC("Unknown token type %d\n", type);
         return NULL;
+    }
+}
+
+const char* Token_GetErrorMsgRepr(_TokenType type)
+{
+    switch (type) {
+    case TOKEN_IDENT:
+        return "identifier";
+    case TOKEN_STR:
+        return "string literal";
+    case TOKEN_CHAR:
+        return "character literal";
+    case TOKEN_INT:
+        return "integer literal";
+    case TOKEN_HEX:
+        return "hexadecimal literal";
+    case TOKEN_BIN:
+        return "binary literal";
+    case TOKEN_REAL:
+        return "real number literal";
+    case TOKEN_NEWLINE:
+        return "end of line";
+    case TOKEN_EOF:
+        return "end of file";
+    default:
+        return Token_GetRepr(type);
     }
 }

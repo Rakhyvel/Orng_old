@@ -424,6 +424,10 @@ x Go back to adding errors and union type unions
 	x fix and consistify spelling of ASTs and IRs and Tokens and everything else
 	x fix enum, AST function, and switch order to be consistent for tokens, asts, ir, symbols etc
 	- reorder functions to be in prefix order, fix header order
+		- move error, error2, error3, and gen_error to errors.c
+			- fix gen_error to be better in most cases
+		- create a new file.c file for package reading
+		- move some functions from validator to ast
 	- create predicate functions for identical conditions of multiple if statements (like "does this IR type use list data?")
 		- is this type a void error enum type
 	- move myItoa to a util file
@@ -616,8 +620,10 @@ x Go back to adding errors and union type unions
 		}
 - language server for visual studio code
 - LLVM
-- doc generation
-
+- doc generation and code analysis
+	- SLOC count
+	- function call graph
+	- module/package dependency tree
 
 
 

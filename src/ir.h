@@ -148,6 +148,5 @@ typedef struct CFG {
 } CFG;
 
 List* createCFG(struct symbolNode* functionSymbol, CFG* caller);
-void clearBBVisitedFlags(CFG* cfg);
 
 #endif

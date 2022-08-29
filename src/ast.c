@@ -33,6 +33,380 @@ const ASTNode* NOTHING_AST = NULL;
 
 bool doDefTypes = false;
 
+int AST_TypeRepr(char* str, ASTNode* type)
+{
+    char* origStr = str;
+    if (type->isConst) {
+        str += sprintf(str, ":");
+    }
+
+    switch (type->astType) {
+    case AST_IDENT: {
+        str += sprintf(str, "%s", type->ident.data);
+        break;
+    }
+    case AST_UNDEF: {
+        str += sprintf(str, "Undef");
+        break;
+    }
+    case AST_DOT: {
+        ASTNode* left = type->binop.left;
+        ASTNode* right = type->binop.right;
+        str += AST_TypeRepr(str, left);
+        str += sprintf(str, ".");
+        str += AST_TypeRepr(str, right);
+        break;
+    }
+    case AST_DEFINE: {
+        SymbolNode* symbol = type->define.symbol;
+        ASTNode* type2 = symbol->originalType;
+        str += sprintf(str, "%s:", symbol->name);
+        str += AST_TypeRepr(str, symbol->originalType);
+        break;
+    }
+    case AST_VOID: {
+        str += sprintf(str, "()");
+        break;
+    }
+    case AST_ADDR: {
+        str += sprintf(str, "&");
+        str += AST_TypeRepr(str, type->unop.expr);
+        break;
+    }
+    case AST_PARAMLIST: {
+        str += sprintf(str, "(");
+        forall(elem, type->paramlist.defines)
+        {
+            ASTNode* param = elem->data;
+            str += AST_TypeRepr(str, param);
+            if (elem->next == List_End(type->paramlist.defines)) {
+                str += sprintf(str, ")");
+            } else {
+                str += sprintf(str, ", ");
+            }
+        }
+        break;
+    }
+    case AST_ARRAY: {
+        ASTNode* lengthDefine = List_Get(type->paramlist.defines, 0);
+        SymbolNode* lengthSymbol = lengthDefine->define.symbol;
+        ASTNode* lengthCode = lengthSymbol->def;
+        ASTNode* dataDefine = List_Get(type->paramlist.defines, 1);
+        SymbolNode* dataSymbol = dataDefine->define.symbol;
+        ASTNode* dataType = dataSymbol->type;
+        if (lengthCode->astType == AST_INT) {
+            str += sprintf(str, "[%d]", (int)lengthCode->_int.data);
+        } else {
+            str += sprintf(str, "[]");
+        }
+        str += AST_TypeRepr(str, dataType);
+        break;
+    }
+    case AST_ENUM: {
+        str += sprintf(str, "<");
+        int i = 0;
+        for (struct listElem* elem = List_Begin(type->_enum.defines); elem != List_End(type->_enum.defines) && i < 5; elem = elem->next, i++) {
+            ASTNode* param = elem->data;
+            str += AST_TypeRepr(str, param);
+            if (elem->next == List_End(type->_enum.defines)) {
+                str += sprintf(str, ">");
+            } else {
+                str += sprintf(str, ", ");
+            }
+        }
+        if (i != type->_enum.defines->size) {
+            str += sprintf(str, "... >");
+        }
+        break;
+    }
+    case AST_INFER_ERROR: {
+        str += sprintf(str, "!");
+        str += AST_TypeRepr(str, type->_enum.expr);
+        break;
+    }
+    case AST_FUNCTION: {
+        ASTNode* input = type->function.domainType;
+        ASTNode* output = type->function.codomainType;
+        str += AST_TypeRepr(str, input);
+        str += sprintf(str, "->");
+        str += AST_TypeRepr(str, output);
+        break;
+    }
+    case AST_EXTERN: {
+        SymbolNode* var = type->_extern.symbol;
+        str += AST_TypeRepr(str, var->type);
+        break;
+    }
+    default: {
+        break;
+    }
+    }
+    return str - origStr;
+}
+
+/*
+ * Returns the name that corresponds to a given ASTType
+ *
+ * Parameters:
+ *	type	The type to get the name for
+ *
+ * Returns:
+ *	The name of the given type
+ */
+char* AST_GetString(enum astType type)
+{
+    switch (type) {
+    case AST_IDENT:
+        return "AST_IDENT";
+    case AST_INT:
+        return "AST_INT";
+    case AST_CHAR:
+        return "AST_CHAR";
+    case AST_TRUE:
+        return "AST_TRUE";
+    case AST_FALSE:
+        return "AST_FALSE";
+    case AST_REAL:
+        return "AST_REAL";
+    case AST_ARGLIST:
+        return "AST_ARGLIST";
+    case AST_NAMED_ARG:
+        return "AST_NAMED_ARG";
+    case AST_NOTHING:
+        return "AST_NOTHING";
+    case AST_ENUM_LITERAL:
+        return "AST_ENUM_LITERAL";
+    case AST_ARRAY_LITERAL:
+        return "AST_ARRAY_LITERAL";
+    case AST_STRING:
+        return "AST_STRING";
+    case AST_UNDEF:
+        return "AST_UNDEF";
+    case AST_DOC:
+        return "AST_DOC";
+    case AST_ASSIGN:
+        return "AST_ASSIGN";
+    case AST_OR:
+        return "AST_OR";
+    case AST_AND:
+        return "AST_AND";
+    case AST_BIT_OR:
+        return "AST_BIT_OR";
+    case AST_BIT_XOR:
+        return "AST_BIT_XOR";
+    case AST_BIT_AND:
+        return "AST_BIT_AND";
+    case AST_EQ:
+        return "AST_EQ";
+    case AST_NEQ:
+        return "AST_NEQ";
+    case AST_GTR:
+        return "AST_GTR";
+    case AST_GTE:
+        return "AST_GTE";
+    case AST_LSR:
+        return "AST_LSR";
+    case AST_LTE:
+        return "AST_LTE";
+    case AST_LSHIFT:
+        return "AST_LSHIFT";
+    case AST_RSHIFT:
+        return "AST_RSHIFT";
+    case AST_ADD:
+        return "AST_ADD";
+    case AST_SUBTRACT:
+        return "AST_SUBTRACT";
+    case AST_MULTIPLY:
+        return "AST_MULTIPLY";
+    case AST_DIVIDE:
+        return "AST_DIVIDE";
+    case AST_MODULUS:
+        return "AST_MODULUS";
+    case AST_EXPONENT:
+        return "AST_EXPONENT";
+    case AST_NOT:
+        return "AST_NOT";
+    case AST_NEG:
+        return "AST_NEG";
+    case AST_BIT_NOT:
+        return "AST_BIT_NOT";
+    case AST_ADDR_OF:
+        return "AST_ADDR_OF";
+    case AST_SIZEOF:
+        return "AST_SIZEOF";
+    case AST_DEREF:
+        return "AST_DEREF";
+    case AST_TRY:
+        return "AST_TRY";
+    case AST_CATCH:
+        return "AST_CATCH";
+    case AST_ORELSE:
+        return "AST_ORELSE";
+    case AST_CALL:
+        return "AST_CALL";
+    case AST_INDEX:
+        return "AST_INDEX";
+    case AST_SLICE:
+        return "AST_SLICE";
+    case AST_DOT:
+        return "AST_DOT";
+    case AST_DEREF_DOT:
+        return "AST_DEREF_DOT";
+    case AST_MAYBE:
+        return "AST_MAYBE";
+    case AST_CAST:
+        return "AST_CAST";
+    case AST_NEW:
+        return "AST_NEW";
+    case AST_FREE:
+        return "AST_FREE";
+    case AST_PAREN:
+        return "AST_PAREN";
+    case AST_OR_ASSIGN:
+        return "AST_OR_ASSIGN";
+    case AST_AND_ASSIGN:
+        return "AST_AND_ASSIGN";
+    case AST_BIT_OR_ASSIGN:
+        return "AST_BIT_OR_ASSIGN";
+    case AST_BIT_XOR_ASSIGN:
+        return "AST_BIT_XOR_ASSIGN";
+    case AST_BIT_AND_ASSIGN:
+        return "AST_BIT_AND_ASSIGN";
+    case AST_LSHIFT_ASSIGN:
+        return "AST_LSHIFT_ASSIGN";
+    case AST_RSHIFT_ASSIGN:
+        return "AST_RSHIFT_ASSIGN";
+    case AST_ADD_ASSIGN:
+        return "AST_ADD_ASSIGN";
+    case AST_SUB_ASSIGN:
+        return "AST_SUB_ASSIGN";
+    case AST_MULT_ASSIGN:
+        return "AST_DIV_ASSIGN";
+    case AST_DIV_ASSIGN:
+        return "AST_DIV_ASSIGN";
+    case AST_EXPONENT_ASSIGN:
+        return "AST_EXPONENT_ASSIGN";
+    case AST_DEFINE:
+        return "AST_DEFINE";
+    case AST_BLOCK:
+        return "AST_BLOCK";
+    case AST_IF:
+        return "AST_IF";
+    case AST_FOR:
+        return "AST_FOR";
+    case AST_CASE:
+        return "AST_CASE";
+    case AST_MAPPING:
+        return "AST_MAPPING";
+    case AST_RETURN:
+        return "AST_RETURN";
+    case AST_BREAK:
+        return "AST_BREAK";
+    case AST_CONTINUE:
+        return "AST_CONTINUE";
+    case AST_UNREACHABLE:
+        return "AST_UNREACHABLE";
+    case AST_DEFER:
+        return "AST_DEFER";
+    case AST_ERRDEFER:
+        return "AST_ERRDEFER";
+    case AST_VOID:
+        return "AST_VOID";
+    case AST_ADDR:
+        return "AST_ADDR";
+    case AST_PARAMLIST:
+        return "AST_PARAMLIST";
+    case AST_ARRAY:
+        return "AST_ARRAY";
+    case AST_ENUM:
+        return "AST_ENUM";
+    case AST_UNION:
+        return "AST_UNION";
+    case AST_ERROR:
+        return "AST_ERROR";
+    case AST_INFER_ERROR:
+        return "AST_INFER_ERROR";
+    case AST_FUNCTION:
+        return "AST_FUNCTION";
+    case AST_EXTERN:
+        return "AST_EXTERN";
+    default:
+        return "Unknown ASTNode type";
+    }
+}
+
+/*
+ * Prints out an AST node
+ *
+ * Parameters:
+ *	root			The AST node to print out. Cannot be null.
+ *	prefix			The string to prefix. Should be empty if calling from userspace code
+ *	childrenPrefix	The string to print before all children. Should be empty string if in userspace
+ */
+void AST_Print(ASTNode* root, char* prefix, char* childrenPrefix)
+{
+    // Crash program if root is null
+    if (root == NULL) {
+        PANIC("Malformed AST, child here was null!\n");
+    }
+    // Switch on the type and print the data specific for each node
+    switch (root->astType) {
+    case AST_IDENT:
+        printf("%s%s [%s]\n", prefix, AST_GetString(root->astType), root->ident.data);
+        break;
+    case AST_INT:
+        printf("%s%s [%d]\n", prefix, AST_GetString(root->astType), root->_int.data);
+        break;
+    case AST_CHAR:
+        printf("%s%s [%c]\n", prefix, AST_GetString(root->astType), root->_char.data);
+        break;
+    case AST_STRING:
+        printf("%s%s [%s]\n", prefix, AST_GetString(root->astType), root->_char.data);
+        break;
+    case AST_DEFINE:
+        printf("%s%s [0x%p]\n", prefix, AST_GetString(root->astType), root->define.symbol);
+        Symbol_Print(root->define.symbol, prefix, childrenPrefix);
+        break;
+    case AST_BLOCK:
+        printf("%s%s [0x%p]\n", prefix, AST_GetString(root->astType), root->block.symbol);
+        break;
+    default:
+        printf("%s%s []\n", prefix, AST_GetString(root->astType));
+    }
+}
+
+ASTNode* getArrayDataType(ASTNode* type)
+{
+    ASTNode* dataDefine = List_Get(type->paramlist.defines, 1);
+    SymbolNode* dataSymbol = dataDefine->define.symbol;
+    ASTNode* dataType = dataSymbol->type->unop.expr;
+    return dataType;
+}
+
+int getArrayLength(ASTNode* type)
+{
+    ASTNode* lengthDefine = List_Get(type->paramlist.defines, 0);
+    SymbolNode* lengthSymbol = lengthDefine->define.symbol;
+    ASTNode* lengthCode = lengthSymbol->def;
+    return lengthCode->astType == AST_INT ? lengthCode->_int.data : -1;
+}
+
+ASTNode* getArrayLengthAST(ASTNode* type)
+{
+    ASTNode* lengthDefine = List_Get(type->paramlist.defines, 0);
+    SymbolNode* lengthSymbol = lengthDefine->define.symbol;
+    ASTNode* lengthCode = lengthSymbol->def;
+    return lengthCode;
+}
+
+ASTNode* getArrayDataTypeAddr(ASTNode* type)
+{
+    ASTNode* dataDefine = List_Get(type->paramlist.defines, 1);
+    SymbolNode* dataSymbol = dataDefine->define.symbol;
+    ASTNode* dataType = dataSymbol->type;
+    return dataType;
+}
+
 // Generates common array type AST Nodes. `length` should be -1 if undefined
 ASTNode* createArrayTypeNode(ASTNode* baseType, int length, struct position pos)
 {
@@ -123,7 +497,7 @@ void AST_Init()
  * Returns:
  *	The AST node with the given parameters
  */
-ASTNode* AST_Create(enum astType type, SymbolNode* scope, struct position pos)
+static ASTNode* AST_Create(enum astType type, SymbolNode* scope, struct position pos)
 {
     ASTNode* retval = calloc(1, sizeof(ASTNode));
     retval->astType = type;
@@ -796,378 +1170,4 @@ ASTNode* AST_Create_extern(struct symbolNode* externSymbol, struct symbolNode* s
     ASTNode* retval = AST_Create(AST_EXTERN, scope, pos);
     retval->_extern.symbol = externSymbol;
     return retval;
-}
-
-/*
- * Prints out an AST node
- *
- * Parameters:
- *	root			The AST node to print out. Cannot be null.
- *	prefix			The string to prefix. Should be empty if calling from userspace code
- *	childrenPrefix	The string to print before all children. Should be empty string if in userspace
- */
-void AST_Print(ASTNode* root, char* prefix, char* childrenPrefix)
-{
-    // Crash program if root is null
-    if (root == NULL) {
-        PANIC("Malformed AST, child here was null!\n");
-    }
-    // Switch on the type and print the data specific for each node
-    switch (root->astType) {
-    case AST_INT:
-        printf("%s%s [%d]\n", prefix, AST_GetString(root->astType), root->_int.data);
-        break;
-    case AST_STRING:
-        printf("%s%s [%s]\n", prefix, AST_GetString(root->astType), root->_char.data);
-        break;
-    case AST_CHAR:
-        printf("%s%s [%c]\n", prefix, AST_GetString(root->astType), root->_char.data);
-        break;
-    case AST_DEFINE:
-        printf("%s%s [0x%p]\n", prefix, AST_GetString(root->astType), root->define.symbol);
-        Symbol_Print(root->define.symbol, prefix, childrenPrefix);
-        break;
-    case AST_BLOCK:
-        printf("%s%s [0x%p]\n", prefix, AST_GetString(root->astType), root->block.symbol);
-        break;
-    case AST_IDENT:
-        printf("%s%s [%s]\n", prefix, AST_GetString(root->astType), root->ident.data);
-        break;
-    default:
-        printf("%s%s []\n", prefix, AST_GetString(root->astType));
-    }
-}
-
-int AST_TypeRepr(char* str, ASTNode* type)
-{
-    char* origStr = str;
-    if (type->isConst) {
-        str += sprintf(str, ":");
-    }
-
-    switch (type->astType) {
-    case AST_IDENT: {
-        str += sprintf(str, "%s", type->ident.data);
-        break;
-    }
-    case AST_UNDEF: {
-        str += sprintf(str, "Undef");
-        break;
-    }
-    case AST_DOT: {
-        ASTNode* left = type->binop.left;
-        ASTNode* right = type->binop.right;
-        str += AST_TypeRepr(str, left);
-        str += sprintf(str, ".");
-        str += AST_TypeRepr(str, right);
-        break;
-    }
-    case AST_DEFINE: {
-        SymbolNode* symbol = type->define.symbol;
-        ASTNode* type2 = symbol->originalType;
-        str += sprintf(str, "%s:", symbol->name);
-        str += AST_TypeRepr(str, symbol->originalType);
-        break;
-    }
-    case AST_VOID: {
-        str += sprintf(str, "()");
-        break;
-    }
-    case AST_ADDR: {
-        str += sprintf(str, "&");
-        str += AST_TypeRepr(str, type->unop.expr);
-        break;
-    }
-    case AST_PARAMLIST: {
-        str += sprintf(str, "(");
-        forall(elem, type->paramlist.defines)
-        {
-            ASTNode* param = elem->data;
-            str += AST_TypeRepr(str, param);
-            if (elem->next == List_End(type->paramlist.defines)) {
-                str += sprintf(str, ")");
-            } else {
-                str += sprintf(str, ", ");
-            }
-        }
-        break;
-    }
-    case AST_ARRAY: {
-        ASTNode* lengthDefine = List_Get(type->paramlist.defines, 0);
-        SymbolNode* lengthSymbol = lengthDefine->define.symbol;
-        ASTNode* lengthCode = lengthSymbol->def;
-        ASTNode* dataDefine = List_Get(type->paramlist.defines, 1);
-        SymbolNode* dataSymbol = dataDefine->define.symbol;
-        ASTNode* dataType = dataSymbol->type;
-        if (lengthCode->astType == AST_INT) {
-            str += sprintf(str, "[%d]", (int)lengthCode->_int.data);
-        } else {
-            str += sprintf(str, "[]");
-        }
-        str += AST_TypeRepr(str, dataType);
-        break;
-    }
-    case AST_ENUM: {
-        str += sprintf(str, "<");
-        int i = 0;
-        for (struct listElem* elem = List_Begin(type->_enum.defines); elem != List_End(type->_enum.defines) && i < 5; elem = elem->next, i++) {
-            ASTNode* param = elem->data;
-            str += AST_TypeRepr(str, param);
-            if (elem->next == List_End(type->_enum.defines)) {
-                str += sprintf(str, ">");
-            } else {
-                str += sprintf(str, ", ");
-            }
-        }
-        if (i != type->_enum.defines->size) {
-            str += sprintf(str, "... >");
-        }
-        break;
-    }
-    case AST_INFER_ERROR: {
-        str += sprintf(str, "!");
-        str += AST_TypeRepr(str, type->_enum.expr);
-        break;
-    }
-    case AST_FUNCTION: {
-        ASTNode* input = type->function.domainType;
-        ASTNode* output = type->function.codomainType;
-        str += AST_TypeRepr(str, input);
-        str += sprintf(str, "->");
-        str += AST_TypeRepr(str, output);
-        break;
-    }
-    case AST_EXTERN: {
-        SymbolNode* var = type->_extern.symbol;
-        str += AST_TypeRepr(str, var->type);
-        break;
-    }
-    default: {
-        break;
-    }
-    }
-    return str - origStr;
-}
-
-/*
- * Returns the name that corresponds to a given ASTType
- *
- * Parameters:
- *	type	The type to get the name for
- *
- * Returns:
- *	The name of the given type
- */
-char* AST_GetString(enum astType type)
-{
-    switch (type) {
-    case AST_IDENT:
-        return "AST_IDENT";
-    case AST_INT:
-        return "AST_INT";
-    case AST_CHAR:
-        return "AST_CHAR";
-    case AST_TRUE:
-        return "AST_TRUE";
-    case AST_FALSE:
-        return "AST_FALSE";
-    case AST_REAL:
-        return "AST_REAL";
-    case AST_ARGLIST:
-        return "AST_ARGLIST";
-    case AST_NAMED_ARG:
-        return "AST_NAMED_ARG";
-    case AST_NOTHING:
-        return "AST_NOTHING";
-    case AST_ENUM_LITERAL:
-        return "AST_ENUM_LITERAL";
-    case AST_ARRAY_LITERAL:
-        return "AST_ARRAY_LITERAL";
-    case AST_STRING:
-        return "AST_STRING";
-    case AST_UNDEF:
-        return "AST_UNDEF";
-    case AST_DOC:
-        return "AST_DOC";
-    case AST_ASSIGN:
-        return "AST_ASSIGN";
-    case AST_OR:
-        return "AST_OR";
-    case AST_AND:
-        return "AST_AND";
-    case AST_BIT_OR:
-        return "AST_BIT_OR";
-    case AST_BIT_XOR:
-        return "AST_BIT_XOR";
-    case AST_BIT_AND:
-        return "AST_BIT_AND";
-    case AST_EQ:
-        return "AST_EQ";
-    case AST_NEQ:
-        return "AST_NEQ";
-    case AST_GTR:
-        return "AST_GTR";
-    case AST_GTE:
-        return "AST_GTE";
-    case AST_LSR:
-        return "AST_LSR";
-    case AST_LTE:
-        return "AST_LTE";
-    case AST_LSHIFT:
-        return "AST_LSHIFT";
-    case AST_RSHIFT:
-        return "AST_RSHIFT";
-    case AST_ADD:
-        return "AST_ADD";
-    case AST_SUBTRACT:
-        return "AST_SUBTRACT";
-    case AST_MULTIPLY:
-        return "AST_MULTIPLY";
-    case AST_DIVIDE:
-        return "AST_DIVIDE";
-    case AST_MODULUS:
-        return "AST_MODULUS";
-    case AST_EXPONENT:
-        return "AST_EXPONENT";
-    case AST_NOT:
-        return "AST_NOT";
-    case AST_NEG:
-        return "AST_NEG";
-    case AST_BIT_NOT:
-        return "AST_BIT_NOT";
-    case AST_ADDR_OF:
-        return "AST_ADDR_OF";
-    case AST_SIZEOF:
-        return "AST_SIZEOF";
-    case AST_DEREF:
-        return "AST_DEREF";
-    case AST_TRY:
-        return "AST_TRY";
-    case AST_CATCH:
-        return "AST_CATCH";
-    case AST_ORELSE:
-        return "AST_ORELSE";
-    case AST_CALL:
-        return "AST_CALL";
-    case AST_INDEX:
-        return "AST_INDEX";
-    case AST_SLICE:
-        return "AST_SLICE";
-    case AST_DOT:
-        return "AST_DOT";
-    case AST_DEREF_DOT:
-        return "AST_DEREF_DOT";
-    case AST_MAYBE:
-        return "AST_MAYBE";
-    case AST_CAST:
-        return "AST_CAST";
-    case AST_NEW:
-        return "AST_NEW";
-    case AST_FREE:
-        return "AST_FREE";
-    case AST_PAREN:
-        return "AST_PAREN";
-    case AST_OR_ASSIGN:
-        return "AST_OR_ASSIGN";
-    case AST_AND_ASSIGN:
-        return "AST_AND_ASSIGN";
-    case AST_BIT_OR_ASSIGN:
-        return "AST_BIT_OR_ASSIGN";
-    case AST_BIT_XOR_ASSIGN:
-        return "AST_BIT_XOR_ASSIGN";
-    case AST_BIT_AND_ASSIGN:
-        return "AST_BIT_AND_ASSIGN";
-    case AST_LSHIFT_ASSIGN:
-        return "AST_LSHIFT_ASSIGN";
-    case AST_RSHIFT_ASSIGN:
-        return "AST_RSHIFT_ASSIGN";
-    case AST_ADD_ASSIGN:
-        return "AST_ADD_ASSIGN";
-    case AST_SUB_ASSIGN:
-        return "AST_SUB_ASSIGN";
-    case AST_MULT_ASSIGN:
-        return "AST_DIV_ASSIGN";
-    case AST_DIV_ASSIGN:
-        return "AST_DIV_ASSIGN";
-    case AST_EXPONENT_ASSIGN:
-        return "AST_EXPONENT_ASSIGN";
-    case AST_DEFINE:
-        return "AST_DEFINE";
-    case AST_BLOCK:
-        return "AST_BLOCK";
-    case AST_IF:
-        return "AST_IF";
-    case AST_FOR:
-        return "AST_FOR";
-    case AST_CASE:
-        return "AST_CASE";
-    case AST_MAPPING:
-        return "AST_MAPPING";
-    case AST_RETURN:
-        return "AST_RETURN";
-    case AST_BREAK:
-        return "AST_BREAK";
-    case AST_CONTINUE:
-        return "AST_CONTINUE";
-    case AST_UNREACHABLE:
-        return "AST_UNREACHABLE";
-    case AST_DEFER:
-        return "AST_DEFER";
-    case AST_ERRDEFER:
-        return "AST_ERRDEFER";
-    case AST_VOID:
-        return "AST_VOID";
-    case AST_ADDR:
-        return "AST_ADDR";
-    case AST_PARAMLIST:
-        return "AST_PARAMLIST";
-    case AST_ARRAY:
-        return "AST_ARRAY";
-    case AST_ENUM:
-        return "AST_ENUM";
-    case AST_UNION:
-        return "AST_UNION";
-    case AST_ERROR:
-        return "AST_ERROR";
-    case AST_INFER_ERROR:
-        return "AST_INFER_ERROR";
-    case AST_FUNCTION:
-        return "AST_FUNCTION";
-    case AST_EXTERN:
-        return "AST_EXTERN";
-    default:
-        return "Unknown ASTNode type";
-    }
-}
-
-ASTNode* getArrayLengthAST(ASTNode* type)
-{
-    ASTNode* lengthDefine = List_Get(type->paramlist.defines, 0);
-    SymbolNode* lengthSymbol = lengthDefine->define.symbol;
-    ASTNode* lengthCode = lengthSymbol->def;
-    return lengthCode;
-}
-
-int getArrayLength(ASTNode* type)
-{
-    ASTNode* lengthDefine = List_Get(type->paramlist.defines, 0);
-    SymbolNode* lengthSymbol = lengthDefine->define.symbol;
-    ASTNode* lengthCode = lengthSymbol->def;
-    return lengthCode->astType == AST_INT ? lengthCode->_int.data : -1;
-}
-
-ASTNode* getArrayDataType(ASTNode* type)
-{
-    ASTNode* dataDefine = List_Get(type->paramlist.defines, 1);
-    SymbolNode* dataSymbol = dataDefine->define.symbol;
-    ASTNode* dataType = dataSymbol->type->unop.expr;
-    return dataType;
-}
-
-ASTNode* getArrayDataTypeAddr(ASTNode* type)
-{
-    ASTNode* dataDefine = List_Get(type->paramlist.defines, 1);
-    SymbolNode* dataSymbol = dataDefine->define.symbol;
-    ASTNode* dataType = dataSymbol->type;
-    return dataType;
 }

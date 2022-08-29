@@ -65,7 +65,7 @@ enum astType {
     AST_NEW,
     AST_FREE,
     AST_PAREN,
-	// Operator assign
+    // Operator assign
     AST_OR_ASSIGN,
     AST_AND_ASSIGN,
     AST_BIT_OR_ASSIGN,
@@ -103,8 +103,8 @@ enum astType {
     AST_ARRAY,
     AST_ENUM,
     AST_UNION,
-	AST_ERROR,
-	AST_INFER_ERROR,
+    AST_ERROR,
+    AST_INFER_ERROR,
     AST_FUNCTION,
     AST_EXTERN
 };
@@ -336,6 +336,19 @@ const ASTNode* TRUE_AST;
 const ASTNode* FALSE_AST;
 const ASTNode* NOTHING_AST;
 
+int AST_TypeRepr(char* str, ASTNode* type);
+char* AST_GetString(enum astType type);
+void AST_Print(ASTNode* root, char* prefix, char* childrenPrefix);
+
+ASTNode* getArrayDataType(ASTNode* type);
+int getArrayLength(ASTNode* type);
+ASTNode* getArrayLengthAST(ASTNode* type);
+ASTNode* getArrayDataTypeAddr(ASTNode* type);
+ASTNode* createArrayTypeNode(ASTNode* baseType, int length, struct position pos);
+ASTNode* createMaybeType(ASTNode* somethingBaseType);
+
+void AST_Init();
+
 ASTNode* AST_Create_ident(char* data, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_int(int64_t data, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_char(char* data, struct symbolNode* scope, struct position pos);
@@ -423,15 +436,5 @@ ASTNode* AST_Create_error(struct astNode* left, struct astNode* right, struct sy
 ASTNode* AST_Create_inferError(struct astNode* expr, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_function(struct astNode* domain, struct astNode* codomain, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_extern(struct symbolNode* externSymbol, struct symbolNode* scope, struct position pos);
-
-int getArrayLength(ASTNode* type);
-ASTNode* getArrayLengthAST(ASTNode* type);
-ASTNode* getArrayDataType(ASTNode* type);
-ASTNode* getArrayDataTypeAddr(ASTNode* type);
-ASTNode* createArrayTypeNode(ASTNode* baseType, int length);
-ASTNode* AST_Create(enum astType type, SymbolNode* scope, struct position pos);
-void AST_Print(ASTNode* root, char* prefix, char* childrenPrefix);
-int AST_TypeRepr(char* str, ASTNode* type);
-char* AST_GetString(enum astType type);
 
 #endif

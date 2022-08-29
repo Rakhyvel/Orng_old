@@ -13,6 +13,64 @@ int line;
 int span = 1;
 bool inComment = false;
 
+/*
+Returns what type of character the given character is. Used to split along char types
+*/
+static int getCharType(char c)
+{
+    if (isalnum(c) || c == '_') {
+        return 0;
+    } else if (isspace(c)) {
+        return 1;
+    } else {
+        return 2;
+    }
+}
+
+/*
+Returns whether or not to split a token based on the begining character of the token, and the new character
+*/
+static bool shouldSplitToken(char c, char start, int length)
+{
+    if (start == '\n'
+        || start == ')'
+        || start == '{'
+        || start == '}'
+        || start == '['
+        || start == ']'
+        || start == ';'
+        || start == '?'
+        || start == ':'
+        || start == ','
+        || (start == '(' && c != '|')
+        || (start == '=' && c != '=')
+        || (start == '&' && c != '&' && c != '=')
+        || (start == '|' && c != '|' && c != '=')
+        || (start == '<' && c != '<' && c != '=')
+        || (start == '>' && c != '>' && c != '=')
+        || (start == '.' && c != '.')
+        || (start == '+' && c != '+' && c != '=')
+        || (start == '-' && c != '>' && c != '-' && c != '=' && (c != '[' || length != 1))
+        || (start == '*' && c != '=')
+        || (start == '/' && c != '=' && c != '/')
+        || (start == '%' && c != '=')
+        || (start == '!' && c != '=')) {
+        return true;
+    } else {
+        return getCharType(c) != getCharType(start);
+    }
+}
+
+static bool strContains(char* str, char c)
+{
+    for (int i = 0; str[i] != '\0'; i++) {
+        if (str[i] == c) {
+            return true;
+        }
+    }
+    return false;
+}
+
 // some legal identifiers in Orng are keywords in C
 // should decouple Orng source from output C. Orng programmer shouldn't care about C at all
 static bool cNameClash(char* str)
@@ -63,64 +121,6 @@ static bool prependWithUnderscore(char* str)
         str[i] = str[i - 1];
     }
     str[0] = '_';
-}
-
-static bool strContains(char* str, char c)
-{
-    for (int i = 0; str[i] != '\0'; i++) {
-        if (str[i] == c) {
-            return true;
-        }
-    }
-    return false;
-}
-
-/*
-Returns what type of character the given character is. Used to split along char types
-*/
-static int getCharType(char c)
-{
-    if (isalnum(c) || c == '_') {
-        return 0;
-    } else if (isspace(c)) {
-        return 1;
-    } else {
-        return 2;
-    }
-}
-
-/*
-Returns whether or not to split a token based on the begining character of the token, and the new character
-*/
-static bool shouldSplitToken(char c, char start, int length)
-{
-    if (start == '\n'
-        || start == ')'
-        || start == '{'
-        || start == '}'
-        || start == '['
-        || start == ']'
-        || start == ';'
-        || start == '?'
-        || start == ':'
-        || start == ','
-        || (start == '(' && c != '|')
-        || (start == '=' && c != '=')
-        || (start == '&' && c != '&' && c != '=')
-        || (start == '|' && c != '|' && c != '=')
-        || (start == '<' && c != '<' && c != '=')
-        || (start == '>' && c != '>' && c != '=')
-        || (start == '.' && c != '.')
-        || (start == '+' && c != '+' && c != '=')
-        || (start == '-' && c != '>' && c != '-' && c != '=' && (c != '[' || length != 1))
-        || (start == '*' && c != '=')
-        || (start == '/' && c != '=' && c != '/')
-        || (start == '%' && c != '=')
-        || (start == '!' && c != '=')) {
-        return true;
-    } else {
-        return getCharType(c) != getCharType(start);
-    }
 }
 
 // Reads in a file stream, gets the data for the next token. Leaves file stream at the begining of next token

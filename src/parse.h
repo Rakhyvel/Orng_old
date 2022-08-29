@@ -7,8 +7,8 @@
 #include "./symbol.h"
 #include <stdio.h>
 
-void rebaseScope(ASTNode* node, SymbolNode* newScope);
 char* myItoa(int val);
+
 ASTNode* Parser_Parse(FILE* in, SymbolNode* program);
 
 #endif

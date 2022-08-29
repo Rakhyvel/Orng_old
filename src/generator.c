@@ -14,7 +14,7 @@
 
 Program program;
 
-static void generateDefine(FILE* out, SymbolNode* var, bool param);
+static void generateDefine(FILE* out, SymbolNode* var, bool param, bool field);
 static void generateEnum(FILE* out, DGraph* graphNode);
 
 static void generateIncludes(FILE* out, Map* includes)
@@ -328,7 +328,7 @@ static void generateStructDefinitions(FILE* out, List* depenGraph)
     }
 }
 
-void generateVerbatims(FILE* out, List* verbatims)
+static void generateVerbatims(FILE* out, List* verbatims)
 {
     fprintf(out, "/* Verbatim code */\n");
     forall(elem, verbatims)
@@ -339,7 +339,7 @@ void generateVerbatims(FILE* out, List* verbatims)
     fprintf(out, "\n");
 }
 
-void generateForwardFunctions(FILE* out, CFG* callGraphNode)
+static void generateForwardFunctions(FILE* out, CFG* callGraphNode)
 {
     if (callGraphNode->visited) {
         return;
@@ -369,7 +369,7 @@ void generateForwardFunctions(FILE* out, CFG* callGraphNode)
     callGraphNode->visited = false;
 }
 
-void printVarDef(FILE* out, SymbolVersion* version)
+static void printVarDef(FILE* out, SymbolVersion* version)
 {
     fprintf(out, "\t");
     printType(out, version->type);
@@ -395,7 +395,7 @@ void printVarDef(FILE* out, SymbolVersion* version)
     fprintf(out, ";\n");
 }
 
-void printVarAssign(FILE* out, SymbolVersion* version)
+static void printVarAssign(FILE* out, SymbolVersion* version)
 {
     fprintf(out, "\t");
     if (!strcmp(version->symbol->name, "$return")) {
@@ -412,13 +412,39 @@ void printVarAssign(FILE* out, SymbolVersion* version)
     }
 }
 
-void printVar(FILE* out, SymbolVersion* version)
+static void printVar(FILE* out, SymbolVersion* version)
 {
     if (version->symbol->name[0] != '$') {
         printPath(out, version->symbol);
     }
     if (!version->symbol->isVolatile) {
         fprintf(out, "_%d", version->version);
+    }
+}
+
+// All symbols are either defined in the basic block or are arguments to the function
+// Print out copies for each argument to the BB parameter
+static void generatePhiFunction(FILE* out, CFG* cfg)
+{
+    forall(elem, cfg->symbol->type->function.domainType->paramlist.defines)
+    {
+        ASTNode* define = elem->data;
+        SymbolNode* symbol = define->define.symbol;
+
+        SymbolVersion* parameter = NULL;
+        forall(elem2, cfg->blockGraph->parameters)
+        {
+            SymbolVersion* symbver = elem2->data;
+            if (!strcmp(symbver->symbol->name, symbol->name)) {
+                parameter = symbver;
+                break;
+            }
+        }
+        if (parameter) {
+            printVarAssign(out, parameter);
+            printPath(out, symbol);
+            fprintf(out, ";\n");
+        }
     }
 }
 
@@ -955,32 +981,6 @@ static void generatePhi(FILE* out, List* argsList, BasicBlock* to, bool extraTab
     }
 }
 
-// All symbols are either defined in the basic block or are arguments to the function
-// Print out copies for each argument to the BB parameter
-static void generatePhiFunction(FILE* out, CFG* cfg)
-{
-    forall(elem, cfg->symbol->type->function.domainType->paramlist.defines)
-    {
-        ASTNode* define = elem->data;
-        SymbolNode* symbol = define->define.symbol;
-
-        SymbolVersion* parameter = NULL;
-        forall(elem2, cfg->blockGraph->parameters)
-        {
-            SymbolVersion* symbver = elem2->data;
-            if (!strcmp(symbver->symbol->name, symbol->name)) {
-                parameter = symbver;
-                break;
-            }
-        }
-        if (parameter) {
-            printVarAssign(out, parameter);
-            printPath(out, symbol);
-            fprintf(out, ";\n");
-        }
-    }
-}
-
 static void generateBasicBlock(FILE* out, CFG* cfg, BasicBlock* bb)
 {
     if (bb->visited) {
@@ -1021,7 +1021,7 @@ static void generateBasicBlock(FILE* out, CFG* cfg, BasicBlock* bb)
     }
 }
 
-void generateFunctionDefinitions(FILE* out, CFG* callGraphNode)
+static void generateFunctionDefinitions(FILE* out, CFG* callGraphNode)
 {
     if (callGraphNode->visited) {
         return;
@@ -1071,7 +1071,6 @@ void generateFunctionDefinitions(FILE* out, CFG* callGraphNode)
     }
     if (callGraphNode->blockGraph) {
         generatePhiFunction(out, callGraphNode);
-        clearBBVisitedFlags(callGraphNode);
         generateBasicBlock(out, callGraphNode, callGraphNode->blockGraph);
     }
     fprintf(out, "end:;\n");
@@ -1088,7 +1087,7 @@ void generateFunctionDefinitions(FILE* out, CFG* callGraphNode)
     callGraphNode->visited = false;
 }
 
-void generateMainFunction(FILE* out, CFG* callGraph)
+static void generateMainFunction(FILE* out, CFG* callGraph)
 {
     fprintf(out, "void pause() {system(\"pause\");}\n\n");
 
@@ -1135,7 +1134,7 @@ void generateMainFunction(FILE* out, CFG* callGraph)
     fprintf(out, "}\n");
 }
 
-void Generator_Generate(FILE* out, Program _program)
+void Generator_Generate(FILE* out, struct program _program)
 {
     program = _program;
 
