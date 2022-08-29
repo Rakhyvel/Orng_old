@@ -1,5 +1,5 @@
 ﻿// © 2021-2022 Joseph Shimel. All rights reserved.
-// Provides functionality for creating and maintaining an Abstract Syntax Tree.
+// Provides functionality for creating and manipulating Abstract Syntax Trees, as well as storing well-known type AST expressions
 
 #define _CRT_SECURE_NO_WARNINGS
 #include "ast.h"
@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+// Well-known constant type ASTs, constructed at init
 const ASTNode* INT8_TYPE = NULL;
 const ASTNode* INT16_TYPE = NULL;
 const ASTNode* INT32_TYPE = NULL;
@@ -27,12 +28,13 @@ const ASTNode* UNDEF_TYPE = NULL;
 const ASTNode* VOID_ADDR_TYPE = NULL;
 const ASTNode* MAYBE_VOID_TYPE = NULL;
 
+// Well-known constant expression ASTs, constructed at init
 const ASTNode* TRUE_AST = NULL;
 const ASTNode* FALSE_AST = NULL;
 const ASTNode* NOTHING_AST = NULL;
 
-bool doDefTypes = false;
-
+// Takes in a string buffer to fill, and a type, pretty-prints out the type as it would be represented in Orng
+// TODO: Make buffer safe
 int AST_TypeRepr(char* str, ASTNode* type)
 {
     char* origStr = str;
@@ -144,15 +146,7 @@ int AST_TypeRepr(char* str, ASTNode* type)
     return str - origStr;
 }
 
-/*
- * Returns the name that corresponds to a given ASTType
- *
- * Parameters:
- *	type	The type to get the name for
- *
- * Returns:
- *	The name of the given type
- */
+// Returns the name of an AST type
 char* AST_GetString(enum astType type)
 {
     switch (type) {
@@ -335,14 +329,7 @@ char* AST_GetString(enum astType type)
     }
 }
 
-/*
- * Prints out an AST node
- *
- * Parameters:
- *	root			The AST node to print out. Cannot be null.
- *	prefix			The string to prefix. Should be empty if calling from userspace code
- *	childrenPrefix	The string to print before all children. Should be empty string if in userspace
- */
+// Pretty-prints an abstract syntax tree
 void AST_Print(ASTNode* root, char* prefix, char* childrenPrefix)
 {
     // Crash program if root is null
@@ -375,6 +362,7 @@ void AST_Print(ASTNode* root, char* prefix, char* childrenPrefix)
     }
 }
 
+// Returns the element data type of an array type AST
 ASTNode* getArrayDataType(ASTNode* type)
 {
     ASTNode* dataDefine = List_Get(type->paramlist.defines, 1);
@@ -383,6 +371,7 @@ ASTNode* getArrayDataType(ASTNode* type)
     return dataType;
 }
 
+// Returns the integer length of an array type AST if there is one, otherwise returns -1
 int getArrayLength(ASTNode* type)
 {
     ASTNode* lengthDefine = List_Get(type->paramlist.defines, 0);
@@ -391,6 +380,7 @@ int getArrayLength(ASTNode* type)
     return lengthCode->astType == AST_INT ? lengthCode->_int.data : -1;
 }
 
+// Returns the AST expression for the length of an array type AST
 ASTNode* getArrayLengthAST(ASTNode* type)
 {
     ASTNode* lengthDefine = List_Get(type->paramlist.defines, 0);
@@ -399,6 +389,7 @@ ASTNode* getArrayLengthAST(ASTNode* type)
     return lengthCode;
 }
 
+// Returns the element data address type of an array type AST
 ASTNode* getArrayDataTypeAddr(ASTNode* type)
 {
     ASTNode* dataDefine = List_Get(type->paramlist.defines, 1);
@@ -407,7 +398,7 @@ ASTNode* getArrayDataTypeAddr(ASTNode* type)
     return dataType;
 }
 
-// Generates common array type AST Nodes. `length` should be -1 if undefined
+// Generates an array type AST given a basetype. `length` should be -1 if array length is undefined
 ASTNode* createArrayTypeNode(ASTNode* baseType, int length, struct position pos)
 {
     ASTNode* array = AST_Create_array(NULL, (Position) { NULL, 0, 0, 0 });
@@ -457,6 +448,7 @@ ASTNode* createMaybeType(ASTNode* somethingBaseType)
     return maybe;
 }
 
+// Initializes well-known constant ASTs
 void AST_Init()
 {
     INT8_TYPE = AST_Create_ident("Int8", NULL, (Position) { NULL, 0, 0, 0 });
@@ -485,18 +477,7 @@ void AST_Init()
     MAYBE_VOID_TYPE = createMaybeType(VOID_TYPE);
 }
 
-/*
- * Creates an AST node
- *
- * Parameters:
- *	type	The type of node to have the node be
- *	data	Some data that the AST node should have. See astData in ast.h
- *	scope	The scope that the AST node belongs into. See symbol.h
- *	line	The line that this AST node comes from
- *
- * Returns:
- *	The AST node with the given parameters
- */
+// Creates an AST node. Used by other functions that create more specific AST nodes
 static ASTNode* AST_Create(enum astType type, SymbolNode* scope, struct position pos)
 {
     ASTNode* retval = calloc(1, sizeof(ASTNode));

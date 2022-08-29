@@ -115,7 +115,7 @@ typedef struct BasicBlock {
     struct IR* entry;
     bool hasBranch;
     int id;
-    int incoming;
+    int incoming; // TODO: rename to 'predecessor'
     struct list* parameters; // List of symbol versions that are used somewhere in an IR in the BB, but are not defined anywhere in the BB up to the IR in question
     struct BasicBlock* next; // Used by jump, and branch if condition is true
     struct list* nextArguments; // These symbols are copied to the parameters of the next BB

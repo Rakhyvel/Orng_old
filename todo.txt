@@ -423,17 +423,17 @@ x Go back to adding errors and union type unions
 	x replace for loops over lists with forall loops
 	x fix and consistify spelling of ASTs and IRs and Tokens and everything else
 	x fix enum, AST function, and switch order to be consistent for tokens, asts, ir, symbols etc
-	- reorder functions to be in prefix order, fix header order
-		- move error, error2, error3, and gen_error to errors.c
-			- fix gen_error to be better in most cases
-		- create a new file.c file for package reading
-		- move some functions from validator to ast
-	- create predicate functions for identical conditions of multiple if statements (like "does this IR type use list data?")
-		- is this type a void error enum type
-	- move myItoa to a util file
+	x reorder functions to be in prefix order, fix header order
+		x move error, error2, error3, and gen_error to errors.c
+			x fix gen_error to be better in most cases
 	- comments on everything
-		- Single line
-		- Assume reader fully understands entire program but what you're commenting
+		- files
+		- functions
+		- globals
+		- structs
+		- enums
+		- struct fields
+		- Assume reader must come up with their own implementation for thing, give them a guide on how they could do it, they have full knowledge of the rest of the program
 	- change references to "double" to "real"
 	- variable name semantics
 		- 'type' for AST nodes that are types

@@ -1,4 +1,5 @@
 // © 2021-2022 Joseph Shimel. All rights reserved.
+// Handles error collection and output
 
 #include "errors.h"
 #include "./main.h"
@@ -6,6 +7,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 
+// Counts the amount of leading whitespace in a string. Tabs count for four whitespaces.
 static int countLeadingWhitespace(char* str)
 {
     int count = 0;
@@ -19,6 +21,7 @@ static int countLeadingWhitespace(char* str)
     return count;
 }
 
+// Returns the address to the first non-space character in a string
 static char* firstNonSpace(char* str)
 {
     int i = 0;
@@ -27,6 +30,7 @@ static char* firstNonSpace(char* str)
     return str + i;
 }
 
+// If 'out' is stderr, prints char as normal. Otherwise, prints character so that it would be escaped in a C string
 static void printPosChar(FILE* out, char c)
 {
     if (out != stderr) {
@@ -42,6 +46,7 @@ static void printPosChar(FILE* out, char c)
     }
 }
 
+// Prints out a given position's information, including the context of the file
 void printPos(FILE* out, struct position pos)
 {
     char* newLine = out == stderr ? "\n" : "\\n";
@@ -112,9 +117,7 @@ void printPos(FILE* out, struct position pos)
     }
 }
 
-/*
-Prints out an error message, with a filename and line number
-*/
+// Prints out an error message, with a filename and line number
 void error(struct position pos, const char* message, ...)
 {
     va_list args;
@@ -131,6 +134,7 @@ void error(struct position pos, const char* message, ...)
     exit(1);
 }
 
+// Prints out an error message with two positions
 void error2(Position pos1, Position pos2, const char* message, ...)
 {
     va_list args;
@@ -148,6 +152,7 @@ void error2(Position pos1, Position pos2, const char* message, ...)
     exit(1);
 }
 
+// Prints out an error message with three positions
 void error3(Position pos1, Position pos2, Position pos3, const char* message, ...)
 {
     va_list args;
@@ -166,9 +171,7 @@ void error3(Position pos1, Position pos2, Position pos3, const char* message, ..
     exit(1);
 }
 
-/*
-prints out a general error message about the program with no position given
-*/
+// prints out a general error message about the program with no position given
 void gen_error(const char* message, ...)
 {
     va_list args;
@@ -182,13 +185,7 @@ void gen_error(const char* message, ...)
     exit(1);
 }
 
-void printType(ASTNode* type)
-{
-    char typeStr[255];
-    AST_TypeRepr(typeStr, type);
-    printf("%s\n", typeStr);
-}
-
+// Prints out a message about two types being mismatched
 void typeMismatchError(struct position pos, struct astNode* expectedType, struct astNode* actualType)
 {
     char expectedStr[255];
@@ -198,6 +195,7 @@ void typeMismatchError(struct position pos, struct astNode* expectedType, struct
     error(pos, "type mismatch: expected %s, got %s", expectedStr, actualStr);
 }
 
+// Prints out a message about two types being mismatched, with two positions
 void typeMismatchError2(struct position pos, struct position pos2, struct astNode* expectedType, struct astNode* actualType)
 {
     char expectedStr[255];
@@ -207,6 +205,7 @@ void typeMismatchError2(struct position pos, struct position pos2, struct astNod
     error2(pos, pos2, "type mismatch: expected %s, got %s", expectedStr, actualStr);
 }
 
+// Prints a message about incompatible types
 void incompatibleTypesError(struct position pos, struct astNode* leftType, struct astNode* rightType)
 {
     char leftStr[255];
@@ -216,6 +215,7 @@ void incompatibleTypesError(struct position pos, struct astNode* leftType, struc
     error(pos, "incompatible types: %s and %s", leftStr, rightStr);
 }
 
+// Prints a message about restriction or an undefined symbol
 void restrictedOrUndefError(struct position pos1, struct position pos2, char* symbolName)
 {
     if (pos2.start_line != 0) {
@@ -225,6 +225,7 @@ void restrictedOrUndefError(struct position pos1, struct position pos2, char* sy
     }
 }
 
+// Prints out a message about expecting an array type
 void expectedArray(struct position pos, struct astNode* actualType)
 {
     char actualStr[255];
@@ -232,6 +233,7 @@ void expectedArray(struct position pos, struct astNode* actualType)
     error(pos, "type mismatch: expected array type, got %s", actualStr);
 }
 
+// Prints out a message about a field not being in a given expression
 void notMemberOfExpression(struct position pos, char* fieldName, struct astNode* paramlist)
 {
     char actualStr[255];

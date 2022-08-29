@@ -1,4 +1,5 @@
 // © 2021-2022 Joseph Shimel. All rights reserved.
+// Generates output code based on program struct constructed and validated in early stages
 
 #include "generator.h"
 #include "../util/debug.h"
@@ -17,6 +18,7 @@ Program program;
 static void generateDefine(FILE* out, SymbolNode* var, bool param, bool field);
 static void generateEnum(FILE* out, DGraph* graphNode);
 
+// Generates the includes used by the program
 static void generateIncludes(FILE* out, Map* includes)
 {
     fprintf(out, "/* Includes */\n");
@@ -32,6 +34,7 @@ static void generateIncludes(FILE* out, Map* includes)
     fprintf(out, "\n");
 }
 
+// Generates some built-in functions and types for a debug build for the callstack
 static void generateDebug(FILE* out)
 {
     fprintf(out, "/* Debug */\n");
@@ -67,6 +70,7 @@ static void generateDebug(FILE* out)
     fprintf(out, "\t}\n}\n\n");
 }
 
+// Generates the code for pushing a function onto the callstack
 static void stackTracePush(FILE* out, char* list)
 {
     fprintf(out, "	if (%s->length >= 1000) {\n", list);
@@ -77,6 +81,7 @@ static void stackTracePush(FILE* out, char* list)
     fprintf(out, "	%s->data[%s->length++] = ", list, list);
 }
 
+// Prints out the ordinal of a given struct type
 static void printStructOrd(FILE* out, ASTNode* type)
 {
     struct listElem* elem = List_Begin(program.structDependencyGraph);
@@ -92,6 +97,7 @@ static void printStructOrd(FILE* out, ASTNode* type)
     }
 }
 
+// Prints out a type
 static void printType(FILE* out, ASTNode* type)
 {
     switch (type->astType) {
@@ -157,6 +163,7 @@ static void printType(FILE* out, ASTNode* type)
     }
 }
 
+// Prints the name of a symbol
 static void printPath(FILE* out, SymbolNode* symbol)
 {
     // Local variables
@@ -185,6 +192,7 @@ static void printPath(FILE* out, SymbolNode* symbol)
     }
 }
 
+// Prints out the definitions of a product type
 static void generateParamList(FILE* out, ASTNode* parameters)
 {
     // For each parameter in the procedure's parameter list, print it out
@@ -199,6 +207,7 @@ static void generateParamList(FILE* out, ASTNode* parameters)
     }
 }
 
+// Generates a definition of a symbol. May be a regular definition, a function parameter, or a struct field
 static void generateDefine(FILE* out, SymbolNode* var, bool param, bool field)
 {
     printType(out, var->type);
@@ -226,6 +235,7 @@ static void generateDefine(FILE* out, SymbolNode* var, bool param, bool field)
     }
 }
 
+// Prints out a struct from a dependency graph node in such a way that all dependencies are defined
 static void generateStruct(FILE* out, DGraph* graphNode)
 {
     if (graphNode->visited) {
@@ -262,6 +272,7 @@ static void generateStruct(FILE* out, DGraph* graphNode)
     fprintf(out, "};\n\n");
 }
 
+// Prints out a sum-type struct from a dependency graph node in such a way that all dependencies are defined.
 static void generateEnum(FILE* out, DGraph* graphNode)
 {
     if (graphNode->visited) {
@@ -314,6 +325,7 @@ static void generateEnum(FILE* out, DGraph* graphNode)
     fprintf(out, "};\n\n");
 }
 
+// Takes a list of dependency nodes that are either sum or product types, prints them out
 static void generateStructDefinitions(FILE* out, List* depenGraph)
 {
     fprintf(out, "/* Struct definitions */\n");
@@ -328,6 +340,7 @@ static void generateStructDefinitions(FILE* out, List* depenGraph)
     }
 }
 
+// Prints out verbatim code for a program. TODO: Remove verbatim code entirely
 static void generateVerbatims(FILE* out, List* verbatims)
 {
     fprintf(out, "/* Verbatim code */\n");
@@ -339,6 +352,7 @@ static void generateVerbatims(FILE* out, List* verbatims)
     fprintf(out, "\n");
 }
 
+// Prints out the forward function declarations used in the program
 static void generateForwardFunctions(FILE* out, CFG* callGraphNode)
 {
     if (callGraphNode->visited) {
@@ -369,6 +383,7 @@ static void generateForwardFunctions(FILE* out, CFG* callGraphNode)
     callGraphNode->visited = false;
 }
 
+// Prints out the definition of a symbol version
 static void printVarDef(FILE* out, SymbolVersion* version)
 {
     fprintf(out, "\t");
@@ -395,6 +410,7 @@ static void printVarDef(FILE* out, SymbolVersion* version)
     fprintf(out, ";\n");
 }
 
+// Prints out the left-hand side of a symbol version assignment
 static void printVarAssign(FILE* out, SymbolVersion* version)
 {
     fprintf(out, "\t");
@@ -412,6 +428,7 @@ static void printVarAssign(FILE* out, SymbolVersion* version)
     }
 }
 
+// Prints out the name of a symbol version
 static void printVar(FILE* out, SymbolVersion* version)
 {
     if (version->symbol->name[0] != '$') {
@@ -422,32 +439,7 @@ static void printVar(FILE* out, SymbolVersion* version)
     }
 }
 
-// All symbols are either defined in the basic block or are arguments to the function
-// Print out copies for each argument to the BB parameter
-static void generatePhiFunction(FILE* out, CFG* cfg)
-{
-    forall(elem, cfg->symbol->type->function.domainType->paramlist.defines)
-    {
-        ASTNode* define = elem->data;
-        SymbolNode* symbol = define->define.symbol;
-
-        SymbolVersion* parameter = NULL;
-        forall(elem2, cfg->blockGraph->parameters)
-        {
-            SymbolVersion* symbver = elem2->data;
-            if (!strcmp(symbver->symbol->name, symbol->name)) {
-                parameter = symbver;
-                break;
-            }
-        }
-        if (parameter) {
-            printVarAssign(out, parameter);
-            printPath(out, symbol);
-            fprintf(out, ";\n");
-        }
-    }
-}
-
+// Prints out the left side of an assignment to an L-value
 static void generateLValueIR(FILE* out, SymbolVersion* version)
 {
     if (!version->def || !version->lvalue) {
@@ -488,6 +480,7 @@ static void generateLValueIR(FILE* out, SymbolVersion* version)
     }
 }
 
+// Prints out an IR instruction
 static void generateIR(FILE* out, CFG* cfg, IR* ir)
 {
     // Don't generate L value IRs, UNLESS they are copies
@@ -956,6 +949,7 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
     }
 }
 
+// Prints out the phi parameter-argument copies between basic block jumps
 static void generatePhi(FILE* out, List* argsList, BasicBlock* to, bool extraTab)
 {
     forall(elem, argsList)
@@ -981,6 +975,32 @@ static void generatePhi(FILE* out, List* argsList, BasicBlock* to, bool extraTab
     }
 }
 
+// Prints the copies of the function's arguments to the functions root basic-block's phi parameters
+static void generatePhiFunction(FILE* out, CFG* cfg)
+{
+    forall(elem, cfg->symbol->type->function.domainType->paramlist.defines)
+    {
+        ASTNode* define = elem->data;
+        SymbolNode* symbol = define->define.symbol;
+
+        SymbolVersion* parameter = NULL;
+        forall(elem2, cfg->blockGraph->parameters)
+        {
+            SymbolVersion* symbver = elem2->data;
+            if (!strcmp(symbver->symbol->name, symbol->name)) {
+                parameter = symbver;
+                break;
+            }
+        }
+        if (parameter) {
+            printVarAssign(out, parameter);
+            printPath(out, symbol);
+            fprintf(out, ";\n");
+        }
+    }
+}
+
+// Prints out a basic block
 static void generateBasicBlock(FILE* out, CFG* cfg, BasicBlock* bb)
 {
     if (bb->visited) {
@@ -1021,6 +1041,7 @@ static void generateBasicBlock(FILE* out, CFG* cfg, BasicBlock* bb)
     }
 }
 
+// Prints out the definition for a function
 static void generateFunctionDefinitions(FILE* out, CFG* callGraphNode)
 {
     if (callGraphNode->visited) {
@@ -1087,6 +1108,7 @@ static void generateFunctionDefinitions(FILE* out, CFG* callGraphNode)
     callGraphNode->visited = false;
 }
 
+// Prints out the main function
 static void generateMainFunction(FILE* out, CFG* callGraph)
 {
     fprintf(out, "void pause() {system(\"pause\");}\n\n");
@@ -1134,6 +1156,7 @@ static void generateMainFunction(FILE* out, CFG* callGraph)
     fprintf(out, "}\n");
 }
 
+// Prints out the Orng program
 void Generator_Generate(FILE* out, struct program _program)
 {
     program = _program;

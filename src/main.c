@@ -25,7 +25,7 @@ PHILOSOPHY:
 */
 
 #include "../util/debug.h"
-#include "./doc.h"
+#include "./errors.h"
 #include "./generator.h"
 #include "./ir.h"
 #include "./lexer.h"
@@ -284,7 +284,7 @@ static SymbolNode* readPackage(char* packagePath, SymbolNode* program)
         SymbolNode* depenPackage;
         if ((depenPackage = Map_Get(program->children, packageName)) != NULL) {
             if (!depenPackage->visited) {
-                gen_error("cycle between packages '%s' and '%s'", packageSymbol->name, packageName);
+                error2(packageSymbol->pos, depenPackage->pos, "cycle between packages '%s' and '%s'", packageSymbol->name, packageName);
             }
         } else {
             char absolutePackageName[255];
@@ -355,39 +355,31 @@ int main(int argc, char** argv)
     SymbolNode* outPackage = readPackage(argv[1], program);
     unVisitSymbolTree(program);
 
-    // Either generate doc or generate program
-    if (false) {
-        doDefTypes = true;
-        char* packageName = pathToFilename(argv[1]);
-        SymbolNode* package = Symbol_Find(packageName, program);
-        Doc_Generate(package, argv[1]);
+    Program programStruct = Validator_Validate(program);
+
+    memset(outFilename, 0, 255);
+    strcat_s(outFilename, 255, argv[1]);
+    strcat_s(outFilename, 255, "\\");
+    if (Map_Get(outPackage->children, "_outname")) {
+        SymbolNode* outnameSymbol = Map_Get(outPackage->children, "_outname");
+        ASTNode* outnameDef = outnameSymbol->def;
+        strcat_s(outFilename, 255, outnameDef->string.data);
     } else {
-        Program programStruct = Validator_Validate(program);
+        strcat_s(outFilename, 255, "out.c");
+    }
 
-        memset(outFilename, 0, 255);
-        strcat_s(outFilename, 255, argv[1]);
-        strcat_s(outFilename, 255, "\\");
-        if (Map_Get(outPackage->children, "_outname")) {
-            SymbolNode* outnameSymbol = Map_Get(outPackage->children, "_outname");
-            ASTNode* outnameDef = outnameSymbol->def;
-            strcat_s(outFilename, 255, outnameDef->string.data);
-        } else {
-            strcat_s(outFilename, 255, "out.c");
-        }
+    FILE* out;
+    fopen_s(&out, outFilename, "w");
+    if (out == NULL) {
+        perror(outFilename);
+        exit(1);
+    }
 
-        FILE* out;
-        fopen_s(&out, outFilename, "w");
-        if (out == NULL) {
-            perror(outFilename);
-            exit(1);
-        }
+    Generator_Generate(out, programStruct);
 
-        Generator_Generate(out, programStruct);
-
-        if (fclose(out)) {
-            perror(outFilename);
-            exit(1);
-        }
+    if (fclose(out)) {
+        perror(outFilename);
+        exit(1);
     }
 
     t = clock() - t;
