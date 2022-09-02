@@ -8,7 +8,7 @@
 const struct map* tagTypes;
 const struct map* tagIDs;
 
-bool typesAreEquivalent(ASTNode* a, ASTNode* b);
+bool isSubtype(ASTNode* a, ASTNode* b);
 int getTag(char* fieldName, ASTNode* fieldType);
 int getTagEnum(char* fieldName, ASTNode* enumType);
 ASTNode* getTypeEnum(int tag, ASTNode* enumType);

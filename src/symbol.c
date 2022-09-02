@@ -64,7 +64,7 @@ struct symbolNode* Symbol_Find(const char* symbolName, const struct symbolNode* 
             }
         }
         SymbolNode* var = Map_Get(parentNode->children, symbolName);
-        if (scope->isRestricted && !List_Contains(scope->restrictions, var) && scope != var && var != 0) {
+        if (scope->hasRestrictions && !List_Contains(scope->restrictions, var) && scope != var && var != 0) {
             rejectingSymbol = scope;
             return -1;
         } else {

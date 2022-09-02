@@ -721,8 +721,6 @@ static SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* b
         } else {
             PANIC("not an l-value\n");
         }
-        // TODO: go through each L value IR and set an L value flag
-        // TODO: generate L value IR's inline
         return NULL;
     }
     case AST_OR: {
@@ -2931,7 +2929,7 @@ static void markUnusedSymbolVersions(CFG* cfg)
 // Traverses graph to find predecessor number
 static void _countPredecessors(BasicBlock* bb)
 {
-    bb->incoming++;
+    bb->numberPredecessors++;
     if (bb->visited) {
         return;
     }
@@ -2951,7 +2949,7 @@ static void countPredecessors(CFG* cfg)
     forall(elem, cfg->basicBlocks)
     {
         BasicBlock* bb = elem->data;
-        bb->incoming = 0;
+        bb->numberPredecessors = 0;
     }
 
     clearBBVisitedFlags(cfg);
@@ -3013,7 +3011,7 @@ static bool deadCode(CFG* cfg)
     forall(elem, cfg->basicBlocks)
     {
         BasicBlock* bb = elem->data;
-        if (bb->incoming == 0) {
+        if (bb->numberPredecessors == 0) {
             removeBasicBlock(cfg, bb, true);
             LOG("remove from L%d block list, no incoming basic blocks\n", bb->id);
             return true;
@@ -3039,7 +3037,7 @@ static bool deadCode(CFG* cfg)
         }
 
         // Adopt basic blocks with only one incoming block
-        if (bb->next && bb->entry && !bb->hasBranch && bb->next->incoming == 1) {
+        if (bb->next && bb->entry && !bb->hasBranch && bb->next->numberPredecessors == 1) {
             IR* end = getTail(bb->entry);
             LOG("block adoption of L%d\n", bb->next->id);
 
@@ -3248,6 +3246,7 @@ List* createCFG(struct symbolNode* functionSymbol, CFG* caller)
             }
         }
     }
+    clearBBVisitedFlags(cfg);
 
     // TODO: Register allocation
 

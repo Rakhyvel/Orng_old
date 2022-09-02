@@ -89,8 +89,8 @@ static void printStructOrd(FILE* out, ASTNode* type)
     bool found = false;
     for (; !found && elem != List_End(program.structDependencyGraph); elem = List_Next(elem), i++) {
         DGraph* node = (DGraph*)elem->data;
-        ASTNode* child = node->structDef;
-        if (typesAreEquivalent(child, type)) {
+        ASTNode* child = node->typeDef;
+        if (isSubtype(child, type)) {
             fprintf(out, "struct_%s", myItoa(i));
             found = true;
         }
@@ -248,15 +248,15 @@ static void generateStruct(FILE* out, DGraph* graphNode)
     forall(elem, graphNode->dependencies)
     {
         DGraph* child = elem->data;
-        if (child->structDef->astType == AST_ENUM) {
+        if (child->typeDef->astType == AST_ENUM) {
             generateEnum(out, child);
         } else {
             generateStruct(out, child);
         }
     }
 
-    ASTNode* _struct = graphNode->structDef;
-    fprintf(out, "struct struct_%d {\n", graphNode->ordinal + 1);
+    ASTNode* _struct = graphNode->typeDef;
+    fprintf(out, "struct struct_%d {\n", graphNode->id + 1);
 
     // For each parameter in the procedure's parameter list, print it out
     forall(elem, _struct->paramlist.defines)
@@ -285,15 +285,15 @@ static void generateEnum(FILE* out, DGraph* graphNode)
     forall(elem, graphNode->dependencies)
     {
         DGraph* child = elem->data;
-        if (child->structDef->astType == AST_ENUM) {
+        if (child->typeDef->astType == AST_ENUM) {
             generateEnum(out, child);
         } else {
             generateStruct(out, child);
         }
     }
 
-    ASTNode* _enum = graphNode->structDef;
-    fprintf(out, "struct struct_%d {\n\tint64_t tag;\n", graphNode->ordinal + 1);
+    ASTNode* _enum = graphNode->typeDef;
+    fprintf(out, "struct struct_%d {\n\tint64_t tag;\n", graphNode->id + 1);
 
     int numOfNonVoidMembers = 0;
     forall(elem, _enum->_enum.defines)
@@ -332,7 +332,7 @@ static void generateStructDefinitions(FILE* out, List* depenGraph)
     forall(elem, depenGraph)
     {
         DGraph* graphNode = elem->data;
-        if (graphNode->structDef->astType == AST_ENUM) {
+        if (graphNode->typeDef->astType == AST_ENUM) {
             generateEnum(out, graphNode);
         } else {
             generateStruct(out, graphNode);
@@ -1007,7 +1007,7 @@ static void generateBasicBlock(FILE* out, CFG* cfg, BasicBlock* bb)
         return;
     }
     bb->visited = true;
-    fprintf(out, "L%d:; // incoming:%d\n", bb->id, bb->incoming);
+    fprintf(out, "L%d:;\n", bb->id);
     for (IR* ir = bb->entry; ir != NULL; ir = ir->next) {
         generateIR(out, cfg, ir);
     }

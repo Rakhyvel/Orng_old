@@ -181,6 +181,7 @@ typedef struct astNode_dot {
     struct astNode* right;
     struct symbolNode* symbol;
     bool assign;
+    bool dotChainHead;
 } astNode_dot;
 
 typedef struct astNode_slice {
@@ -191,7 +192,7 @@ typedef struct astNode_slice {
 
 typedef struct astNode_block {
     List* children;
-    struct symbolNode* symbol; // TODO: remove
+    struct symbolNode* symbol; // This block scope, while ASTs scope is parent scope
     bool returnEval; // Does this block produce the return value for a function?
 } astNode_block;
 

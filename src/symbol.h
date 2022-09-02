@@ -32,10 +32,10 @@ typedef struct symbolNode {
     struct CFG* cfg; // Control flow graph node of this symbol, if it is a function
 
     bool isError; // If the type of this symbol was constructed using the ! operator
-    //bool isDeclared; TODO: implement
+    bool isDeclared;
     bool isExtern; // Whether or not the symbol is external
-    bool isRestricted; // Whether or not the symbol has symbol restrictions TODO: rename to 'hasRestrictions'
-    bool isVararg; // Whether or not the symbol is a variable argument. Only applicable to varargs TODO: change parse to be in paramlist parse instead
+    bool hasRestrictions; // Whether or not the symbol has symbol restrictions
+    bool isVararg; // Whether or not the symbol is a variable argument. Only applicable to varargs
 
     struct symbolNode* parent; // Parent symbol node in the symbol tree
     Map* children; // Maps child symbol names to the symbol nodes

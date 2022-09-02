@@ -14,8 +14,8 @@ Map* files;
 
 // Represents a node in the product/sum dependency graph
 typedef struct {
-    ASTNode* structDef; // Definition of the product/sum type TODO: rename to 'typeDef'
-    int ordinal; // The unique ID of this dependency graph node TODO: rename to 'id'
+    ASTNode* typeDef; // Definition of the product/sum type
+    int id; // The unique ID of this dependency graph node
     List* dependencies; // List of other DGraph nodes for product/sum types used by the fields of the type of this DGraph node
     bool visited; // Used for graph traversal
 } DGraph;

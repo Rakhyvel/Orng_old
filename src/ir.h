@@ -120,7 +120,7 @@ typedef struct BasicBlock {
     struct IR* entry; // The first IR instruction in the basic block's IR instruction linked list
     bool hasBranch; // Whether or not this basic block has a conditional branch or is just a jump
     int id; // The unique ID for this basic block
-    int incoming; // TODO: rename to 'numberOfPredecessors' // The number of basic blocks that jump to this block
+    int numberPredecessors; // The number of basic blocks that jump to this block
 
     struct list* parameters; // List of symbol versions that are used somewhere in an IR in the BB, but are not defined anywhere in the BB up to the IR in question
 

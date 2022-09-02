@@ -19,7 +19,7 @@ struct token* prevToken;
 // Queue of tokens scanned in
 static List* tokens;
 // Block unique ID
-static int blockUID = 1; // Must be outside parseBlock scope for parseFor TODO: Fix that
+static int blockUID = 1; // Must be outside parseBlock scope for parseFor, for good reason!
 
 static ASTNode* parseType(SymbolNode* scope);
 static ASTNode* parseStatement(SymbolNode* scope);
@@ -176,11 +176,16 @@ static ASTNode* parseTypeAtom(SymbolNode* scope)
     } else if ((token = accept(TOKEN_LPAREN)) != NULL) {
         child = AST_Create_paramlist(scope, token->pos);
         while (!accept(TOKEN_RPAREN)) {
-            List_Append(child->paramlist.defines, parseDefine(scope));
+            ASTNode* define = parseDefine(scope);
+            List_Append(child->paramlist.defines, define);
             if (accept(TOKEN_COMMA)) {
                 if (nextTokenMaybeNewline()->type == TOKEN_NEWLINE) {
                     error(nextTokenMaybeNewline()->pos, "unexpected newline");
                 }
+            } else if (accept(TOKEN_ELLIPSES)) {
+                define->define.symbol->isVararg = true;
+                expect(TOKEN_RPAREN);
+                break;
             }
         }
         child->pos = merge(child->pos, token->pos);
@@ -392,7 +397,6 @@ static ASTNode* parseErrdefer(SymbolNode* scope)
 
 static ASTNode* parseStatement(SymbolNode* scope)
 {
-    // TODO: Detect def by ident followed by newlines followed by : -[ ? or @
     if (nextIsDef()) {
         return parseDefine(scope, false);
     } else if (accept(TOKEN_FREE)) {
@@ -971,12 +975,12 @@ static ASTNode* parseDefine(SymbolNode* scope)
 
     if (temp = accept(TOKEN_RESTRICT)) {
         List* restrictionExpr = List_Create();
-        symbol->isRestricted = true;
+        symbol->hasRestrictions = true;
         symbol->restrictionExpr = restrictionExpr;
         while (!accept(TOKEN_RSQUARE)) {
             while (accept(TOKEN_NEWLINE))
                 ;
-            ASTNode* expr = parseFactor(scope); // TODO: parseFactor, really?
+            ASTNode* expr = parseFactor(scope);
             List_Append(restrictionExpr, expr);
             if (!accept(TOKEN_NEWLINE)) {
                 if (!accept(TOKEN_COMMA)) {
@@ -1018,9 +1022,6 @@ static ASTNode* parseDefine(SymbolNode* scope)
             symbol->isError = type->function.codomainType->astType == AST_ERROR || type->function.codomainType->astType == AST_INFER_ERROR;
         } else {
             symbol->symbolType = SYMBOL_VARIABLE;
-        }
-        if (accept(TOKEN_ELLIPSES)) {
-            symbol->isVararg = true;
         }
         symbol->pos = merge(symbol->pos, type->pos);
     } else {
