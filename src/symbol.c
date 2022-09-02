@@ -1,4 +1,5 @@
 // © 2021-2022 Joseph Shimel. All rights reserved.
+// Functionality for creating, manipulating, and querying a symbol tree
 
 #include "symbol.h"
 #include "../util/debug.h"
@@ -12,9 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-/*
-Allocates and initializes a symbol
-*/
+// Creates a symbol tree node, placing it under an optional parent's scope. Leave 'parent' NULL to skip scoping
 struct symbolNode* Symbol_Create(char* name, SymbolType symbolType, struct symbolNode* parent, struct position pos)
 {
     struct symbolNode* retval = (struct symbolNode*)calloc(1, sizeof(struct symbolNode));
@@ -27,7 +26,6 @@ struct symbolNode* Symbol_Create(char* name, SymbolType symbolType, struct symbo
     retval->defers = List_Create();
     retval->errdefers = List_Create();
     retval->pos = pos;
-    retval->versions = List_Create();
 
     strncpy_s(retval->name, 255, name, 254);
     if (parent != NULL) {
@@ -44,14 +42,7 @@ struct symbolNode* Symbol_Create(char* name, SymbolType symbolType, struct symbo
     return retval;
 }
 
-/*
-Returns the symbol with the given name relative to a given starting scope.
-    
-Will return NULL if no symbol with the name is found in any direct ancestor
-scopes. 
-
-Will return -1 if symbol name is not in scope restriction
-*/
+// Returns the symbol with the given name relative to a given starting scope, or NULL if no symbol is found, or -1 if symbol is found and is restricted
 struct symbolNode* Symbol_Find(const char* symbolName, const struct symbolNode* scope)
 {
     rejectingSymbol = NULL;
@@ -84,6 +75,7 @@ struct symbolNode* Symbol_Find(const char* symbolName, const struct symbolNode* 
     }
 }
 
+// Returns the most recent ancestor with the given symbol type
 struct symbolNode* Symbol_TypeAncestor(struct symbolNode* scope, SymbolType type)
 {
     if (scope == NULL || scope->symbolType == type) {
@@ -93,9 +85,7 @@ struct symbolNode* Symbol_TypeAncestor(struct symbolNode* scope, SymbolType type
     }
 }
 
-/*
-Prints out the symbol tree
-*/
+// Pretty-prints out a symbol tree
 void Symbol_Print(SymbolNode* root, wchar_t* prefix, wchar_t* childrenPrefix)
 {
     ASSERT(root != NULL);
@@ -139,6 +129,7 @@ void Symbol_Print(SymbolNode* root, wchar_t* prefix, wchar_t* childrenPrefix)
     }
 }
 
+// Resets the 'visited' flag in an entire symbol tree to false
 void unVisitSymbolTree(SymbolNode* node)
 {
     if (node == NULL) {
@@ -154,6 +145,7 @@ void unVisitSymbolTree(SymbolNode* node)
     }
 }
 
+// Returns the most recent symbol ancestor that is not a block symbol type
 struct symbolNode* Symbol_MostRecentNonBlock(struct symbolNode* scope)
 {
     if (scope->symbolType != SYMBOL_BLOCK) {
@@ -163,6 +155,7 @@ struct symbolNode* Symbol_MostRecentNonBlock(struct symbolNode* scope)
     }
 }
 
+// Returns the root symbol node of a symbol tree
 struct symbolNode* Symbol_Root(const struct symbolNode* scope)
 {
     if (scope->parent == NULL) {

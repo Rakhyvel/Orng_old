@@ -5,9 +5,7 @@
 
 #include "./main.h"
 
-/*
-    Token operators are ordered by precedence, this makes it easy to compare
-    when creating an AST for an expression */
+// A list of all types that a token can be
 typedef enum {
     // Literals
     TOKEN_IDENT,
@@ -106,12 +104,11 @@ typedef enum {
 } _TokenType; // winnt.h uses TokenType as an enum >:(
 
 // Used to break up lexicographical meaning
-struct token {
+typedef struct token {
     _TokenType type;
     char data[500];
     Position pos;
-};
-typedef struct token Token;
+} Token;
 
 const char* Token_GetString(_TokenType type);
 const char* Token_GetRepr(_TokenType type);

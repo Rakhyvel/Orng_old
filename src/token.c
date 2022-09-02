@@ -1,10 +1,12 @@
 // © 2021-2022 Joseph Shimel. All rights reserved.
+// Functionality for working with tokens
 
 #include "token.h"
 #include "../util/debug.h"
 #include "../util/list.h"
 #include "../util/map.h"
 
+// Returns the name of a token type
 const char* Token_GetString(_TokenType type)
 {
     switch (type) {
@@ -162,6 +164,7 @@ const char* Token_GetString(_TokenType type)
     return "";
 }
 
+// Returns how a token is represented textually in Orng
 const char* Token_GetRepr(_TokenType type)
 {
     switch (type) {
@@ -321,6 +324,7 @@ const char* Token_GetRepr(_TokenType type)
     }
 }
 
+// Returns how a token is represented in an Orng syntax error message
 const char* Token_GetErrorMsgRepr(_TokenType type)
 {
     switch (type) {

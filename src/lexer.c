@@ -1,4 +1,5 @@
 // © 2021-2022 Joseph Shimel. All rights reserved.
+// Splits the input file into tokens
 
 #include "lexer.h"
 #include "../util/debug.h"
@@ -10,12 +11,10 @@
 
 // The line number that the translator is on in the input file
 int line;
+// The column number that the translator is on in the current line
 int span = 1;
-bool inComment = false;
 
-/*
-Returns what type of character the given character is. Used to split along char types
-*/
+// Returns what type of character the given character is. Used to split along char types
 static int getCharType(char c)
 {
     if (isalnum(c) || c == '_') {
@@ -27,9 +26,7 @@ static int getCharType(char c)
     }
 }
 
-/*
-Returns whether or not to split a token based on the begining character of the token, and the new character
-*/
+// Returns whether or not to split a token based on the begining character of the token, and the new character
 static bool shouldSplitToken(char c, char start, int length)
 {
     if (start == '\n'
@@ -61,6 +58,7 @@ static bool shouldSplitToken(char c, char start, int length)
     }
 }
 
+// Returns whether or not the given string contains the given character
 static bool strContains(char* str, char c)
 {
     for (int i = 0; str[i] != '\0'; i++) {
@@ -71,8 +69,7 @@ static bool strContains(char* str, char c)
     return false;
 }
 
-// some legal identifiers in Orng are keywords in C
-// should decouple Orng source from output C. Orng programmer shouldn't care about C at all
+// Some legal identifiers in Orng are keywords in C, and so cannot be generated out
 static bool cNameClash(char* str)
 {
     return (!strcmp(str, "auto")
@@ -114,6 +111,7 @@ static bool cNameClash(char* str)
         || !strcmp(str, "tag"));
 }
 
+// Shifts the string one character, sets first character to '_'
 static bool prependWithUnderscore(char* str)
 {
     int len = strlen(str);
@@ -127,6 +125,7 @@ static bool prependWithUnderscore(char* str)
 Token* Lexer_GetNextToken(FILE* in)
 {
     int nextChar;
+    bool inComment = false;
     struct token* token = (struct token*)calloc(1, sizeof(struct token));
     token->pos.filename = filename;
     token->pos.start_line = line;

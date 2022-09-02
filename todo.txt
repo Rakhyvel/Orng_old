@@ -427,13 +427,18 @@ x Go back to adding errors and union type unions
 		x move error, error2, error3, and gen_error to errors.c
 			x fix gen_error to be better in most cases
 	- comments on everything
-		- files
-		- functions
-		- globals
-		- structs
-		- enums
-		- struct fields
-		- Assume reader must come up with their own implementation for thing, give them a guide on how they could do it, they have full knowledge of the rest of the program
+		x files
+		x functions
+		x globals
+		x structs
+		x enums
+		x struct fields (figure out if all are needed)
+		x enum fields?
+		x Assume reader must come up with their own implementation for thing, give them a guide on how they could do it, they have full knowledge of the rest of the program
+	- complete the TODOs
+	- create program.c and program.h files, for program data structure
+		- has functions for adding sum type tags
+		- has functions and struct def of dependency graph
 	- change references to "double" to "real"
 	- variable name semantics
 		- 'type' for AST nodes that are types
@@ -455,6 +460,7 @@ x Go back to adding errors and union type unions
 	- fix semantics in parsing functions (instead of prefix/term/factor etc just use child)
 	- remove 'symbol' field from block ast, should use scope field from common ast struct (right?)
 	- fix all warnings
+	- 
 - subexpression elimination
 - true error collection
 - 'register' allocation

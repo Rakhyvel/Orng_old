@@ -1,4 +1,5 @@
 // © 2021-2022 Joseph Shimel. All rights reserved.
+// Functionality for parsing files and token queues into ASTs
 
 #define _CRT_SECURE_NO_WARNINGS
 #include "parse.h"
@@ -13,19 +14,19 @@
 
 // File handle for the input file
 static FILE* in;
+// The previous token scanned
 struct token* prevToken;
+// Queue of tokens scanned in
 static List* tokens;
-// The next unique identifier used for indexing blocks
-static int arrayUID = 1;
+// Block unique ID
+static int blockUID = 1; // Must be outside parseBlock scope for parseFor TODO: Fix that
 
 static ASTNode* parseType(SymbolNode* scope);
 static ASTNode* parseStatement(SymbolNode* scope);
 static ASTNode* parseExpr(SymbolNode* scope);
 static ASTNode* parseDefine(SymbolNode* scope);
 
-/*
-Converts integers to base 10 ascii. Used for text representation of UID's 
-*/
+// Converts integers to base 10 ascii. Used for text representation of UID's 
 char* myItoa(int val)
 {
     char* buf = (char*)calloc(1, 32);
@@ -35,6 +36,7 @@ char* myItoa(int val)
     return &buf[i + 1];
 }
 
+// Advances the token queue if the next token is of the given type, returns token
 static struct token* accept(_TokenType type)
 {
     struct token* token;
@@ -58,6 +60,7 @@ static struct token* accept(_TokenType type)
     return token;
 }
 
+// Advances the token queue one token, skipping newlines. Returns first non-newline token
 static struct token* nextToken()
 {
     int i = 0;
@@ -75,6 +78,16 @@ static struct token* nextToken()
     }
 }
 
+// Advances the token queue one token regardless if it's a newline token or not. Returns token
+static struct token* nextTokenMaybeNewline()
+{
+    if (List_IsEmpty(tokens)) {
+        List_Append(tokens, Lexer_GetNextToken(in));
+    }
+    return List_Peek(tokens);
+}
+
+// If next token is the given token type, advances token queue and returns token. Else emits syntax error.
 static struct token* expect(_TokenType type)
 {
     struct token* token;
@@ -86,12 +99,38 @@ static struct token* expect(_TokenType type)
     }
 }
 
-static struct token* nextTokenMaybeNewline()
+// Whether or not the next tokens in the queue create a definition or not
+static bool nextIsDef()
 {
-    if (List_IsEmpty(tokens)) {
-        List_Append(tokens, Lexer_GetNextToken(in));
+    int i = 0;
+    while (true) {
+        if (List_IsEmpty(tokens) || i >= tokens->size) {
+            List_Append(tokens, Lexer_GetNextToken(in));
+        }
+        struct token* token = List_Get(tokens, i);
+        i++;
+        if (token->type == TOKEN_NEWLINE) {
+            continue;
+        } else if (token->type == TOKEN_IDENT) {
+            break;
+        } else {
+            return false;
+        }
     }
-    return List_Peek(tokens);
+    while (true) {
+        if (List_IsEmpty(tokens) || i >= tokens->size) {
+            List_Append(tokens, Lexer_GetNextToken(in));
+        }
+        struct token* token = List_Get(tokens, i);
+        i++;
+        if (token->type == TOKEN_NEWLINE) {
+            continue;
+        } else if (token->type == TOKEN_COLON) {
+            return true;
+        } else {
+            return false;
+        }
+    }
 }
 
 static ASTNode* parseEnumDefine(SymbolNode* scope)
@@ -328,39 +367,6 @@ static ASTNode* parseArgList(SymbolNode* scope)
     return arglist;
 }
 
-static bool nextIsDef()
-{
-    int i = 0;
-    while (true) {
-        if (List_IsEmpty(tokens) || i >= tokens->size) {
-            List_Append(tokens, Lexer_GetNextToken(in));
-        }
-        struct token* token = List_Get(tokens, i);
-        i++;
-        if (token->type == TOKEN_NEWLINE) {
-            continue;
-        } else if (token->type == TOKEN_IDENT) {
-            break;
-        } else {
-            return false;
-        }
-    }
-    while (true) {
-        if (List_IsEmpty(tokens) || i >= tokens->size) {
-            List_Append(tokens, Lexer_GetNextToken(in));
-        }
-        struct token* token = List_Get(tokens, i);
-        i++;
-        if (token->type == TOKEN_NEWLINE) {
-            continue;
-        } else if (token->type == TOKEN_COLON) {
-            return true;
-        } else {
-            return false;
-        }
-    }
-}
-
 static ASTNode* parseDefer(SymbolNode* scope)
 {
     ASTNode* deferStatement = parseStatement(scope);
@@ -406,7 +412,6 @@ static ASTNode* parseStatement(SymbolNode* scope)
     }
 }
 
-static int blockUID = 1; // Must be outside parseBlock scope for parseFor
 static ASTNode* parseBlock(SymbolNode* scope)
 {
     SymbolNode* blockScope = Symbol_Create(myItoa(blockUID++), SYMBOL_BLOCK, scope, prevToken->pos);
@@ -430,7 +435,6 @@ static ASTNode* parseBlock(SymbolNode* scope)
     return block;
 }
 
-// Parses out the first if-statement from the token queue
 static ASTNode* parseIf(SymbolNode* scope)
 {
     ASTNode* condition = parseExpr(scope);
@@ -469,7 +473,6 @@ static ASTNode* parseFor(SymbolNode* scope)
 
     if (pre && accept(TOKEN_LBRACE)) {
         body = parseBlock(blockScope);
-        body->block.symbol->isLoop = true;
         condition = pre;
         pre = NULL;
     } else {
@@ -487,7 +490,6 @@ static ASTNode* parseFor(SymbolNode* scope)
         }
 
         body = parseBlock(blockScope);
-        body->block.symbol->isLoop = true;
     }
 
     if (!pre) {
@@ -584,6 +586,7 @@ static ASTNode* parseCase(SymbolNode* scope)
 
 static ASTNode* parseFactor(SymbolNode* scope)
 {
+    static int arrayUID = 1;
     ASTNode* child = NULL;
     struct token* token = NULL;
     if ((token = accept(TOKEN_IDENT)) != NULL) {
@@ -808,8 +811,6 @@ static ASTNode* parseShiftExpr(SymbolNode* scope)
     }
 }
 
-// Returns the first conditional, or the first integer expression if none can be found
-// <shiftExpr> (<condition-token> <shiftExpr>)*
 static ASTNode* parseConditional(SymbolNode* scope)
 {
     ASTNode* child = parseShiftExpr(scope);
@@ -829,7 +830,6 @@ static ASTNode* parseConditional(SymbolNode* scope)
     }
 }
 
-// Returns the first equal-sign expression, or the next conditional if none can be found
 static ASTNode* parseNeqExpr(SymbolNode* scope)
 {
     ASTNode* child = parseConditional(scope);
@@ -880,7 +880,6 @@ static ASTNode* parseBitOrExpr(SymbolNode* scope)
     }
 }
 
-// Returns the first and expression, or the next equal-sign expression if none can be found
 static ASTNode* parseAndExpr(SymbolNode* scope)
 {
     ASTNode* child = parseBitOrExpr(scope);
@@ -894,7 +893,6 @@ static ASTNode* parseAndExpr(SymbolNode* scope)
     }
 }
 
-// Returns the first or expression, or the next and expression if none can be found
 static ASTNode* parseOrExpr(SymbolNode* scope)
 {
     ASTNode* child = parseAndExpr(scope);
@@ -944,7 +942,6 @@ static ASTNode* parseExpr(SymbolNode* scope)
     return child;
 }
 
-// isPublic is passed in as true to make parameters and return types always public
 static ASTNode* parseDefine(SymbolNode* scope)
 {
     struct token* doc = NULL;
@@ -1054,7 +1051,7 @@ static ASTNode* parseDefine(SymbolNode* scope)
     return define;
 }
 
-// Parses the token queue into a symbol tree
+// Parses the given file, expects single define
 ASTNode* Parser_Parse(FILE* _in, SymbolNode* program)
 {
     in = _in;

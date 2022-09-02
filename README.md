@@ -3,6 +3,8 @@ Orng is a simple, modular general-purpose programming language for hobby program
 
 [![Alt Text](https://github.com/Rakhyvel/Orng/blob/rakhyvel_cleanup/splash.png?raw=true)](https://github.com/Rakhyvel/Orng/blob/rakhyvel_cleanup/splash.png?raw=true)
 
+[Read the documentation here!](https://github.com/Rakhyvel/Orng/blob/main/documentation.md)
+
 ## Module and Package System
 Orng features a package and module system which makes it easy to re-use and organize code. Modules and packages are first class in Orng, meaning they can be assigned to variables and passed around as parameters to functions.
 

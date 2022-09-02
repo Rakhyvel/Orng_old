@@ -1,27 +1,14 @@
 // © 2021-2022 Joseph Shimel. All rights reserved.
-
 /*
-PHILOSOPHY:
-- Stateless functional style between modules/packages for predictability
-- Stateful imperative style inside functions for speed
-- Everything, including packages, modules, functions, constants, AND types, is an expression
-- Every .orng file defines one symbol with the same name as the file
-
-
-1. read files in package
-2. tokenize
-3. parse into AST & symbol tree
-	- each file contains one definition of a constant type
-	- the entire program is represented by a symbol tree
-	- the symbol tree defined in each file is appended to the program symbol tree
-4. for each symbol definition, flatten AST into IR list
-	- types are NOT flattened and maintain tree structure for ease of comparing
-	- this includes paramlists for types, modules, packages, function domains
-	- types ASTs ARE expanded and validated to form their true structural type
-	- each symbol keeps a copy of their old type for error printing(?)
-5. perform semantic analysis on each IR instruction in list to turn it into a typed IR list
-6. take symbol tree with typed IR list definitions and generate to C code or doc
-	- flatten symbol tree to have a list of all globals, functions, structs, etc
+COMPILER PIPELINE:
+- Root package filename is given as command-line argument.
+- .pkg.orng manifest file is read in and parsed. Package dependency non-cyclic graph is constructed.
+- Every .orng file in every package is read in and parsed to create symbol tree
+- The symbol tree is walked-through, type expanding and semantic analysis is done
+- The symbol for the main function is found
+- The main function symbol is converted to a control-flow graph (CFG) node, along with any functions the main functions calls, and so on.
+- The CFG is optimized
+- The CFG is generated out to output code
 */
 
 #include "../util/debug.h"
@@ -45,19 +32,16 @@ PHILOSOPHY:
 #include <sys/stat.h> // For stat().
 #include <sys/types.h> // For stat().
 
+// The path to the orng/dependencies folder
 char* packagesPath;
+// The filename of the current input file
 char* filename;
-// The filename of the output file
-char outFilename[255];
-
-static bool errsExist = false;
-
+// Whether the compiler is in debug mode
 bool isDebug = true;
-
-// files[fileNo] -> lines[lineNo]
+// Maps filenames to lists of lines
 Map* files;
-Map* files_whitespace; // Map(String, List(Int))
 
+// Given an absolute path, returns pointer of substring in the form packageName/fileName
 char* getRelPath(char* absPath)
 {
     char* recentSlash = absPath - 1;
@@ -71,6 +55,7 @@ char* getRelPath(char* absPath)
     return secondRecentSlash + 1;
 }
 
+// Takes in a path, returns a pointer to the substring of just the filename
 char* pathToFilename(char* path)
 {
     char* recentSlash = path - 1;
@@ -82,6 +67,7 @@ char* pathToFilename(char* path)
     return recentSlash + 1;
 }
 
+// Gets the user directory. Wors on Windows and on UNIX
 static char* getUserDirectory()
 {
 #ifdef _WIN32
@@ -96,11 +82,7 @@ static char* getUserDirectory()
 #endif
 }
 
-/*
-Takes in a parent absolute directory, and a sub directory path.
-Creates the subdirectory if it does not exist
-Returns the concatonated path length
-*/
+// Takes in a parent absolute directory, and a sub directory path. Creates the subdirectory if it does not exist in absolute directory. Returns the concatonated path name
 static char* createIfNotExist(char* parentAbsDir, char* subDirPath)
 {
     int userDirLen = strlen(parentAbsDir);
@@ -133,6 +115,7 @@ static char* createIfNotExist(char* parentAbsDir, char* subDirPath)
     return subDir;
 }
 
+// Reads in a file and puts the filename/list of lines relation in the files map
 static void readLines(FILE* in)
 {
     int nextChar, lineLength = 0, lineCapacity = 80;
@@ -164,6 +147,7 @@ static void readLines(FILE* in)
     Map_Put(files, filename, lines);
 }
 
+// Reads a file, updates file map, parses file and returns the define AST node
 static ASTNode* readFile(char* _filename, SymbolNode* program)
 {
     FILE* in;
@@ -209,6 +193,7 @@ static char isSubStr(char* relPath, char* symbolName)
     return relPath[i];
 }
 
+// Converts a char to a wide character
 static wchar_t* charToWChar(char* orig)
 {
     size_t newsize = strlen(orig) + 1;
@@ -221,6 +206,7 @@ static wchar_t* charToWChar(char* orig)
     return wcstring;
 }
 
+// Converts a wide character to a character
 static char* wCharToChar(wchar_t* orig)
 {
     size_t origsize = wcslen(orig) + 1;
@@ -235,20 +221,7 @@ static char* wCharToChar(wchar_t* orig)
     return nstring;
 }
 
-/*
-to read package
-    read in & parse package manifest file
-    validate package AST
-    for each dependency:
-        check program to see if it already exists
-        if it exists already
-            if not visited
-                err, cycles!
-        else
-            read in package, add package ptr to the node's list of depens
-    read in all module files from package dir
-	set package symbol to be visited
-*/
+// Reads in package, constructs package dependency graph, reads in file of package
 static SymbolNode* readPackage(char* packagePath, SymbolNode* program)
 {
     // Create manifest filename
@@ -330,9 +303,7 @@ bail:
     return packageSymbol;
 }
 
-/*
-Translates an input file to a C output file
-*/
+// Compiles an Orng program given a root package directory path
 int main(int argc, char** argv)
 {
     clock_t t;
@@ -357,6 +328,7 @@ int main(int argc, char** argv)
 
     Program programStruct = Validator_Validate(program);
 
+	char outFilename[255];
     memset(outFilename, 0, 255);
     strcat_s(outFilename, 255, argv[1]);
     strcat_s(outFilename, 255, "\\");

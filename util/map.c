@@ -19,8 +19,7 @@
 int hash(const char*);
 void addNode(struct map* map, char* key, void* value, int hash);
 
-/*
-    Creates a map pointer */
+// Creates a map pointer
 struct map* Map_Create()
 {
     struct map* map = (struct map*)malloc(sizeof(struct map));

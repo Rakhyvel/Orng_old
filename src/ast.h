@@ -109,11 +109,9 @@ enum astType {
     AST_EXTERN
 };
 
-// When printing out, should types be unwrapped or not
-bool doDefTypes;
-
 struct astNode;
 
+// The following structs are used for data for specific sorts of AST nodes. Check the constructors for which one is used
 typedef struct astNode_ident {
     char* data;
 } astNode_ident;
@@ -124,7 +122,6 @@ typedef struct astNode_int {
 
 typedef struct astNode_string {
     char* data;
-    int stringID;
 } astNode_string;
 
 typedef struct astNode_char {
@@ -251,34 +248,30 @@ typedef struct astNode_enum {
 typedef struct astNode_function {
     struct astNode* domainType;
     struct astNode* codomainType;
-    // field that says if function is stateless?
-    // field for if the type is const
 } astNode_function;
 
 typedef struct astNode_extern {
     struct symbolNode* symbol;
 } astNode_extern;
 
-/* Define the structure of an AST Node */
+// Used to represent a node in an Abstract Syntax Tree. ASTs are used for expressions and for types
 typedef struct astNode {
     enum astType astType; // The type of the AST node
     struct symbolNode* scope; // The scope that this AST is constrained within
-    struct position pos;
-    int tag; // Tag of a specific type for enums
+    struct position pos; // Position the AST is found in the source text
 
-    bool visited;
-    bool isValid;
+    bool visited; // Used during traversal, particularly for ASTs that represent types
+    bool isValid; // Whether this AST has been checked for validity
+    bool isConst; // For type ASTs, whether or not the type is compile-time constant
 
-    bool isConst;
+    bool containsReturn; // AST contains a return node
+    bool containsContinue; // AST contains a continue node
+    bool containsBreak; // AST contains a break node
 
-    // if subtree contains any of these
-    bool containsReturn;
-    bool containsContinue;
-    bool containsBreak;
+    struct astNode* type; // The type of the AST expression
+    struct astNode* originalType; // Is never expanded, used to print error messages and documentation
 
-    struct astNode* type; // The type of the AST Node
-    struct astNode* originalType; // Is never expanded, used to print
-
+	// Data stored in AST
     union {
         astNode_ident ident;
         astNode_int _int;
@@ -311,6 +304,10 @@ typedef struct astNode {
     };
 } ASTNode;
 
+// Binary operator constructors will follow this type
+typedef ASTNode* (*BinopConstructor)(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
+
+// Some well-known types and constants
 const ASTNode* INT8_TYPE;
 const ASTNode* INT16_TYPE;
 const ASTNode* INT32_TYPE;
@@ -331,7 +328,6 @@ const ASTNode* UNDEF_TYPE;
 const ASTNode* VOID_ADDR_TYPE;
 const ASTNode* VOID_TYPE;
 const ASTNode* MAYBE_VOID_TYPE;
-
 const ASTNode* TRUE_AST;
 const ASTNode* FALSE_AST;
 const ASTNode* NOTHING_AST;
@@ -344,6 +340,7 @@ ASTNode* getArrayDataType(ASTNode* type);
 int getArrayLength(ASTNode* type);
 ASTNode* getArrayLengthAST(ASTNode* type);
 ASTNode* getArrayDataTypeAddr(ASTNode* type);
+BinopConstructor getBinopConstructor(enum astType astType);
 ASTNode* createArrayTypeNode(ASTNode* baseType, int length, struct position pos);
 ASTNode* createMaybeType(ASTNode* somethingBaseType);
 

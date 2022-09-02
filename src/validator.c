@@ -1,4 +1,5 @@
 // © 2021-2022 Joseph Shimel. All rights reserved.
+// Functionality to perform semantic analysis of a parsed-in program
 
 #include "validator.h"
 #include "../util/debug.h"
@@ -11,26 +12,31 @@
 #include <stdlib.h>
 #include <string.h>
 
-static const List* structDepenGraph = NULL;
+// Maps field names to set of types available for that field
 const Map* tagTypes = NULL; // Map(name:String, Set(type))
+// Maps field names to set of ids that correspond with field type
 const Map* tagIDs = NULL; // Map(name:String, List(tag:Int))
+// Set of DGraph nodes for unique product and sum types
+static const List* structDepenGraph = NULL;
+// Map used as a Set of filenames to include for the Orng program
 static const Map* includes = NULL;
+// List of verbatim code. TODO: Remove verbatims
 static const List* verbatims = NULL;
+// The main function of the program, found after traversal
 static const SymbolNode* mainFunction = NULL;
+// The call graph, built from the functions reachable by the main function
 static const CFG* callGraph = NULL;
-
-bool permissiveTypeEquiv = false; // True during validation phase, false during generation phase
-
-static ASTNode* mainFunctionType;
+// Whether to use structural type equivalence or not. True during validation phase, false during generation phase
+bool structuralTypeEquiv = false;
 
 static ASTNode* expandTypeIdent(ASTNode* type, bool reassigning);
 bool typesAreEquivalent(ASTNode* a, ASTNode* b);
 static void inferTypes(SymbolNode* var);
 static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning);
-static ASTNode* validateAST(ASTNode* node);
+static ASTNode* validateAST(ASTNode* node, ASTNode* coerceType);
 static void validateType(ASTNode* node, bool collectThisType);
 
-
+// Returns the tag ID for a field name/type pair, panics on error
 int getTag(char* fieldName, ASTNode* fieldType)
 {
     List* set = Map_Get(tagTypes, fieldName);
@@ -52,6 +58,7 @@ int getTag(char* fieldName, ASTNode* fieldType)
     return tag;
 }
 
+// Returns the tag ID for a field name from within a sum type
 int getTagEnum(char* fieldName, ASTNode* enumType)
 {
     forall(elem, enumType->_enum.defines)
@@ -65,6 +72,7 @@ int getTagEnum(char* fieldName, ASTNode* enumType)
     PANIC("couldn't find tag enum");
 }
 
+// Returns the type of a field given a tag from a sum type
 ASTNode* getTypeEnum(int tag, ASTNode* enumType)
 {
     forall(elem, enumType->_enum.defines)
@@ -78,6 +86,7 @@ ASTNode* getTypeEnum(int tag, ASTNode* enumType)
     PANIC("couldn't find tag enum");
 }
 
+// Determines whether a sum type contains a field name/type pair
 bool enumContainsField(ASTNode* enumType, char* fieldName, ASTNode* fieldType)
 {
     forall(elem, enumType->_enum.defines)
@@ -91,7 +100,9 @@ bool enumContainsField(ASTNode* enumType, char* fieldName, ASTNode* fieldType)
     return false;
 }
 
-static bool unionEnums(ASTNode* left, ASTNode* right)
+// Given two sun types, adds all the definitions from the right type to the left type. Field names may collide if types are equal, though fields will not be duplicated.
+// TODO: add error if field names are the same and types are not equal
+static void unionEnums(ASTNode* left, ASTNode* right)
 {
     forall(elem, right->_enum.defines)
     {
@@ -113,10 +124,7 @@ static bool unionEnums(ASTNode* left, ASTNode* right)
     }
 }
 
-/*
-* Takes in a dot chain and returns the symbol refered to by the dot chain
-* WARNING: Check returns! may be null (undefined) or -1 (restricted)
-*/
+// Determines the symbol node refered to by a dot expression AST. WARNING: Check returns! may be null (undefined) or -1 (restricted)
 static SymbolNode* getDotSymbol(ASTNode* type)
 {
     ASTNode* left = type->dot.left;
@@ -245,14 +253,15 @@ static SymbolNode* getDotSymbol(ASTNode* type)
     return rightSymbol;
 }
 
+// Returns the type refered to by a dot expression
+// TODO: rename 'reassigning' to 'keepExternTypes', check whether you need this or not!
 static ASTNode* resolveDotTypes(ASTNode* node, bool reassigning)
 {
     if (node->astType == AST_DOT) {
         SymbolNode* dotSymbol = getDotSymbol(node);
         if (dotSymbol == 0 || dotSymbol == -1) {
             error(node->pos, "dot expression doesn't resolve to a symbol");
-        }
-        if (reassigning && dotSymbol->isExtern) {
+        } else if (reassigning && dotSymbol->isExtern) {
             return AST_Create_extern(dotSymbol, dotSymbol, dotSymbol->pos);
         } else {
             return dotSymbol->def;
@@ -262,12 +271,8 @@ static ASTNode* resolveDotTypes(ASTNode* node, bool reassigning)
     }
 }
 
-/*
-* Takes in a type and expands type identifiers, and resolves dot types
-* 
-* if reassigning, don't expand extern types further
-* else, expand extern types further
-*/
+// Evaluates a type expr AST. 'keepExternTypes' refers to whether or not to expand extern types further, or keep them
+// TODO: rename 'reassigning' => 'keepExternTypes', rename 'expandTypeIdent' => 'evaluateType'
 static ASTNode* expandTypeIdent(ASTNode* type, bool reassigning)
 {
     int loopCounter = 0;
@@ -359,9 +364,10 @@ static ASTNode* expandTypeIdent(ASTNode* type, bool reassigning)
     return expanded;
 }
 
+// Used for determining integer and real subtypes
 static int scalarTypeType(ASTNode* node)
 {
-    if (permissiveTypeEquiv) {
+    if (structuralTypeEquiv) {
         if (node->astType != AST_IDENT) {
             return -1;
         } else {
@@ -404,8 +410,8 @@ static int scalarTypeType(ASTNode* node)
     }
 }
 
-// a is subset of b
-// returns -1 if N/A, 0 if applicable and incompatible, and 1 if applicable and compatible
+// returns whether or not 'a' is not a scalar subtype of 'b', or -1 if any are not scalar types
+// TODO: rename to 'scalarSubtype'
 static int typesAreCompatible(ASTNode* a, ASTNode* b)
 {
     int aIntType = scalarTypeType(a);
@@ -417,7 +423,7 @@ static int typesAreCompatible(ASTNode* a, ASTNode* b)
     }
 }
 
-// is a an enum subtype of b
+// returns whether or not 'b' has all the fields of 'a'
 static bool enumSubtype(ASTNode* a, ASTNode* b)
 {
     ASTNode* aExpand = expandTypeIdent(a, false);
@@ -428,7 +434,7 @@ static bool enumSubtype(ASTNode* a, ASTNode* b)
     {
         ASTNode* aDefine = elem->data;
         SymbolNode* aSymbol = aDefine->define.symbol;
-        if (aSymbol->type->astType == AST_VOID && !permissiveTypeEquiv) {
+        if (aSymbol->type->astType == AST_VOID && !structuralTypeEquiv) {
             continue;
         }
         bool found = false;
@@ -436,7 +442,7 @@ static bool enumSubtype(ASTNode* a, ASTNode* b)
         {
             ASTNode* bDefine = elem2->data;
             SymbolNode* bSymbol = bDefine->define.symbol;
-            if (bSymbol->type->astType == AST_VOID && !permissiveTypeEquiv) {
+            if (bSymbol->type->astType == AST_VOID && !structuralTypeEquiv) {
                 continue;
             }
             aExpand->visited = true;
@@ -448,9 +454,8 @@ static bool enumSubtype(ASTNode* a, ASTNode* b)
     return allEquiv;
 }
 
-/*
-checks whether A <= B, that is "is A a subtype of B"
-*/
+// returns whether the type 'a' is a subtype of 'b' 
+// TODO: rename to 'isSubtype'
 bool typesAreEquivalent(ASTNode* a, ASTNode* b)
 {
     ASTNode* aExpand = expandTypeIdent(a, true);
@@ -489,7 +494,7 @@ bool typesAreEquivalent(ASTNode* a, ASTNode* b)
     if (bExpand->astType == AST_IDENT && !strcmp(bExpand->ident.data, "Package")) {
         return true;
     }
-    if (permissiveTypeEquiv && bExpand->isConst && !aExpand->isConst) {
+    if (structuralTypeEquiv && bExpand->isConst && !aExpand->isConst) {
         return false;
     }
 
@@ -572,7 +577,7 @@ bool typesAreEquivalent(ASTNode* a, ASTNode* b)
                 ASTNode* bDef = bSymbol->def;
                 aExpand->visited = true;
                 bExpand->visited = true;
-                bool lengthSame = !permissiveTypeEquiv || bDef->astType != AST_INT || aDef->_int.data == bDef->_int.data;
+                bool lengthSame = !structuralTypeEquiv || bDef->astType != AST_INT || aDef->_int.data == bDef->_int.data;
                 bool fieldNamesSame = (aSymbol == NULL || bSymbol == NULL || !strcmp(aSymbol->name, bSymbol->name));
                 bool typeEquiv = typesAreEquivalent(aType, bType);
                 allEquiv &= lengthSame && typeEquiv && fieldNamesSame;
@@ -592,7 +597,7 @@ bool typesAreEquivalent(ASTNode* a, ASTNode* b)
             break;
         }
         case AST_ENUM:
-            if (permissiveTypeEquiv) {
+            if (structuralTypeEquiv) {
                 retval = enumSubtype(aExpand, bExpand);
             } else {
                 retval = enumSubtype(aExpand, bExpand) && enumSubtype(bExpand, aExpand);
@@ -608,6 +613,7 @@ bool typesAreEquivalent(ASTNode* a, ASTNode* b)
     return retval;
 }
 
+// Takes in a sum type AST and an expression. Returns a wrapping expression if the expression can be coerced up to the enum type, else NULL
 static ASTNode* tryCoerceToEnum(ASTNode* enumType, ASTNode* member)
 {
     validateType(enumType, true);
@@ -666,6 +672,7 @@ static ASTNode* tryCoerceToEnum(ASTNode* enumType, ASTNode* member)
     }
 }
 
+// Given a calling expression (for method calls), an named arglist, and a parameterlist, determines if the arguments match the parameters
 static void namedArgsMatch(ASTNode* expr, ASTNode* args, ASTNode* params)
 {
     Map* argNames = Map_Create(); // maps param names:String -> arg expressions:&ASTNode
@@ -730,6 +737,7 @@ static void namedArgsMatch(ASTNode* expr, ASTNode* args, ASTNode* params)
     Map_Destroy(argNames);
 }
 
+// Given a calling expression (for method calls), a positional arglist, and a parameterlist, determines if the arguments match the parameters
 static void positionalArgsMatch(ASTNode* expr, ASTNode* args, ASTNode* params)
 {
     if (expr && expr->astType == AST_DOT && params->paramlist.defines->size > 0) {
@@ -817,6 +825,7 @@ static void positionalArgsMatch(ASTNode* expr, ASTNode* args, ASTNode* params)
     }
 }
 
+// Given a calling expression (for method calls), an arglist, and a parameterlist, determines if the arguments match the parameters
 static void argsMatchParams(ASTNode* expr, ASTNode* args, ASTNode* params)
 {
     if ((args->astType != AST_ARGLIST && args->astType != AST_PAREN) || (params->astType != AST_PARAMLIST && params->astType != AST_VOID)) {
@@ -831,6 +840,8 @@ static void argsMatchParams(ASTNode* expr, ASTNode* args, ASTNode* params)
     }
 }
 
+// Takes in a symbol, performs either type checking if the type is defined, or type inference if the type is undefined
+// TODO: better name! maybe 'symbolTypeCheck'
 static void inferTypes(SymbolNode* var)
 {
     if (var->def && var->symbolType != SYMBOL_FUNCTION) {
@@ -883,12 +894,8 @@ static void inferTypes(SymbolNode* var)
     }
 }
 
-/*
-* Assumes that all subnodes have already been validated
-* 
-* @param intermediate	In the case of a dot chain with two or more dots, whether or not the this node is not the head dot in the dot chain
-* @param reassigning	when reassigning, do not expand 
-*/
+// Returns the type AST for an expression. In the case of a dot chain with two or more dots, 'intermediate' whether or not the this node is NOT the head dot in the dot chain
+// TOOD: rename 'reassigning' => 'expandExternTypes', 'intermediate' => 'inDotChainTail'
 static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
 {
     ASSERT(node != NULL);
@@ -1008,8 +1015,8 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
         ASTNode* right = node->binop.right;
         ASTNode* leftType = getType(left, false, false);
         ASTNode* rightType = getType(right, false, false);
-        bool tempPermissiveness = permissiveTypeEquiv;
-        permissiveTypeEquiv = true;
+        bool tempPermissiveness = structuralTypeEquiv;
+        structuralTypeEquiv = true;
         if (typesAreEquivalent(leftType, rightType)) {
             type = rightType;
         } else if (typesAreEquivalent(rightType, leftType)) {
@@ -1017,7 +1024,7 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
         } else {
             incompatibleTypesError(node->pos, leftType, rightType);
         }
-        permissiveTypeEquiv = tempPermissiveness;
+        structuralTypeEquiv = tempPermissiveness;
         break;
     }
     case AST_ADDR_OF: {
@@ -1231,8 +1238,8 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
             ASTNode* elseBody = node->_if.elseBlock;
             ASTNode* bodyType = getType(body, false, false);
             ASTNode* elseBodyType = getType(elseBody, false, false);
-            bool tempPermissiveness = permissiveTypeEquiv;
-            permissiveTypeEquiv = true;
+            bool tempPermissiveness = structuralTypeEquiv;
+            structuralTypeEquiv = true;
             if (typesAreEquivalent(bodyType, elseBodyType)) {
                 type = elseBodyType;
             } else if (typesAreEquivalent(elseBodyType, bodyType)) {
@@ -1240,7 +1247,7 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
             } else {
                 type = UNDEF_TYPE;
             }
-            permissiveTypeEquiv = tempPermissiveness;
+            structuralTypeEquiv = tempPermissiveness;
         } else {
             type = UNDEF_TYPE;
         }
@@ -1310,6 +1317,7 @@ static ASTNode* getType(ASTNode* node, bool intermediate, bool reassigning)
     return type;
 }
 
+// Validates properties for L value expressions 
 static void validateLValue(ASTNode* node)
 {
     switch (node->astType) {
@@ -1346,10 +1354,7 @@ static void validateLValue(ASTNode* node)
         if (childType->astType == AST_ADDR) {
             childType = childType->unop.expr;
         }
-        ASTNode* dataDefine = List_Get(childType->paramlist.defines, 1);
-        SymbolNode* dataSymbol = dataDefine->define.symbol;
-        ASTNode* dataAddrType = dataSymbol->type;
-        ASTNode* dataType = dataAddrType->unop.expr;
+        ASTNode* dataType = getArrayDataType(childType);
         if (dataType->isConst) {
             error(node->pos, "array data type is constant");
         }
@@ -1374,6 +1379,7 @@ static void validateLValue(ASTNode* node)
     }
 }
 
+// Returns the size in bytes a type AST would take up in memory, padding included
 static int getTypeSize(ASTNode* type)
 {
     switch (type->astType) {
@@ -1452,48 +1458,7 @@ static int getTypeSize(ASTNode* type)
     }
 }
 
-typedef ASTNode* (*binopConstructor)(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);
-static binopConstructor getBinopConstructor(enum astType astType)
-{
-    switch (astType) {
-    case AST_ADD_ASSIGN:
-        return &AST_Create_add;
-    case AST_SUB_ASSIGN:
-        return &AST_Create_subtract;
-    case AST_MULT_ASSIGN:
-        return &AST_Create_multiply;
-    case AST_DIV_ASSIGN:
-        return &AST_Create_divide;
-    case AST_MOD_ASSIGN:
-        return &AST_Create_modulus;
-    case AST_EXPONENT_ASSIGN:
-        return &AST_Create_exponent;
-    case AST_AND_ASSIGN:
-        return &AST_Create_and;
-    case AST_OR_ASSIGN:
-        return &AST_Create_or;
-    case AST_BIT_OR_ASSIGN:
-        return &AST_Create_bitOr;
-    case AST_BIT_XOR_ASSIGN:
-        return &AST_Create_bitXor;
-    case AST_BIT_AND_ASSIGN:
-        return &AST_Create_bitAnd;
-    case AST_LSHIFT_ASSIGN:
-        return &AST_Create_lshift;
-    case AST_RSHIFT_ASSIGN:
-        return &AST_Create_rshift;
-    default:
-        PANIC("not an op-assign");
-    }
-}
-
-/*
-for reference:
-integral = int
-scalar = integral + Real
-arithmetic = scalar + <addr>
-chars are not considered integral for later compatability with Python
-*/
+// Validates and possibly evaluates an AST expression, returns resulting original AST. Takes in an expected type to coerce the expression to, set to NULL for no type check
 static ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
 {
     static int loops = 0;
@@ -2074,7 +2039,7 @@ static ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
 
         validateLValue(left);
 
-        binopConstructor constructor = getBinopConstructor(node->astType);
+        BinopConstructor constructor = getBinopConstructor(node->astType);
         retval = AST_Create_assign(left, constructor(left, right, node->scope, node->pos), node->scope, node->pos);
         validateAST(retval, NULL); // To give it a type
         break;
@@ -2096,7 +2061,7 @@ static ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
 
         validateLValue(left);
 
-        binopConstructor constructor = getBinopConstructor(node->astType);
+        BinopConstructor constructor = getBinopConstructor(node->astType);
         retval = AST_Create_assign(left, constructor(left, right, node->scope, node->pos), node->scope, node->pos);
         validateAST(retval, NULL); // To give it a type
         break;
@@ -2117,7 +2082,7 @@ static ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
 
         validateLValue(left);
 
-        binopConstructor constructor = getBinopConstructor(node->astType);
+        BinopConstructor constructor = getBinopConstructor(node->astType);
         retval = AST_Create_assign(left, constructor(left, right, node->scope, node->pos), node->scope, node->pos);
         validateAST(retval, NULL); // To give it a type
         break;
@@ -2411,6 +2376,7 @@ static ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
     return retval;
 }
 
+// Registers the field name/type pair if it is unique
 static void putTag(char* fieldName, ASTNode* fieldType)
 {
     static int tagID = 0;
@@ -2442,6 +2408,7 @@ static void putTag(char* fieldName, ASTNode* fieldType)
     }
 }
 
+// Adds a struct to the dependency graph if it is unique, with all dependencies 
 static struct graph* addGraphNode(List* depenGraph, ASTNode* structType)
 {
     // Check if type is enum, if so, collect tags
@@ -2458,8 +2425,8 @@ static struct graph* addGraphNode(List* depenGraph, ASTNode* structType)
     // Check list to see if any graph node has paramlist type
     // If does, return that graph node
     // If not, create new grpahnode, append to list of dependencies, return new graph node
-    bool oldTypePermissiveness = permissiveTypeEquiv;
-    permissiveTypeEquiv = false;
+    bool oldTypePermissiveness = structuralTypeEquiv;
+    structuralTypeEquiv = false;
     ListElem* elem = List_Begin(depenGraph);
     for (; elem != List_End(depenGraph); elem = elem->next) {
         DGraph* graphNode = elem->data;
@@ -2467,7 +2434,7 @@ static struct graph* addGraphNode(List* depenGraph, ASTNode* structType)
             return graphNode;
         }
     }
-    permissiveTypeEquiv = oldTypePermissiveness;
+    structuralTypeEquiv = oldTypePermissiveness;
 
     DGraph* graphNode = calloc(1, sizeof(DGraph));
     graphNode->structDef = structType;
@@ -2479,6 +2446,7 @@ static struct graph* addGraphNode(List* depenGraph, ASTNode* structType)
     return graphNode;
 }
 
+// Checks that a dependency graph doesn't have loops in it
 static void validateNoLoops(DGraph* graphNode)
 {
     graphNode->visited = true;
@@ -2493,6 +2461,7 @@ static void validateNoLoops(DGraph* graphNode)
     graphNode->visited = false;
 }
 
+// Validates that a type AST is correctly formed. 'collectThisType' is whether to add type to the dependency graph or not
 static void validateType(ASTNode* node, bool collectThisType)
 {
     ASSERT(node != NULL);
@@ -2608,6 +2577,7 @@ static void validateType(ASTNode* node, bool collectThisType)
     }
 }
 
+// Figures out which symbols are allowed through the given symbol's restriction
 static void resolveRestrictions(SymbolNode* symbol)
 {
     List* allowedIdentifiers = symbol->restrictionExpr;
@@ -2639,7 +2609,6 @@ static void resolveRestrictions(SymbolNode* symbol)
 }
 
 // Validate that all possible paths return some value
-// The actual type validation is done earlier for all return types
 static bool allReturnPath(ASTNode* node)
 {
     if (node->astType == AST_RETURN) {
@@ -2659,6 +2628,8 @@ static bool allReturnPath(ASTNode* node)
     return true;
 }
 
+// TODO: rename to validateSymbol or somem
+// Validates that a symbol is correct
 Program Validator_Validate(SymbolNode* symbol)
 {
     ASSERT(symbol != NULL);
@@ -2680,16 +2651,7 @@ Program Validator_Validate(SymbolNode* symbol)
         validateType(CONST_STRING_TYPE, true);
         validateType(STRING_ARR_TYPE, true);
         validateType(MAYBE_VOID_TYPE, true);
-        permissiveTypeEquiv = true;
-
-        SymbolNode* argsDefineSymbol = Symbol_Create("args", SYMBOL_VARIABLE, NULL, (Position) { 0, 0, 0, 0 });
-        argsDefineSymbol->type = STRING_ARR_TYPE;
-        argsDefineSymbol->def = AST_Create_undef(NULL, (Position) { 0, 0, 0, 0 });
-        ASTNode* argsDefine = AST_Create_define(argsDefineSymbol, NULL, (Position) { 0, 0, 0, 0 });
-        ASTNode* mainFunctionParams = AST_Create_paramlist(NULL, (Position) { 0, 0, 0, 0 });
-        List_Append(mainFunctionParams->paramlist.defines, argsDefine);
-        mainFunctionType = AST_Create_function(mainFunctionParams, INT32_TYPE, NULL, (Position) { 0, 0, 0, 0 });
-        mainFunctionType->isConst = true;
+        structuralTypeEquiv = true;
         resolveRestrictions(symbol);
     }
 
@@ -2727,15 +2689,12 @@ Program Validator_Validate(SymbolNode* symbol)
                 typeMismatchError(child->type->pos, PACKAGE_TYPE, child->type);
             }
         }
-        if (mainFunction == NULL) {
-            gen_error("no main function defined");
-        } else {
+        if (mainFunction) {
             callGraph = createCFG(mainFunction, NULL);
-            // flattenAST(callGraph, ...
-            // optimize(callGraph, ...
+        } else {
+            gen_error("no main function defined");
         }
-        // Reachability?
-        permissiveTypeEquiv = false;
+        structuralTypeEquiv = false;
         unVisitSymbolTree(symbol);
         break;
     }

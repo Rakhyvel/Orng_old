@@ -398,6 +398,41 @@ ASTNode* getArrayDataTypeAddr(ASTNode* type)
     return dataType;
 }
 
+// Given an operator-assign AST type, returns the function to create the operator AST node
+BinopConstructor getBinopConstructor(enum astType astType)
+{
+    switch (astType) {
+    case AST_ADD_ASSIGN:
+        return &AST_Create_add;
+    case AST_SUB_ASSIGN:
+        return &AST_Create_subtract;
+    case AST_MULT_ASSIGN:
+        return &AST_Create_multiply;
+    case AST_DIV_ASSIGN:
+        return &AST_Create_divide;
+    case AST_MOD_ASSIGN:
+        return &AST_Create_modulus;
+    case AST_EXPONENT_ASSIGN:
+        return &AST_Create_exponent;
+    case AST_AND_ASSIGN:
+        return &AST_Create_and;
+    case AST_OR_ASSIGN:
+        return &AST_Create_or;
+    case AST_BIT_OR_ASSIGN:
+        return &AST_Create_bitOr;
+    case AST_BIT_XOR_ASSIGN:
+        return &AST_Create_bitXor;
+    case AST_BIT_AND_ASSIGN:
+        return &AST_Create_bitAnd;
+    case AST_LSHIFT_ASSIGN:
+        return &AST_Create_lshift;
+    case AST_RSHIFT_ASSIGN:
+        return &AST_Create_rshift;
+    default:
+        PANIC("not an op-assign");
+    }
+}
+
 // Generates an array type AST given a basetype. `length` should be -1 if array length is undefined
 ASTNode* createArrayTypeNode(ASTNode* baseType, int length, struct position pos)
 {

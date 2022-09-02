@@ -244,8 +244,7 @@ static void makeSymbolVersionUnique(SymbolVersion* symbver)
     if (symbver->version != -1) {
         return;
     } else {
-        symbver->version = symbver->symbol->versions->size;
-        List_Append(symbver->symbol->versions, symbver);
+        symbver->version = symbver->symbol->numberVersions++;
     }
 }
 
@@ -351,7 +350,7 @@ static IR* appendInstructionBasicBlock(BasicBlock* bb, IR* ir)
     return ir;
 }
 
-// Removes an IR instruction from the list of a basic blocks list of IR instructions
+// Removes an IR instruction from a basic blocks list of IR instructions
 static void removeInstruction(BasicBlock* bb, IR* ir)
 {
     //printf("removed instruction %d\n", ir->id);
@@ -3129,7 +3128,7 @@ static bool deadCode(CFG* cfg)
 // Creates and optimizes a control-flow-graph node for a function symbol
 List* createCFG(struct symbolNode* functionSymbol, CFG* caller)
 {
-    if (functionSymbol->ir || functionSymbol->isExtern) {
+    if (functionSymbol->cfg || functionSymbol->isExtern) {
         return;
     }
     CFG* cfg = calloc(sizeof(CFG), 1);
@@ -3145,7 +3144,7 @@ List* createCFG(struct symbolNode* functionSymbol, CFG* caller)
     cfg->basicBlocks = List_Create();
     cfg->leaves = List_Create();
 
-    functionSymbol->ir = cfg;
+    functionSymbol->cfg = cfg;
     if (caller && !List_Contains(caller->leaves, cfg)) {
         List_Append(caller->leaves, cfg);
     }

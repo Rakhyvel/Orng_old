@@ -12,6 +12,7 @@ typedef struct position {
     int end_span;
 } Position;
 
+// Represents an invalid posiiton, or the absence of a defined position
 #define invalid_pos \
     ((struct position) { NULL, 0, 0, 0, 0})
 
