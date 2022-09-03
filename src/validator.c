@@ -2324,7 +2324,6 @@ static void validateType(ASTNode* node, bool collectThisType)
                 restrictedOrUndefError(node->pos, rejectingSymbol->pos, node->ident.data);
             } else if (var->symbolType != SYMBOL_TYPE) {
                 error(node->pos, "cannot resolve symbol '%s' as type", node->ident.data);
-
             }
         }
         break;
@@ -2343,6 +2342,9 @@ static void validateType(ASTNode* node, bool collectThisType)
         break;
     }
     case AST_ADDR: {
+        if (node->unop.expr->isConst) {
+            error(node->pos, "address of a compile-time constant");
+        }
         validateType(node->unop.expr, collectThisType);
         break;
     }
@@ -2634,9 +2636,6 @@ void Validator_ValidateSymbol(SymbolNode* symbol)
         {
             SymbolNode* child = Map_Get(symbol->children, elem->data);
             Validator_ValidateSymbol(child);
-        }
-        if (symbol->def->astType != AST_PRODUCT && symbol->def->astType != AST_VOID) {
-            error(symbol->pos, "expected product type literal");
         }
         validateAST(symbol->def, NULL);
         break;

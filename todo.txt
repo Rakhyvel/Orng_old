@@ -451,7 +451,7 @@ x cleanup!
 	x document all errors, with special error message example
 	x document debug mode and the errors which may come with it
 	x !strcmp(dotType->ident.data, "Enum")
-- cannot have an address to a compile-time constant
+x cannot have an address to a compile-time constant
 - true error collection
 - subexpression elimination
 - 'register' allocation
@@ -463,22 +463,6 @@ x cleanup!
 	)
 - Orange should compile the program for you, too
 	- No verbatims, instead write the C file and header, include it, and add it to be included when compiling
-- 'default' keyword which takes in a type and gives its default value
-	if x == default Int64 {
-		std.system.println("x is 0")
-	}
-	- useful for variants and allocators
-	new::(T::Type, init::T=default T)->AllocationError!&T = {
-		malloc?::(size:Int64)->&Any
-		retval := malloc(sizeof T):&T
-		*retval = init
-		return retval
-	}
-	-- usage:
-	create::(alloc:&Allocator)->!&Whatever = {
-		retval := try alloc.new(Whatever, ("This is the default\n", 34, 535.5))
-		
-	}
 - implement == and != for struct types (field equality conjunction)
 	- Vector::Type = (x:Int, y:Int)
 	myPos:Vector = (0, 10)
@@ -546,10 +530,17 @@ x cleanup!
 		- create a 'stack frame' with symbols, and a strip of memory for data, use offsets for this
 	- rewrite util data structures to be parametric
 	- typeof operator which gets the compiletime type of an expression
-	- subtype operator which does compile time type checking
+		x:typeof 4 = 5
+	- subtype operator which does compile time type checking, equality checking for types as well
+		- A <: B means A is a subtype of B
+		- A == B means A <: B and B <: A
 	- remove the concept of restrictions. Packages include each other using a built-in function
 		- remove .pkg.orng manifest files too
 		- add back public modifiers
+	- 'default' keyword which takes in a type and gives its default value
+		if x == default Int64 {
+			std.system.println("x is 0")
+		}
 - interfaces (traits in rust https://theburningmonk.com/2015/05/rust-memory-safety-without-gc/)
 	- are just structs with Any pointers to the base data structure, and function pointers
 	- add method calling for stack structs, just take the address in the call
