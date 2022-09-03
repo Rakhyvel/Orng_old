@@ -11,6 +11,8 @@
     - [Arrays](#arrays)
     - [Enum Types](#enum-types)
     - [Functions](#functions)
+    - [Packages](#packages)
+    - [Modules](#modules)
   - [Value Operators](#value-operators)
     - [Operator Assignment](#operator-assignment)
     - [Comparison chaining](#comparison-chaining)
@@ -27,9 +29,6 @@
     - [Defer](#defer)
     - [New](#new)
     - [Free](#free)
-  - [Program Structure](#program-structure)
-    - [Packages](#packages)
-    - [Modules](#modules)
 ## Getting Started with Hello World
 The following is an example of a Hello World program written in Orng.
 ```
@@ -79,9 +78,9 @@ program
 |   |   +---functionF
 |   |   \---constantG
 |   \---moduleH
-|   |   +---functionI
-|   |   +---functionJ
-|   |   \---constantK
+|       +---functionI
+|       +---functionJ
+|       \---constantK
 \---packageL
     +---moduleM
     |   +---functionN
@@ -639,7 +638,39 @@ func1::()->() = {
     }
 }
 ```
+### Packages
+Packages are defined in a folder using `.pkg.orng` file extenstion. They must have the same name as the folder they are in. They must be a `:Package` type, and have a product literal as their definition. Packages have the modules in their folder as children, and also any definitions defined in the package itself. Package children must be compile-time constant.
 
+Packages can mark other packages as dependencies by putting them in the symbol restriction. They will then be loaded from the Orng/dependencies folder.
+
+Package children must have the same name as their file, without the `.orng`. 
+```
+-- In file a.orng
+b::Module = () -- Error! symbol name differs from containing file name
+```
+
+Files may only define one outer symbol.
+```
+-- In file a.orng
+a::Module = (
+    -- Valid, inside module a
+    b::Module = ()
+)
+
+c::Module = () -- Error! both a and c are defined in a.orng, can only be one thing defined per file!
+```
+
+#### Includes
+Packages may define a string array field called `includes`, which contains a list of header files to include in the output C file. Include strings are only generated once, so it is okay for two packages to include the same header file. Includes surrounded by < > will not be surrounded in quotes in the output C file.
+```
+-- In file myPackage/myPackage.pkg.orng
+myPackage::Package = (
+    somePackageConstant::Int = 4
+    include ::= ["<stdio.h>", "main.h"] -- Outputs #include <stdio.h> and #include "main.h"
+)
+```
+### Modules
+Modules are singleton collections of compile-time constants. They contain the functions, types, and constants of a program.
 ## Value Operators
 Below is a list of operators in order of lowest precedence to highest.
 
@@ -979,39 +1010,3 @@ The `free` keyword frees memory on the system.
 x:&Int = new Int
 free x
 ```
-
-## Program Structure
-Conceptually, all Orng programs have one root symbol representing the program as a whole. This program symbol has all primitive type definitions, all packages given to the compiler, and all packages found using package closure. 
-### Packages
-Packages are defined in a folder using `.pkg.orng` file extenstion. They must have the same name as the folder they are in. They must be a `:Package` type, and have a product literal as their definition. Packages have the modules in their folder as children, and also any definitions defined in the package itself. Package children must be compile-time constant.
-
-Packages can mark other packages as dependencies by putting them in the symbol restriction. They will then be loaded from the Orng/dependencies folder.
-
-Package children must have the same name as their file, without the `.orng`. 
-```
--- In file a.orng
-b::Module = () -- Error! symbol name differs from containing file name
-```
-
-Files may only define one outer symbol.
-```
--- In file a.orng
-a::Module = (
-    -- Valid, inside module a
-    b::Module = ()
-)
-
-c::Module = () -- Error! both a and c are defined in a.orng, can only be one thing defined per file!
-```
-
-#### Includes
-Packages may define a string array field called `includes`, which contains a list of header files to include in the output C file. Include strings are only generated once, so it is okay for two packages to include the same header file. Includes surrounded by < > will not be surrounded in quotes in the output C file.
-```
--- In file myPackage/myPackage.pkg.orng
-myPackage::Package = (
-    somePackageConstant::Int = 4
-    include ::= ["<stdio.h>", "main.h"] -- Outputs #include <stdio.h> and #include "main.h"
-)
-```
-### Modules
-Modules are singleton collections of compile-time constants. They contain the functions, types, and constants of a program.
