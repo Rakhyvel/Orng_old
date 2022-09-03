@@ -176,6 +176,8 @@ const char* Token_GetRepr(_TokenType type)
         return ",";
     case TOKEN_DOT:
         return ".";
+    case TOKEN_DDOT:
+        return "..";
     case TOKEN_DSIGN:
         return "$";
     case TOKEN_ELLIPSES:

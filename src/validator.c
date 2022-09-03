@@ -320,9 +320,9 @@ static int scalarTypeType(ASTNode* node)
                 return 2;
             } else if (!strcmp(node->ident.data, "Int64") || !strcmp(node->ident.data, "Int")) {
                 return 3;
-            } else if (!strcmp(node->ident.data, "Real32") || !strcmp(node->ident.data, "Real")) {
+            } else if (!strcmp(node->ident.data, "Real32")) {
                 return 4;
-            } else if (!strcmp(node->ident.data, "Real64")) {
+            } else if (!strcmp(node->ident.data, "Real64") || !strcmp(node->ident.data, "Real")) {
                 return 5;
             } else {
                 return -1;

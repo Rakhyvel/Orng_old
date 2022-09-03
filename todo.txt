@@ -452,10 +452,13 @@ x cleanup!
 	x document debug mode and the errors which may come with it
 	x !strcmp(dotType->ident.data, "Enum")
 x cannot have an address to a compile-time constant
+x change case arrow to fat arrow
+- change slice syntax to use double dot instead of semi-colon
 - true error collection
-- subexpression elimination
-- 'register' allocation
-	- For each distinct type, have a list of registers, allocate symbol versions to use them to cut down on the amount of symbol versions emitted
+- C code optimizations
+	- 'register' allocation
+		- For each distinct type, have a list of registers, allocate symbol versions to use them to cut down on the amount of symbol versions emitted
+	- subexpression elimination
 - struct method scope should be rebased to struct scope
 	(
 		x:Int
@@ -470,15 +473,12 @@ x cannot have an address to a compile-time constant
 	if myPos == yourPos {
 		-- do something
 	}
-- change case arrow to fat arrow
-- change slice syntax to use double dot instead of semi-colon
 - add assign expression <-, make = assign a statement
 	- To holisitically fix this long standing issue of assignment
 	- Maybe it's actually a type operator that overrides the default value of a type
 	- x := 4 <- 5 -- x will equal 5
 	- x := new Int <- 5 -- address of x will equal 5
 	- x := Node.header <- (.size=4, .text="Hello, World!")
-- cases need else mappings to be able to return values!
 - cases should be able to operate on any types that have == and != defined
 	Col::Type = <A, B, C, D, E, F, G, H>
 	ChessSquare::Type = (col:Col, row:Int)

@@ -21,6 +21,7 @@ typedef enum {
     TOKEN_COLON,
     TOKEN_COMMA,
     TOKEN_DOT,
+	TOKEN_DDOT,
     TOKEN_DSIGN,
     TOKEN_ELLIPSES,
     // Math

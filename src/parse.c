@@ -529,13 +529,13 @@ static ASTNode* parseMapping(SymbolNode* scope)
     List* exprs = List_Create();
     struct token* token = NULL;
     if (accept(TOKEN_ELSE)) {
-        expect(TOKEN_ARROW);
+        expect(TOKEN_BIG_ARROW);
     } else {
         List_Append(exprs, parseExpr(scope));
         while (accept(TOKEN_COMMA)) {
             List_Append(exprs, parseExpr(scope));
         }
-        expect(TOKEN_ARROW);
+        expect(TOKEN_BIG_ARROW);
     }
     ASTNode* expr = parseExpr(scope);
     return AST_Create_mapping(expr, exprs, scope, prevToken->pos);
@@ -546,7 +546,7 @@ static ASTNode* parseFieldMapping(SymbolNode* scope)
     List* exprs = List_Create();
     struct token* token = NULL;
     if (accept(TOKEN_ELSE)) {
-        expect(TOKEN_ARROW);
+        expect(TOKEN_BIG_ARROW);
     } else {
         expect(TOKEN_DOT);
         char* text = malloc(sizeof(char) * 255);
@@ -560,7 +560,7 @@ static ASTNode* parseFieldMapping(SymbolNode* scope)
             strncpy_s(text, 255, "nothing", 254);
         }
         List_Append(exprs, AST_Create_ident(text, scope, token->pos));
-        expect(TOKEN_ARROW);
+        expect(TOKEN_BIG_ARROW);
     }
     ASTNode* expr = parseExpr(scope);
 
@@ -612,8 +612,14 @@ static ASTNode* parseFactor(SymbolNode* scope)
         strncpy_s(text, 255, token->data, 254);
         child = AST_Create_ident(text, scope, token->pos);
     } else if ((token = accept(TOKEN_INT)) != NULL) {
-        int data = strtol(token->data, NULL, 10);
-        child = AST_Create_int(data, scope, token->pos);
+        if (accept(TOKEN_DOT)) {
+            Token* decimal = expect(TOKEN_INT);
+            strcat_s(decimal->data, 255, token->data);
+            child = AST_Create_real(atof(token->data), scope, token->pos);
+        } else {
+            int data = strtol(token->data, NULL, 10);
+            child = AST_Create_int(data, scope, token->pos);
+        }
     } else if ((token = accept(TOKEN_HEX)) != NULL) {
         int data = strtol(token->data + 2, NULL, 16);
         child = AST_Create_int(data, scope, token->pos);
@@ -626,8 +632,6 @@ static ASTNode* parseFactor(SymbolNode* scope)
         child = AST_Create_true(scope, token->pos);
     } else if ((token = accept(TOKEN_FALSE)) != NULL) {
         child = AST_Create_false(scope, token->pos);
-    } else if ((token = accept(TOKEN_REAL)) != NULL) {
-        child = AST_Create_real(atof(token->data), scope, token->pos);
     } else if ((token = accept(TOKEN_LPAREN)) != NULL) {
         child = parseArgList(scope);
     } else if ((token = accept(TOKEN_DOT)) != NULL) {
@@ -704,7 +708,7 @@ static ASTNode* parsePostfix(SymbolNode* scope)
             ASTNode* subscriptOrLowerBound = NULL;
             ASTNode* upperBound = NULL;
             bool isSlice = false;
-            if (accept(TOKEN_SEMICOLON)) { // no lower bound
+            if (accept(TOKEN_DDOT)) { // no lower bound
                 subscriptOrLowerBound = AST_Create_undef(scope, token->pos); // lowerbound
                 isSlice = true;
                 if (!accept(TOKEN_RSQUARE)) { // upper bound
@@ -717,7 +721,7 @@ static ASTNode* parsePostfix(SymbolNode* scope)
                 subscriptOrLowerBound = parseExpr(scope); // either lowerbound or subscript
                 if (!accept(TOKEN_RSQUARE)) { // there is an upper bound
                     isSlice = true;
-                    expect(TOKEN_SEMICOLON);
+                    expect(TOKEN_DDOT);
                     if (!accept(TOKEN_RSQUARE)) { // upper bound
                         upperBound = parseExpr(scope);
                         token = expect(TOKEN_RSQUARE);

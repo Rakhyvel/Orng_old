@@ -41,7 +41,7 @@ static bool shouldSplitToken(char c, char start, int length)
         || start == ':'
         || start == ','
         || (start == '(' && c != '|')
-        || (start == '=' && c != '=')
+        || (start == '=' && c != '=' && c != '>')
         || (start == '&' && c != '&' && c != '=')
         || (start == '|' && c != '|' && c != '=')
         || (start == '<' && c != '<' && c != '=')
@@ -143,7 +143,6 @@ Token* Lexer_GetNextToken(FILE* in)
                 token->type != TOKEN_CHAR && // Excempt if token is a char
                 (token->type != TOKEN_HEX || !isdigit(nextChar))
                 && shouldSplitToken(nextChar, token->data[0], length)) // Compare based on character types
-            && !(isdigit(token->data[0]) && nextChar == '.')
             && !(token->data[0] == '0' && nextChar == 'x')) {
             break;
         } else if (!escaped && nextChar == '"' && token->type == TOKEN_STR) {
