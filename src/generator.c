@@ -1,29 +1,30 @@
 // © 2021-2022 Joseph Shimel. All rights reserved.
+// Generates output code based on program struct constructed and validated in early stages
 
 #include "generator.h"
 #include "../util/debug.h"
 #include "../util/list.h"
+#include "./errors.h"
 #include "./ir.h"
 #include "./main.h"
 #include "./parse.h"
 #include "./position.h"
+#include "./program.h"
 #include "./validator.h"
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 
-Program program;
-
-static void generateDefine(FILE* out, SymbolNode* var, bool param);
+static void generateDefine(FILE* out, SymbolNode* var, bool param, bool field);
 static void generateEnum(FILE* out, DGraph* graphNode);
 
+// Generates the includes used by the program
 static void generateIncludes(FILE* out, Map* includes)
 {
     fprintf(out, "/* Includes */\n");
-    List* keys = includes->keyList;
-    ListElem* e = List_Begin(keys);
-    for (; e != List_End(keys); e = e->next) {
-        char* include = e->data;
+    forall(elem, includes->keyList)
+    {
+        char* include = elem->data;
         if (include[0] == '<') {
             fprintf(out, "#include %s\n", include);
         } else {
@@ -33,6 +34,7 @@ static void generateIncludes(FILE* out, Map* includes)
     fprintf(out, "\n");
 }
 
+// Generates some built-in functions and types for a debug build for the callstack
 static void generateDebug(FILE* out)
 {
     fprintf(out, "/* Debug */\n");
@@ -55,10 +57,10 @@ static void generateDebug(FILE* out)
 
     fprintf(out, "char* tagGetFieldName(int tag) {\n");
     fprintf(out, "	switch(tag) {\n");
-    forall(elem, tagIDs->keyList)
+    forall(elem, program->tagIDs->keyList)
     {
         char* fieldName = elem->data;
-        List* idList = Map_Get(tagIDs, fieldName);
+        List* idList = Map_Get(program->tagIDs, fieldName);
         for (int i = 0; i < idList->size; i++) {
             int64_t data = (int64_t)List_Get(idList, i);
             fprintf(out, "\tcase %d:\n", (int)data);
@@ -68,6 +70,7 @@ static void generateDebug(FILE* out)
     fprintf(out, "\t}\n}\n\n");
 }
 
+// Generates the code for pushing a function onto the callstack
 static void stackTracePush(FILE* out, char* list)
 {
     fprintf(out, "	if (%s->length >= 1000) {\n", list);
@@ -78,25 +81,27 @@ static void stackTracePush(FILE* out, char* list)
     fprintf(out, "	%s->data[%s->length++] = ", list, list);
 }
 
+// Prints out the ordinal of a given struct type
 static void printStructOrd(FILE* out, ASTNode* type)
 {
-    struct listElem* elem = List_Begin(program.structDependencyGraph);
     int i = 1;
-    bool found = false;
-    for (; !found && elem != List_End(program.structDependencyGraph); elem = List_Next(elem), i++) {
+    forall(elem, program->typeDependencyGraph)
+    {
         DGraph* node = (DGraph*)elem->data;
-        ASTNode* child = node->structDef;
-        if (typesAreEquivalent(child, type)) {
+        ASTNode* child = node->typeDef;
+        if (isSubtype(child, type)) {
             fprintf(out, "struct_%s", myItoa(i));
-            found = true;
+            break;
         }
+        i++;
     }
 }
 
+// Prints out a type
 static void printType(FILE* out, ASTNode* type)
 {
     switch (type->astType) {
-    case AST_IDENT:
+    case AST_IDENT: {
         if (!strcmp(type->ident.data, "Int8") || !strcmp(type->ident.data, "Char")) {
             fprintf(out, "%s", "int8_t");
         } else if (!strcmp(type->ident.data, "Int16")) {
@@ -117,7 +122,8 @@ static void printType(FILE* out, ASTNode* type)
             fprintf(out, "%s", type->ident.data);
         }
         break;
-    case AST_DOT:
+    }
+    case AST_DOT: {
         SymbolNode* var = type->dot.symbol;
         if (var->isExtern) {
             fprintf(out, "%s", var->externName);
@@ -125,20 +131,22 @@ static void printType(FILE* out, ASTNode* type)
             printType(out, type->type);
         }
         break;
-    case AST_ADDR:
-        printType(out, type->unop.expr);
-        fprintf(out, "*");
-        break;
-    case AST_ENUM:
-    case AST_ARRAY:
-    case AST_PARAMLIST: {
-        fprintf(out, "struct ");
-        printStructOrd(out, type);
-    } break;
+    }
     case AST_VOID: {
         fprintf(out, "void");
         break;
     }
+    case AST_ADDR: {
+        printType(out, type->unop.expr);
+        fprintf(out, "*");
+        break;
+    }
+    case AST_PRODUCT:
+    case AST_ARRAY:
+    case AST_ENUM: {
+        fprintf(out, "struct ");
+        printStructOrd(out, type);
+    } break;
     case AST_FUNCTION:
         // The second child in a function is the return type
         ASTNode* ret = type->function.codomainType;
@@ -155,6 +163,7 @@ static void printType(FILE* out, ASTNode* type)
     }
 }
 
+// Prints the name of a symbol
 static void printPath(FILE* out, SymbolNode* symbol)
 {
     // Local variables
@@ -167,7 +176,7 @@ static void printPath(FILE* out, SymbolNode* symbol)
     }
     // Everything else
     else if (symbol->parent && (symbol->parent->symbolType != SYMBOL_TYPE || symbol->symbolType == SYMBOL_FUNCTION) && symbol->parent->parent && !symbol->isExtern) {
-        if (symbol->parent->symbolType != SYMBOL_VARIABLE) { // Done so that fields in anon structs collected by variable types don't have their variable names appended
+        if (symbol->parent->symbolType != SYMBOL_VARIABLE) { // Done so that fields in product/enum types collected by variable types don't have their variable names appended
             // Done so that inner functions print correctly (i think)
             if (symbol->symbolType == SYMBOL_VARIABLE || (symbol->parent->parent->symbolType != SYMBOL_BLOCK && symbol->parent->symbolType != SYMBOL_FUNCTION)) {
                 printPath(out, symbol->parent);
@@ -183,20 +192,22 @@ static void printPath(FILE* out, SymbolNode* symbol)
     }
 }
 
-static void generateParamList(FILE* out, ASTNode* parameters)
+// Prints out the definitions of a product type
+static void generateProductParamlist(FILE* out, ASTNode* parameters)
 {
-    ListElem* paramElem = List_Begin(parameters->paramlist.defines);
     // For each parameter in the procedure's parameter list, print it out
-    for (; paramElem != List_End(parameters->paramlist.defines); paramElem = paramElem->next) {
-        ASTNode* define = paramElem->data;
+    forall(elem, parameters->product.defines)
+    {
+        ASTNode* define = elem->data;
         SymbolNode* var = define->define.symbol;
         generateDefine(out, var, true, false);
-        if (paramElem != List_End(parameters->paramlist.defines)->prev) {
+        if (elem != List_End(parameters->product.defines)->prev) {
             fprintf(out, ", ");
         }
     }
 }
 
+// Generates a definition of a symbol. May be a regular definition, a function parameter, or a struct field
 static void generateDefine(FILE* out, SymbolNode* var, bool param, bool field)
 {
     printType(out, var->type);
@@ -213,7 +224,7 @@ static void generateDefine(FILE* out, SymbolNode* var, bool param, bool field)
     if (functionPtr) {
         fprintf(out, ") (");
         ASTNode* params = var->type->function.domainType;
-        generateParamList(out, params);
+        generateProductParamlist(out, params);
         fprintf(out, ")");
     }
     if (var->isVararg) {
@@ -224,7 +235,8 @@ static void generateDefine(FILE* out, SymbolNode* var, bool param, bool field)
     }
 }
 
-static void generateStruct(FILE* out, DGraph* graphNode)
+// Prints out a struct from a dependency graph node in such a way that all dependencies are defined
+static void generateProduct(FILE* out, DGraph* graphNode)
 {
     if (graphNode->visited) {
         return;
@@ -233,23 +245,23 @@ static void generateStruct(FILE* out, DGraph* graphNode)
     }
 
     // Print out all dependencies
-    ListElem* elem = List_Begin(graphNode->dependencies);
-    for (; elem != List_End(graphNode->dependencies); elem = elem->next) {
+    forall(elem, graphNode->dependencies)
+    {
         DGraph* child = elem->data;
-        if (child->structDef->astType == AST_ENUM) {
+        if (child->typeDef->astType == AST_ENUM) {
             generateEnum(out, child);
         } else {
-            generateStruct(out, child);
+            generateProduct(out, child);
         }
     }
 
-    ASTNode* _struct = graphNode->structDef;
-    fprintf(out, "struct struct_%d {\n", graphNode->ordinal + 1);
+    ASTNode* _struct = graphNode->typeDef;
+    fprintf(out, "struct struct_%d {\n", graphNode->id + 1);
 
-    ListElem* paramElem = List_Begin(_struct->paramlist.defines);
     // For each parameter in the procedure's parameter list, print it out
-    for (; paramElem != List_End(_struct->paramlist.defines); paramElem = paramElem->next) {
-        ASTNode* define = paramElem->data;
+    forall(elem, _struct->product.defines)
+    {
+        ASTNode* define = elem->data;
         SymbolNode* var = define->define.symbol;
         if (!(var->symbolType == SYMBOL_FUNCTION && var->type->isConst)) {
             fprintf(out, "\t");
@@ -260,6 +272,7 @@ static void generateStruct(FILE* out, DGraph* graphNode)
     fprintf(out, "};\n\n");
 }
 
+// Prints out a sum-type struct from a dependency graph node in such a way that all dependencies are defined.
 static void generateEnum(FILE* out, DGraph* graphNode)
 {
     if (graphNode->visited) {
@@ -269,23 +282,23 @@ static void generateEnum(FILE* out, DGraph* graphNode)
     }
 
     // Print out all dependencies
-    ListElem* elem = List_Begin(graphNode->dependencies);
-    for (; elem != List_End(graphNode->dependencies); elem = elem->next) {
+    forall(elem, graphNode->dependencies)
+    {
         DGraph* child = elem->data;
-        if (child->structDef->astType == AST_ENUM) {
+        if (child->typeDef->astType == AST_ENUM) {
             generateEnum(out, child);
         } else {
-            generateStruct(out, child);
+            generateProduct(out, child);
         }
     }
 
-    ASTNode* _enum = graphNode->structDef;
-    fprintf(out, "struct struct_%d {\n\tint64_t tag;\n", graphNode->ordinal + 1);
+    ASTNode* _enum = graphNode->typeDef;
+    fprintf(out, "struct struct_%d {\n\tint64_t tag;\n", graphNode->id + 1);
 
     int numOfNonVoidMembers = 0;
-    ListElem* paramElem = List_Begin(_enum->_enum.defines);
-    for (; paramElem != List_End(_enum->_enum.defines); paramElem = paramElem->next) {
-        ASTNode* define = paramElem->data;
+    forall(elem, _enum->_enum.defines)
+    {
+        ASTNode* define = elem->data;
         SymbolNode* var = define->define.symbol;
         if (var->type->astType != AST_VOID) {
             numOfNonVoidMembers = 1;
@@ -296,10 +309,10 @@ static void generateEnum(FILE* out, DGraph* graphNode)
     if (numOfNonVoidMembers > 0) {
         fprintf(out, "\tunion {\n");
 
-        paramElem = List_Begin(_enum->_enum.defines);
         // For each parameter in the procedure's parameter list, print it out
-        for (; paramElem != List_End(_enum->_enum.defines); paramElem = paramElem->next) {
-            ASTNode* define = paramElem->data;
+        forall(elem, _enum->_enum.defines)
+        {
+            ASTNode* define = elem->data;
             SymbolNode* var = define->define.symbol;
             if (!(var->symbolType == SYMBOL_FUNCTION && var->type->isConst) && var->type->astType != AST_VOID) {
                 fprintf(out, "\t\t");
@@ -312,32 +325,35 @@ static void generateEnum(FILE* out, DGraph* graphNode)
     fprintf(out, "};\n\n");
 }
 
-static void generateStructDefinitions(FILE* out, List* depenGraph)
+// Takes a list of dependency nodes that are either sum or product types, prints them out
+static void generateProductDefinitions(FILE* out, List* depenGraph)
 {
     fprintf(out, "/* Struct definitions */\n");
-    ListElem* elem = List_Begin(depenGraph);
-    for (; elem != List_End(depenGraph); elem = elem->next) {
+    forall(elem, depenGraph)
+    {
         DGraph* graphNode = elem->data;
-        if (graphNode->structDef->astType == AST_ENUM) {
+        if (graphNode->typeDef->astType == AST_ENUM) {
             generateEnum(out, graphNode);
         } else {
-            generateStruct(out, graphNode);
+            generateProduct(out, graphNode);
         }
     }
 }
 
-void generateVerbatims(FILE* out, List* verbatims)
+// Prints out verbatim code for a program. TODO: Remove verbatim code entirely
+static void generateVerbatims(FILE* out, List* verbatims)
 {
     fprintf(out, "/* Verbatim code */\n");
-    ListElem* elem = List_Begin(verbatims);
-    for (; elem != List_End(verbatims); elem = elem->next) {
+    forall(elem, verbatims)
+    {
         fprintf(out, (char*)elem->data);
         fprintf(out, "\n");
     }
     fprintf(out, "\n");
 }
 
-void generateForwardFunctions(FILE* out, CFG* callGraphNode)
+// Prints out the forward function declarations used in the program
+static void generateForwardFunctions(FILE* out, CFG* callGraphNode)
 {
     if (callGraphNode->visited) {
         return;
@@ -349,7 +365,7 @@ void generateForwardFunctions(FILE* out, CFG* callGraphNode)
     ASTNode* functionType = symbol->type;
     ASTNode* params = functionType->function.domainType;
     ASTNode* returns = functionType->function.codomainType;
-    if (returns->astType != AST_PARAMLIST) {
+    if (returns->astType != AST_PRODUCT) {
         printType(out, functionType);
     } else {
         printType(out, returns);
@@ -357,7 +373,7 @@ void generateForwardFunctions(FILE* out, CFG* callGraphNode)
     fprintf(out, " ");
     printPath(out, symbol);
     fprintf(out, "(");
-    generateParamList(out, params);
+    generateProductParamlist(out, params);
     fprintf(out, ");\n");
 
     forall(elem, callGraphNode->leaves)
@@ -367,7 +383,8 @@ void generateForwardFunctions(FILE* out, CFG* callGraphNode)
     callGraphNode->visited = false;
 }
 
-void printVarDef(FILE* out, SymbolVersion* version)
+// Prints out the definition of a symbol version
+static void printVarDef(FILE* out, SymbolVersion* version)
 {
     fprintf(out, "\t");
     printType(out, version->type);
@@ -387,13 +404,14 @@ void printVarDef(FILE* out, SymbolVersion* version)
     if (functionPtr) {
         fprintf(out, ") (");
         ASTNode* params = version->type->function.domainType;
-        generateParamList(out, params);
+        generateProductParamlist(out, params);
         fprintf(out, ")");
     }
     fprintf(out, ";\n");
 }
 
-void printVarAssign(FILE* out, SymbolVersion* version)
+// Prints out the left-hand side of a symbol version assignment
+static void printVarAssign(FILE* out, SymbolVersion* version)
 {
     fprintf(out, "\t");
     if (!strcmp(version->symbol->name, "$return")) {
@@ -410,7 +428,8 @@ void printVarAssign(FILE* out, SymbolVersion* version)
     }
 }
 
-void printVar(FILE* out, SymbolVersion* version)
+// Prints out the name of a symbol version
+static void printVar(FILE* out, SymbolVersion* version)
 {
     if (version->symbol->name[0] != '$') {
         printPath(out, version->symbol);
@@ -420,6 +439,7 @@ void printVar(FILE* out, SymbolVersion* version)
     }
 }
 
+// Prints out the left side of an assignment to an L-value
 static void generateLValueIR(FILE* out, SymbolVersion* version)
 {
     if (!version->def || !version->lvalue) {
@@ -428,6 +448,18 @@ static void generateLValueIR(FILE* out, SymbolVersion* version)
         switch (version->def->irType) {
         case IR_LOAD_SYMBOL: {
             printPath(out, version->def->symbol);
+            break;
+        }
+        case IR_ADDR_OF: {
+            fprintf(out, "(&");
+            generateLValueIR(out, version->def->src1);
+            fprintf(out, ")");
+            break;
+        }
+        case IR_DEREF: {
+            fprintf(out, "(*");
+            generateLValueIR(out, version->def->src1);
+            fprintf(out, ")");
             break;
         }
         case IR_INDEX: {
@@ -444,22 +476,11 @@ static void generateLValueIR(FILE* out, SymbolVersion* version)
             fprintf(out, ".%s)", version->def->strData);
             break;
         }
-        case IR_DEREF: {
-            fprintf(out, "(*");
-            generateLValueIR(out, version->def->src1);
-            fprintf(out, ")");
-            break;
-        }
-        case IR_ADDR_OF: {
-            fprintf(out, "(&");
-            generateLValueIR(out, version->def->src1);
-            fprintf(out, ")");
-            break;
-        }
         }
     }
 }
 
+// Prints out an IR instruction
 static void generateIR(FILE* out, CFG* cfg, IR* ir)
 {
     // Don't generate L value IRs, UNLESS they are copies
@@ -468,7 +489,8 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
     }
 
     switch (ir->irType) {
-    case IR_LOAD_SYMBOL: {
+    case IR_LOAD_SYMBOL:
+    case IR_LOAD_EXTERN: {
         printVarAssign(out, ir->dest);
         printPath(out, ir->symbol);
         fprintf(out, ";\n");
@@ -481,12 +503,32 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
     }
     case IR_LOAD_REAL: {
         printVarAssign(out, ir->dest);
-        fprintf(out, "%f;\n", ir->doubleData);
+        fprintf(out, "%f;\n", ir->realData);
+        break;
+    }
+    case IR_LOAD_ARGLIST:
+    case IR_SLICE: {
+        printVarAssign(out, ir->dest);
+        fprintf(out, "(");
+        ASSERT(ir->dest != NULL);
+        printType(out, ir->dest->type);
+        fprintf(out, ") {");
+        forall(elem, ir->listData)
+        {
+            SymbolVersion* symbver = elem->data;
+            printVar(out, symbver);
+            if (elem->next != List_End(ir->listData)) {
+                fprintf(out, ", ");
+            } else {
+                fprintf(out, "};\n");
+            }
+        }
         break;
     }
     case IR_LOAD_ARRAY_LITERAL: {
         printVarAssign(out, ir->dest);
         fprintf(out, "(");
+        ASSERT(ir->dest != NULL);
         printType(out, ir->dest->type);
         fprintf(out, ") {%d, (", ir->listData->size);
         printType(out, ((SymbolVersion*)List_Get(ir->listData, 0))->type);
@@ -516,95 +558,18 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
     case IR_LOAD_STRING: {
         printVarAssign(out, ir->dest);
         fprintf(out, "(");
+        ASSERT(ir->dest != NULL);
         printType(out, ir->dest->type);
         fprintf(out, ") {%d, \"%s\"};\n", strlen(ir->strData), ir->strData);
         break;
     }
-    case IR_SLICE:
-    case IR_LOAD_ARGLIST: {
-        printVarAssign(out, ir->dest);
-        fprintf(out, "(");
-        printType(out, ir->dest->type);
-        fprintf(out, ") {");
-        forall(elem, ir->listData)
-        {
-            SymbolVersion* symbver = elem->data;
-            printVar(out, symbver);
-            if (elem->next != List_End(ir->listData)) {
-                fprintf(out, ", ");
-            } else {
-                fprintf(out, "};\n");
-            }
-        }
-        break;
-    }
     case IR_COPY: {
+        ASSERT(ir->dest != NULL && ir->dest->type != NULL);
         if (ir->dest->type->astType != AST_VOID) {
             printVarAssign(out, ir->dest);
             printVar(out, ir->src1);
             fprintf(out, ";\n");
         }
-        break;
-    }
-    case IR_DECLARE_LABEL: // Just don't do anything... these instructions are generated at the end of a basic block
-    case IR_JUMP:
-    case IR_BRANCH_IF_FALSE: {
-        break;
-    }
-    case IR_CALL: {
-        stackTracePush(out, "(&stackTrace)");
-        fprintf(out, "\"");
-        printPos(out, ir->pos);
-        fprintf(out, "\";\n");
-        if (ir->dest->type->astType != AST_VOID) {
-            printVarAssign(out, ir->dest);
-        } else {
-            fprintf(out, "\t");
-        }
-        printVar(out, ir->src1);
-        fprintf(out, "(");
-        forall(elem, ir->listData)
-        {
-            SymbolVersion* arg = elem->data;
-            printVar(out, arg);
-            if (elem->next != List_End(ir->listData)) {
-                fprintf(out, ", ");
-            }
-        }
-        fprintf(out, ");\n");
-        fprintf(out, "\tstackTrace.length--;\n");
-        break;
-    }
-    case IR_INDEX: {
-        printVarAssign(out, ir->dest);
-        printVar(out, ir->src1);
-        fprintf(out, ".data[");
-        printVar(out, ir->src2);
-        fprintf(out, "];\n");
-        break;
-    }
-    case IR_INDEX_COPY: {
-        fprintf(out, "\t");
-        generateLValueIR(out, ir->src1);
-        fprintf(out, ".data[");
-        printVar(out, ir->src2);
-        fprintf(out, "] = ");
-        printVar(out, ir->src3);
-        fprintf(out, ";\n");
-        break;
-    }
-    case IR_DOT: {
-        printVarAssign(out, ir->dest);
-        printVar(out, ir->src1);
-        fprintf(out, ".%s;\n", ir->strData);
-        break;
-    }
-    case IR_DOT_COPY: {
-        fprintf(out, "\t");
-        generateLValueIR(out, ir->src1);
-        fprintf(out, ".%s = ", ir->strData);
-        printVar(out, ir->src2);
-        fprintf(out, ";\n");
         break;
     }
     case IR_BIT_OR: {
@@ -627,22 +592,6 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
         printVarAssign(out, ir->dest);
         printVar(out, ir->src1);
         fprintf(out, " & ");
-        printVar(out, ir->src2);
-        fprintf(out, ";\n");
-        break;
-    }
-    case IR_LSHIFT: {
-        printVarAssign(out, ir->dest);
-        printVar(out, ir->src1);
-        fprintf(out, " << ");
-        printVar(out, ir->src2);
-        fprintf(out, ";\n");
-        break;
-    }
-    case IR_RSHIFT: {
-        printVarAssign(out, ir->dest);
-        printVar(out, ir->src1);
-        fprintf(out, " >> ");
         printVar(out, ir->src2);
         fprintf(out, ";\n");
         break;
@@ -695,6 +644,22 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
         fprintf(out, ";\n");
         break;
     }
+    case IR_LSHIFT: {
+        printVarAssign(out, ir->dest);
+        printVar(out, ir->src1);
+        fprintf(out, " << ");
+        printVar(out, ir->src2);
+        fprintf(out, ";\n");
+        break;
+    }
+    case IR_RSHIFT: {
+        printVarAssign(out, ir->dest);
+        printVar(out, ir->src1);
+        fprintf(out, " >> ");
+        printVar(out, ir->src2);
+        fprintf(out, ";\n");
+        break;
+    }
     case IR_ADD: {
         printVarAssign(out, ir->dest);
         printVar(out, ir->src1);
@@ -735,6 +700,15 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
         fprintf(out, ";\n");
         break;
     }
+    case IR_EXPONENT: {
+        printVarAssign(out, ir->dest);
+        fprintf(out, "powf(");
+        printVar(out, ir->src1);
+        fprintf(out, ", ");
+        printVar(out, ir->src2);
+        fprintf(out, ");\n");
+        break;
+    }
     case IR_NOT: {
         printVarAssign(out, ir->dest);
         fprintf(out, "!");
@@ -742,7 +716,7 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
         fprintf(out, ";\n");
         break;
     }
-    case IR_NEGATE: {
+    case IR_NEG: {
         printVarAssign(out, ir->dest);
         fprintf(out, "-");
         printVar(out, ir->src1);
@@ -763,6 +737,13 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
         fprintf(out, ";\n");
         break;
     }
+    case IR_SIZEOF: {
+        printVarAssign(out, ir->dest);
+        fprintf(out, "sizeof(");
+        printType(out, ir->fromType);
+        fprintf(out, ");\n");
+        break;
+    }
     case IR_DEREF: {
         printVarAssign(out, ir->dest);
         fprintf(out, "*");
@@ -778,7 +759,39 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
         fprintf(out, ";\n");
         break;
     }
-    case IR_CONVERT: {
+    case IR_INDEX: {
+        printVarAssign(out, ir->dest);
+        printVar(out, ir->src1);
+        fprintf(out, ".data[");
+        printVar(out, ir->src2);
+        fprintf(out, "];\n");
+        break;
+    }
+    case IR_INDEX_COPY: {
+        fprintf(out, "\t");
+        generateLValueIR(out, ir->src1);
+        fprintf(out, ".data[");
+        printVar(out, ir->src2);
+        fprintf(out, "] = ");
+        printVar(out, ir->src3);
+        fprintf(out, ";\n");
+        break;
+    }
+    case IR_DOT: {
+        printVarAssign(out, ir->dest);
+        printVar(out, ir->src1);
+        fprintf(out, ".%s;\n", ir->strData);
+        break;
+    }
+    case IR_DOT_COPY: {
+        fprintf(out, "\t");
+        generateLValueIR(out, ir->src1);
+        fprintf(out, ".%s = ", ir->strData);
+        printVar(out, ir->src2);
+        fprintf(out, ";\n");
+        break;
+    }
+    case IR_CAST: {
         if (ir->toType->astType == AST_ENUM) {
             printVarAssign(out, ir->dest);
             fprintf(out, "*((");
@@ -794,16 +807,6 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
             printVar(out, ir->src1);
             fprintf(out, ";\n");
         }
-        break;
-    }
-    case IR_PHONY: {
-        break;
-    }
-    case IR_SIZEOF: {
-        printVarAssign(out, ir->dest);
-        fprintf(out, "\sizeof(");
-        printType(out, ir->fromType);
-        fprintf(out, ");\n");
         break;
     }
     case IR_NEW: {
@@ -822,6 +825,7 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
         fprintf(out, "\t");
         SymbolVersion* lastLen = NULL;
         int dim = 0;
+        ASSERT(ir->dest != NULL);
         ASTNode* arrType = ir->dest->type;
         forall(elem, ir->listData)
         {
@@ -840,7 +844,7 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
 
             fprintf(out, "(");
             printType(out, arrType);
-            arrType = getArrayDataType(arrType);
+            arrType = AST_GetArrayDataType(arrType);
             fprintf(out, ") ");
             fprintf(out, "{");
             printVar(out, len);
@@ -893,6 +897,39 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
         fprintf(out, ");\n");
         break;
     }
+    case IR_PHONY: {
+        break;
+    }
+    case IR_DECLARE_LABEL: // Just don't do anything... these instructions are generated at the end of a basic block
+    case IR_JUMP:
+    case IR_BRANCH_IF_FALSE: {
+        break;
+    }
+    case IR_CALL: {
+        stackTracePush(out, "(&stackTrace)");
+        fprintf(out, "\"");
+        printPos(out, ir->pos);
+        fprintf(out, "\";\n");
+        ASSERT(ir->dest != NULL && ir->dest->type != NULL);
+        if (ir->dest->type->astType != AST_VOID) {
+            printVarAssign(out, ir->dest);
+        } else {
+            fprintf(out, "\t");
+        }
+        printVar(out, ir->src1);
+        fprintf(out, "(");
+        forall(elem, ir->listData)
+        {
+            SymbolVersion* arg = elem->data;
+            printVar(out, arg);
+            if (elem->next != List_End(ir->listData)) {
+                fprintf(out, ", ");
+            }
+        }
+        fprintf(out, ");\n");
+        fprintf(out, "\tstackTrace.length--;\n");
+        break;
+    }
     case IR_PUSH_STACK_TRACE: {
         stackTracePush(out, "(&errorTrace)");
         fprintf(out, "\"");
@@ -901,7 +938,7 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
         break;
     }
     case IR_CLEAR_STACK_TRACE: {
-        fprintf(out, "\errorTrace.length = 0;\n");
+        fprintf(out, "\terrorTrace.length = 0;\n");
         break;
     }
     case IR_ERROR: {
@@ -918,6 +955,7 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
     }
 }
 
+// Prints out the phi parameter-argument copies between basic block jumps
 static void generatePhi(FILE* out, List* argsList, BasicBlock* to, bool extraTab)
 {
     forall(elem, argsList)
@@ -943,11 +981,10 @@ static void generatePhi(FILE* out, List* argsList, BasicBlock* to, bool extraTab
     }
 }
 
-// All symbols are either defined in the basic block or are arguments to the function
-// Print out copies for each argument to the BB parameter
+// Prints the copies of the function's arguments to the functions root basic-block's phi parameters
 static void generatePhiFunction(FILE* out, CFG* cfg)
 {
-    forall(elem, cfg->symbol->type->function.domainType->paramlist.defines)
+    forall(elem, cfg->symbol->type->function.domainType->product.defines)
     {
         ASTNode* define = elem->data;
         SymbolNode* symbol = define->define.symbol;
@@ -969,13 +1006,14 @@ static void generatePhiFunction(FILE* out, CFG* cfg)
     }
 }
 
+// Prints out a basic block
 static void generateBasicBlock(FILE* out, CFG* cfg, BasicBlock* bb)
 {
     if (bb->visited) {
         return;
     }
     bb->visited = true;
-    fprintf(out, "L%d:; // incoming:%d\n", bb->id, bb->incoming);
+    fprintf(out, "L%d:;\n", bb->id);
     for (IR* ir = bb->entry; ir != NULL; ir = ir->next) {
         generateIR(out, cfg, ir);
     }
@@ -1009,7 +1047,8 @@ static void generateBasicBlock(FILE* out, CFG* cfg, BasicBlock* bb)
     }
 }
 
-void generateFunctionDefinitions(FILE* out, CFG* callGraphNode)
+// Prints out the definition for a function
+static void generateFunctionDefinitions(FILE* out, CFG* callGraphNode)
 {
     if (callGraphNode->visited) {
         return;
@@ -1021,7 +1060,7 @@ void generateFunctionDefinitions(FILE* out, CFG* callGraphNode)
     ASTNode* functionType = symbol->type;
     ASTNode* params = functionType->function.domainType;
     ASTNode* returns = functionType->function.codomainType;
-    if (returns->astType != AST_PARAMLIST) {
+    if (returns->astType != AST_PRODUCT) {
         printType(out, functionType);
     } else {
         printType(out, returns);
@@ -1029,7 +1068,7 @@ void generateFunctionDefinitions(FILE* out, CFG* callGraphNode)
     fprintf(out, " ");
     printPath(out, symbol);
     fprintf(out, "(");
-    generateParamList(out, params);
+    generateProductParamlist(out, params);
     fprintf(out, ")\n{\n");
     if (callGraphNode->symbol->type->function.codomainType->astType != AST_VOID) {
         fprintf(out, "\t");
@@ -1041,7 +1080,12 @@ void generateFunctionDefinitions(FILE* out, CFG* callGraphNode)
         BasicBlock* bb = elem->data;
         for (IR* ir = bb->entry; ir != NULL; ir = ir->next) {
             SymbolVersion* symbver = ir->dest;
-            if (!symbver || !symbver->used || symbver->symbol->visited || symbver->type->astType == AST_VOID) { // Removed a check for symbver.symbol.visited, was that needed? why?
+            if (!symbver // Symbvers cant be null
+                || !symbver->used // Symbols must be used of course
+                //|| symbver->symbol->visited // Uncommenting this prevents symbols in methods from being generated properly
+                || symbver->type->astType == AST_VOID // Not allowed in C, sometimes allowable in Orng
+                || symbver->def != ir // Prevents Phi noded symbols from having every def of them declared more than once
+            ) {
                 continue;
             }
             printVarDef(out, symbver);
@@ -1054,7 +1098,6 @@ void generateFunctionDefinitions(FILE* out, CFG* callGraphNode)
     }
     if (callGraphNode->blockGraph) {
         generatePhiFunction(out, callGraphNode);
-        clearBBVisitedFlags(callGraphNode);
         generateBasicBlock(out, callGraphNode, callGraphNode->blockGraph);
     }
     fprintf(out, "end:;\n");
@@ -1071,7 +1114,8 @@ void generateFunctionDefinitions(FILE* out, CFG* callGraphNode)
     callGraphNode->visited = false;
 }
 
-void generateMainFunction(FILE* out, CFG* callGraph)
+// Prints out the main function
+static void generateMainFunction(FILE* out, CFG* callGraph)
 {
     fprintf(out, "void pause() {system(\"pause\");}\n\n");
 
@@ -1093,7 +1137,7 @@ void generateMainFunction(FILE* out, CFG* callGraph)
 
     fprintf(out, "\t\targs.data[i] = (");
     printType(out, STRING_TYPE);
-    fprintf(out, "){length, calloc(sizeof(char) * length, 1)};\n");
+    fprintf(out, "){length, calloc(sizeof(char) * (length + 1), 1)};\n");
 
     fprintf(out, "\t\tmemcpy(args.data[i].data, argv[i], length);\n");
 
@@ -1113,28 +1157,27 @@ void generateMainFunction(FILE* out, CFG* callGraph)
 
     fprintf(out, "\tfree(args.data);\n");
 
-    fprintf(out, "\tif (errorTrace.length > 0) {\n\t\tfprintf(stderr, \"error: %%s\\n\", tagGetFieldName(retval.tag));\n\t}\n\tstackTracePrint(&errorTrace);\n\treturn retval.tag != %d;\n", getTag("success", VOID_TYPE));
+    fprintf(out, "\tif (errorTrace.length > 0) {\n\t\tfprintf(stderr, \"error: %%s\\n\", tagGetFieldName(retval.tag));\n\t}\n\tstackTracePrint(&errorTrace);\n\treturn retval.tag != %d;\n", (int)getTag("success", VOID_TYPE));
 
     fprintf(out, "}\n");
 }
 
-void Generator_Generate(FILE* out, Program _program)
+// Prints out the Orng program
+void Generator_Generate(FILE* out)
 {
-    program = _program;
-
-    srand(time(0));
+    srand((int)time(0));
     int randID = rand();
     fprintf(out, "/* Code generated using the Orng compiler http://josephs-projects.com */\n");
-    fprintf(out, "\n#ifndef ORNG_%s\n#define ORNG_%s\n\n", myItoa(randID), myItoa(randID));
-    generateIncludes(out, program.includes);
+    fprintf(out, "\n#ifndef ORNG_%s\n#define ORNG_%s\n#define _CRT_SECURE_NO_WARNINGS\n\n", myItoa(randID), myItoa(randID));
+    generateIncludes(out, program->includes);
     generateDebug(out);
-    generateStructDefinitions(out, program.structDependencyGraph);
-    generateVerbatims(out, program.verbatims);
+    generateProductDefinitions(out, program->typeDependencyGraph);
+    generateVerbatims(out, program->verbatims);
     fprintf(out, "/* Function definitions */\n");
-    generateForwardFunctions(out, program.callGraph);
+    generateForwardFunctions(out, program->callGraph);
     fprintf(out, "\n");
-    generateFunctionDefinitions(out, program.callGraph);
-    generateMainFunction(out, program.callGraph);
+    generateFunctionDefinitions(out, program->callGraph);
+    generateMainFunction(out, program->callGraph);
 
     fprintf(out, "#endif\n");
 }

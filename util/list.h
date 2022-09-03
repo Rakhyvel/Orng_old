@@ -38,6 +38,5 @@ void* List_Peek(List* list);
 void* List_Pop(List* list);
 bool List_IsEmpty(List* list);
 bool List_Contains(List* list, void* data);
-bool Set_Put(List* list, double data);
 
 #endif

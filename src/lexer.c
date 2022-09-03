@@ -1,20 +1,76 @@
 // © 2021-2022 Joseph Shimel. All rights reserved.
+// Splits the input file into tokens
 
 #include "lexer.h"
 #include "../util/debug.h"
 #include "../util/list.h"
 #include "./position.h"
+#include "./program.h"
 #include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
 
 // The line number that the translator is on in the input file
 int line;
+// The column number that the translator is on in the current line
 int span = 1;
-bool inComment = false;
 
-// some legal identifiers in Orng are keywords in C
-// should decouple Orng source from output C. Orng programmer shouldn't care about C at all
+// Returns what type of character the given character is. Used to split along char types
+static int getCharType(char c)
+{
+    if (isalnum(c) || c == '_') {
+        return 0;
+    } else if (isspace(c)) {
+        return 1;
+    } else {
+        return 2;
+    }
+}
+
+// Returns whether or not to split a token based on the begining character of the token, and the new character
+static bool shouldSplitToken(char c, char start, int length)
+{
+    if (start == '\n'
+        || start == ')'
+        || start == '{'
+        || start == '}'
+        || start == '['
+        || start == ']'
+        || start == ';'
+        || start == '?'
+        || start == ':'
+        || start == ','
+        || (start == '(' && c != '|')
+        || (start == '=' && c != '=')
+        || (start == '&' && c != '&' && c != '=')
+        || (start == '|' && c != '|' && c != '=')
+        || (start == '<' && c != '<' && c != '=')
+        || (start == '>' && c != '>' && c != '=')
+        || (start == '.' && c != '.')
+        || (start == '+' && c != '+' && c != '=')
+        || (start == '-' && c != '>' && c != '-' && c != '=' && (c != '[' || length != 1))
+        || (start == '*' && c != '=')
+        || (start == '/' && c != '=' && c != '/')
+        || (start == '%' && c != '=')
+        || (start == '!' && c != '=')) {
+        return true;
+    } else {
+        return getCharType(c) != getCharType(start);
+    }
+}
+
+// Returns whether or not the given string contains the given character
+static bool strContains(char* str, char c)
+{
+    for (int i = 0; str[i] != '\0'; i++) {
+        if (str[i] == c) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Some legal identifiers in Orng are keywords in C, and so cannot be generated out
 static bool cNameClash(char* str)
 {
     return (!strcmp(str, "auto")
@@ -56,7 +112,8 @@ static bool cNameClash(char* str)
         || !strcmp(str, "tag"));
 }
 
-static bool prependWithUnderscore(char* str)
+// Shifts the string one character, sets first character to '_'
+static void prependWithUnderscore(char* str)
 {
     int len = strlen(str);
     for (int i = len; i > 0; i--) {
@@ -65,70 +122,13 @@ static bool prependWithUnderscore(char* str)
     str[0] = '_';
 }
 
-static bool strContains(char* str, char c)
-{
-    for (int i = 0; str[i] != '\0'; i++) {
-        if (str[i] == c) {
-            return true;
-        }
-    }
-    return false;
-}
-
-/*
-Returns what type of character the given character is. Used to split along char types
-*/
-static int getCharType(char c)
-{
-    if (isalnum(c) || c == '_') {
-        return 0;
-    } else if (isspace(c)) {
-        return 1;
-    } else {
-        return 2;
-    }
-}
-
-/*
-Returns whether or not to split a token based on the begining character of the token, and the new character
-*/
-static bool shouldSplitToken(char c, char start, int length)
-{
-    if (start == '\n'
-        || start == ')'
-        || start == '{'
-        || start == '}'
-        || start == '['
-        || start == ']'
-        || start == ';'
-        || start == '?'
-        || start == ':'
-        || start == ','
-        || (start == '(' && c != '|')
-        || (start == '=' && c != '=')
-        || (start == '&' && c != '&' && c != '=')
-        || (start == '|' && c != '|' && c != '=')
-        || (start == '<' && c != '<' && c != '=')
-        || (start == '>' && c != '>' && c != '=')
-        || (start == '.' && c != '.')
-        || (start == '+' && c != '+' && c != '=')
-        || (start == '-' && c != '>' && c != '-' && c != '=' && (c != '[' || length != 1))
-        || (start == '*' && c != '=')
-        || (start == '/' && c != '=' && c != '/')
-        || (start == '%' && c != '=')
-        || (start == '!' && c != '=')) {
-        return true;
-    } else {
-        return getCharType(c) != getCharType(start);
-    }
-}
-
 // Reads in a file stream, gets the data for the next token. Leaves file stream at the begining of next token
 Token* Lexer_GetNextToken(FILE* in)
 {
     int nextChar;
+    bool inComment = false;
     struct token* token = (struct token*)calloc(1, sizeof(struct token));
-    token->pos.filename = filename;
+    token->pos.filename = program->filename;
     token->pos.start_line = line;
     token->pos.end_line = line;
     token->pos.start_span = span;

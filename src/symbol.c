@@ -1,9 +1,11 @@
 // © 2021-2022 Joseph Shimel. All rights reserved.
+// Functionality for creating, manipulating, and querying a symbol tree
 
 #include "symbol.h"
 #include "../util/debug.h"
 #include "../util/list.h"
 #include "../util/map.h"
+#include "./errors.h"
 #include "./lexer.h"
 #include "./main.h"
 #include <fcntl.h>
@@ -12,13 +14,11 @@
 #include <stdlib.h>
 #include <string.h>
 
-/*
-Allocates and initializes the program struct
-*/
+// Creates a symbol tree node, placing it under an optional parent's scope. Leave 'parent' NULL to skip scoping
 struct symbolNode* Symbol_Create(char* name, SymbolType symbolType, struct symbolNode* parent, struct position pos)
 {
     struct symbolNode* retval = (struct symbolNode*)calloc(1, sizeof(struct symbolNode));
-
+    ASSERT(retval != NULL);
     retval->symbolType = symbolType;
     retval->parent = parent;
     retval->children = Map_Create();
@@ -27,7 +27,6 @@ struct symbolNode* Symbol_Create(char* name, SymbolType symbolType, struct symbo
     retval->defers = List_Create();
     retval->errdefers = List_Create();
     retval->pos = pos;
-    retval->versions = List_Create();
 
     strncpy_s(retval->name, 255, name, 254);
     if (parent != NULL) {
@@ -44,10 +43,51 @@ struct symbolNode* Symbol_Create(char* name, SymbolType symbolType, struct symbo
     return retval;
 }
 
-/*
-Prints out the symbol tree
-*/
-void Symbol_Print(SymbolNode* root, wchar_t* prefix, wchar_t* childrenPrefix)
+// Returns the symbol with the given name relative to a given starting scope, or NULL if no symbol is found, or -1 if symbol is found and is restricted
+struct symbolNode* Symbol_Find(const char* symbolName, const struct symbolNode* scope)
+{
+    rejectingSymbol = NULL;
+    if (!symbolName || !scope) {
+        return NULL;
+    }
+    if (!strcmp(symbolName, scope->name)) {
+        return scope;
+    }
+
+    struct symbolNode* symbol = Map_Get(scope->children, symbolName);
+    if (symbol != NULL) {
+        return symbol;
+    } else if (scope->parent != NULL) {
+        SymbolNode* parentNode = scope->parent;
+        if (scope->symbolType == SYMBOL_FUNCTION) {
+            while (parentNode->symbolType == SYMBOL_TYPE || parentNode->symbolType == SYMBOL_FUNCTION) {
+                parentNode = parentNode->parent;
+            }
+        }
+        SymbolNode* var = Map_Get(parentNode->children, symbolName);
+        if (scope->hasRestrictions && !List_Contains(scope->restrictions, var) && scope != var && var != 0) {
+            rejectingSymbol = scope;
+            return RESTRICTED_SYMBOL;
+        } else {
+            return Symbol_Find(symbolName, scope->parent);
+        }
+    } else {
+        return NULL;
+    }
+}
+
+// Returns the most recent ancestor with the given symbol type
+struct symbolNode* Symbol_TypeAncestor(struct symbolNode* scope, SymbolType type)
+{
+    if (scope == NULL || scope->symbolType == type) {
+        return scope;
+    } else {
+        return Symbol_TypeAncestor(scope->parent, type);
+    }
+}
+
+// Pretty-prints out a symbol tree
+void Symbol_Print(SymbolNode* root, char* prefix, char* childrenPrefix)
 {
     ASSERT(root != NULL);
 
@@ -72,7 +112,8 @@ void Symbol_Print(SymbolNode* root, wchar_t* prefix, wchar_t* childrenPrefix)
     List* children = root->children->keyList;
     char newPrefix[255];
     char newChildrenPrefix[255];
-    for (ListElem* elem = List_Begin(children); elem != List_End(children); elem = elem->next) {
+    forall(elem, children)
+    {
         bool hasNext = elem->next != List_End(children);
         if (hasNext) {
             strncpy_s(newPrefix, 254, childrenPrefix, 254);
@@ -89,69 +130,36 @@ void Symbol_Print(SymbolNode* root, wchar_t* prefix, wchar_t* childrenPrefix)
     }
 }
 
-/*
-Returns the symbol with the given name relative to a given starting scope.
-    
-Will return NULL if no symbol with the name is found in any direct ancestor
-scopes. 
-
-Will return -1 if symbol name is not in scope restriction
-*/
-struct symbolNode* Symbol_Find(const char* symbolName, const struct symbolNode* scope)
+// Resets the 'visited' flag in an entire symbol tree to false
+void Symbol_UnvisitTree(SymbolNode* node)
 {
-    rejectingSymbol = NULL;
-    if (!symbolName || !scope) {
-        return NULL;
+    if (node == NULL) {
+        return;
     }
-    if (!strcmp(symbolName, scope->name)) {
-        return scope;
-    }
+    node->visited = false;
 
-    struct symbolNode* symbol = Map_Get(scope->children, symbolName);
-    if (symbol != NULL) {
-        return symbol;
-    } else if (scope->parent != NULL) {
-        SymbolNode* parentNode = scope->parent;
-        if (scope->symbolType == SYMBOL_FUNCTION) {
-            while (parentNode->symbolType == SYMBOL_TYPE || parentNode->symbolType == SYMBOL_FUNCTION) {
-                parentNode = parentNode->parent;
-            }
-        }
-        SymbolNode* var = Map_Get(parentNode->children, symbolName);
-        if (scope->isRestricted && !List_Contains(scope->restrictions, var) && scope != var && var != 0) {
-            rejectingSymbol = scope;
-            return -1;
-        } else {
-            return Symbol_Find(symbolName, scope->parent);
-        }
-    } else {
-        return NULL;
+    forall(elem, node->children->keyList)
+    {
+        Symbol_UnvisitTree(Map_Get(node->children, elem->data));
     }
 }
 
-struct symbolNode* Symbol_Root(const struct symbolNode* scope)
-{
-    if (scope->parent == NULL) {
-        return scope;
-    } else {
-        return Symbol_Root(scope->parent);
-    }
-}
-
-struct symbolNode* Symbol_TypeAncestor(struct symbolNode* scope, SymbolType type)
-{
-    if (scope == NULL || scope->symbolType == type) {
-        return scope;
-    } else {
-        return Symbol_TypeAncestor(scope->parent, type);
-    }
-}
-
+// Returns the most recent symbol ancestor that is not a block symbol type
 struct symbolNode* Symbol_MostRecentNonBlock(struct symbolNode* scope)
 {
     if (scope->symbolType != SYMBOL_BLOCK) {
         return scope;
     } else {
         return Symbol_MostRecentNonBlock(scope->parent);
+    }
+}
+
+// Returns the root symbol node of a symbol tree
+struct symbolNode* Symbol_Root(const struct symbolNode* scope)
+{
+    if (scope->parent == NULL) {
+        return scope;
+    } else {
+        return Symbol_Root(scope->parent);
     }
 }

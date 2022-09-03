@@ -1,78 +1,39 @@
-# Orange
-Orange is a simple, modular general-purpose programming language for hobby programmers.
+# Orng
+Orng is a simple, modular general-purpose programming language for hobby programmers. Hobbyist programmers continuously modify their projects as living-breathing documents. Orng has many constructs that are more aligned with this type of programming.
 
-## Emphasis on code re-use
-Waste less time configuring libraries and more time working on the projects you love.
-- No messing with complicated build configurations each time you start a new project
-- Package manifests use the same syntax as the rest of the language
+[![Alt Text](https://github.com/Rakhyvel/Orng/blob/rakhyvel_cleanup/splash.png?raw=true)](https://github.com/Rakhyvel/Orng/blob/rakhyvel_cleanup/splash.png?raw=true)
 
-## Simple language
-Things look like what they do, and do what they look like.
-- No ambiguity!
-- No hidden control flow
-- No hidden allocation/deallocations
+[Read the documentation here!](https://github.com/Rakhyvel/Orng/blob/main/documentation.md)
 
-## Low friction
-As hobbyist programmers, our projects are living, breathing documents that change over time. Orange's syntax allows you to go from ...
-```
-myFunction::()->() = {
-    someVar := 4
-    someVar2 := '5'
-    someVar3 := false
+## Module and Package System
+Orng features a package and module system which makes it easy to re-use and organize code. Modules and packages are first class in Orng, meaning they can be assigned to variables and passed around as parameters to functions.
 
-    {
-        // A block of code
-    }
-}
-```
-```
-myFunction::()->() = {
-    someVar := 4
-    someVar2 := '5'
-    someVar3 := false
+Packages in Orng are simply folders/directories with a `.pkg.orng` manifest file, and `.orng` source code files. Package description is done using Orng itself, so there's no need to learn another complicated package management utility.
 
-    -[someVar, someVar2]
-    {
-        // To a restricted block of code
-    }
-}
-```
-```
-myFunction::()->() = {
-    someVar := 4
-    someVar2 := '5'
-    someVar3 := false
+## Elegant Arithmetic Type System
+Unlike most languages, Orng has structural type equivalence, which means two types are equivalent if they have the same structure. Types are also first class in Orng, meaning you can assign and pass them as values.
 
-    myOtherFunction := (someVar, someVar2)->{
-        // To a lambda
-    }
-}
-```
-```
-myFunction::()->() = {
-    someVar := 4
-    someVar2 := '5'
-    someVar3 := false
+## Perfect Interoperability With C/C++ ABI
+Orng compiles to C, and allows for C functions to be called from Orng code, offering perfect bidirectional interoperability with C. You can use pre-exisiting C libraries, or drop in Orng into your pre-exisiting C project.
 
-    myOtherFunction::(someVar:Int, someVar2:Char)->() = {
-        // To an inner function
-    }
-}
-```
-```
-myFunction::()->() = {
-    someVar := 4
-    someVar2 := '5'
-    someVar3 := false
-}
+## Planned Features
+- [x] Inner functions, methods for product and sum data types
+- [x] Default parameters, named arguments
+- [x] Sum data types
+- [x] 'Maybe' sum data types
+- [x] Error sum data types
+- [ ] Parametric types
+- [ ] Interfaces/typeclasses/traits
+- [ ] String interpolation
+- [ ] Runtime constancy (immutability)
+- [ ] Attributes
+- [ ] Test suite
+- [ ] Visual Studio language server
+- [ ] LLVM code generation
 
-myOtherFunction::(someVar:Int, someVar2:Char)->() = {
-    // To an outer function
-}
-```
-All with minimal code changes.
-
-## Planned features
-- Union types
-- Compile time evaluation
-- First-class-type based generics
+### Maybe?
+- [ ] Pattern matching
+- [ ] Exponentiation
+- [ ] Relational operator chaining
+- [ ] Refinement types
+- [ ] Quantifiers `some`, `all`, `none` for iterators

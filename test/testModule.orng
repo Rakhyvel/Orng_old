@@ -1,44 +1,9 @@
 testModule::Module = (
-	A::Type = <a, b, c:Int>
-	B::Type = <c:Int, d:Char, e>
-
-	Complex::Type = (
-		re:Real
-		im:Real
-
-		add::(c1:Complex, c2:Complex)->Complex = (.re=c1.re + c2.re, .im=c1.im + c2.im)
-		sub::(c1:Complex, c2:Complex)->Complex = (.re=c1.re - c2.re, .im=c1.im - c2.im)
-	)
-
-	FileError::Type = <
-		fileNotFound:Int
-		resourceBusy
-	>
-
-	AllocationError::Type = <
-		outOfMemory
-		resourceBusy
-	>
-
-	lol::(x:Int)->!Int = 
-	if build.platform == build.Platform.c {
-		if x == 0 {
-			return FileError.fileNotFound
-		} else {
-			return x
-		}
-	} else if build.platform = build.Platform.web {
-		# (
-			x:Int
-			y:Int
-			z:Int
-		)
-	}
-
 	main::(args:[]String)->!() = {
-		enum:B = B.c
-		enum.c = 'A':Int
-		std.system.println("%c", enum.d)
-		0
+		myFile := std.system.open(args[0], "r")
+		case myFile {
+			std.system.Error.noSuchFileOrDirectory -> std.system.println("Cannot open '%s'", args[0])
+		}
+		{}
 	}
 )

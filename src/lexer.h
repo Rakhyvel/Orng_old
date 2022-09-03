@@ -8,6 +8,7 @@
 
 int line;
 int span;
+
 Token* Lexer_GetNextToken(FILE* in);
 
 #endif

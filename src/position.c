@@ -1,9 +1,11 @@
 // © 2021-2022 Joseph Shimel. All rights reserved.
+// Represents a position in a file
 
 #include "position.h"
 #include <stdlib.h>
 
-Position merge(Position a, Position b)
+// Takes two positions and Position_Merges them so that the resulting position starts where the earlier position started, and ends where the later position ended
+Position Position_Merge(Position a, Position b)
 {
     int start_line = 0;
     int start_span = 0;

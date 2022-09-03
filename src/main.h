@@ -9,31 +9,7 @@
 #include "./symbol.h"
 #include <stdio.h>
 
-char* filename;
-
-typedef struct {
-    ASTNode* structDef;
-    int ordinal;
-    List* dependencies;
-    bool visited;
-} DGraph;
-
-typedef struct {
-    List* structDependencyGraph;
-    Map* includes;
-    List* verbatims;
-    struct CFG* callGraph;
-} Program;
-
-bool isDebug;
-
-char* getRelPath(char*);
-char* pathToFilename(char* path);
-void gen_error(const char* message, ...);
-void printPos(FILE* out, struct position pos);
-void error(struct position pos, const char* message, ...);
-void error2(struct position pos1, Position pos2, const char* message, ...);
-void error3(struct position pos1, Position pos2, Position pos3, const char* message, ...);
-void unVisitSymbolTree(SymbolNode* node);
+char* Main_GetRelPath(char*);
+char* Main_PathToFilename(char* path);
 
 #endif

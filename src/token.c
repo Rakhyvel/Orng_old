@@ -1,10 +1,12 @@
 // © 2021-2022 Joseph Shimel. All rights reserved.
+// Functionality for working with tokens
 
 #include "token.h"
 #include "../util/debug.h"
 #include "../util/list.h"
 #include "../util/map.h"
 
+// Returns the name of a token type
 const char* Token_GetString(_TokenType type)
 {
     switch (type) {
@@ -162,32 +164,7 @@ const char* Token_GetString(_TokenType type)
     return "";
 }
 
-const char* Token_GetErrorMsgRepr(_TokenType type)
-{
-    switch (type) {
-    case TOKEN_IDENT:
-        return "identifier";
-    case TOKEN_STR:
-        return "string literal";
-    case TOKEN_CHAR:
-        return "character literal";
-    case TOKEN_INT:
-        return "integer literal";
-    case TOKEN_HEX:
-        return "hexadecimal literal";
-    case TOKEN_BIN:
-        return "binary literal";
-    case TOKEN_REAL:
-        return "real number literal";
-    case TOKEN_NEWLINE:
-        return "end of line";
-    case TOKEN_EOF:
-        return "end of file";
-    default:
-        return Token_GetRepr(type);
-    }
-}
-
+// Returns how a token is represented textually in Orng
 const char* Token_GetRepr(_TokenType type)
 {
     switch (type) {
@@ -215,6 +192,8 @@ const char* Token_GetRepr(_TokenType type)
         return "/=";
     case TOKEN_PERCENT_ASSIGN:
         return "%=";
+    case TOKEN_CARET_ASSIGN:
+        return "^=";
     case TOKEN_DAMPERSAND_ASSIGN:
         return "&&=";
     case TOKEN_DBAR_ASSIGN:
@@ -223,8 +202,8 @@ const char* Token_GetRepr(_TokenType type)
         return "&=";
     case TOKEN_BAR_ASSIGN:
         return "|=";
-    case TOKEN_CARET_ASSIGN:
-        return "^=";
+    case TOKEN_TILDE_ASSIGN:
+        return  "~=";
     case TOKEN_DLSR_ASSIGN:
         return "<<=";
     case TOKEN_DGTR_ASSIGN:
@@ -342,5 +321,32 @@ const char* Token_GetRepr(_TokenType type)
     default:
         PANIC("Unknown token type %d\n", type);
         return NULL;
+    }
+}
+
+// Returns how a token is represented in an Orng syntax error message
+const char* Token_GetErrorMsgRepr(_TokenType type)
+{
+    switch (type) {
+    case TOKEN_IDENT:
+        return "identifier";
+    case TOKEN_STR:
+        return "string literal";
+    case TOKEN_CHAR:
+        return "character literal";
+    case TOKEN_INT:
+        return "integer literal";
+    case TOKEN_HEX:
+        return "hexadecimal literal";
+    case TOKEN_BIN:
+        return "binary literal";
+    case TOKEN_REAL:
+        return "real number literal";
+    case TOKEN_NEWLINE:
+        return "end of line";
+    case TOKEN_EOF:
+        return "end of file";
+    default:
+        return Token_GetRepr(type);
     }
 }

@@ -1,10 +1,14 @@
 // © 2021-2022 Joseph Shimel. All rights reserved.
+// Functionality for creating and optimizing CFGs, basic-blocks, symbol-versions and IR instructions from a program's AST and symbol tree
 
+#define _CRT_SECURE_NO_WARNINGS
 #include "./ir.h"
 #include "../util/debug.h"
 #include "./ast.h"
+#include "./errors.h"
 #include "./main.h"
 #include "./parse.h"
+#include "./program.h"
 #include "./symbol.h"
 #include "./validator.h"
 #include <stdio.h>
@@ -13,51 +17,34 @@
 
 SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLabel, IR* continueLabel, IR* errorLabel, bool lvalue);
 
+// Returns the name of an IR type
 char* IR_ToString(ir_type type)
 {
     switch (type) {
     case IR_LOAD_SYMBOL:
         return "IR_LOAD_SYMBOL";
+    case IR_LOAD_EXTERN:
+        return "IR_LOAD_EXTERN";
     case IR_LOAD_INT:
         return "IR_LOAD_INT";
     case IR_LOAD_REAL:
         return "IR_LOAD_REAL";
-    case IR_LOAD_ARRAY_LITERAL:
-        return "IR_LOAD_ARRAY_LITERAL";
     case IR_LOAD_ARGLIST:
         return "IR_LOAD_ARGLIST";
+    case IR_LOAD_ARRAY_LITERAL:
+        return "IR_LOAD_ARRAY_LITERAL";
+    case IR_LOAD_DEFAULT_ARRAY:
+        return "IR_LOAD_DEFAULT_ARRAY";
     case IR_LOAD_STRING:
         return "IR_LOAD_STRING";
     case IR_COPY:
         return "IR_COPY";
-    case IR_CALL:
-        return "IR_CALL";
-    case IR_DECLARE_LABEL:
-        return "IR_DECLARE_LABEL";
-    case IR_JUMP:
-        return "IR_JUMP";
-    case IR_BRANCH_IF_FALSE:
-        return "IR_BRANCH_IF_FALSE";
-    case IR_INDEX_COPY:
-        return "IR_INDEX_COPY";
-    case IR_INDEX:
-        return "IR_INDEX";
-    case IR_SLICE:
-        return "IR_SLICE";
-    case IR_DOT:
-        return "IR_DOT";
-    case IR_DOT_COPY:
-        return "IR_DOT_COPY";
-    case IR_BIT_AND:
-        return "IR_BIT_AND";
     case IR_BIT_OR:
         return "IR_BIT_OR";
     case IR_BIT_XOR:
         return "IR_BIT_XOR";
-    case IR_LSHIFT:
-        return "IR_LSHIFT";
-    case IR_RSHIFT:
-        return "IR_RSHIFT";
+    case IR_BIT_AND:
+        return "IR_BIT_AND";
     case IR_EQ:
         return "IR_EQ";
     case IR_NEQ:
@@ -70,6 +57,10 @@ char* IR_ToString(ir_type type)
         return "IR_GTE";
     case IR_LTE:
         return "IR_LTE";
+    case IR_LSHIFT:
+        return "IR_LSHIFT";
+    case IR_RSHIFT:
+        return "IR_RSHIFT";
     case IR_ADD:
         return "IR_ADD";
     case IR_SUBTRACT:
@@ -80,39 +71,62 @@ char* IR_ToString(ir_type type)
         return "IR_DIVIDE";
     case IR_MODULUS:
         return "IR_MODULUS";
-    case IR_NEGATE:
-        return "IR_NEGATE";
+    case IR_EXPONENT:
+        return "IR_EXPONENT";
     case IR_NOT:
         return "IR_NOT";
+    case IR_NEG:
+        return "IR_NEG";
     case IR_BIT_NOT:
         return "IR_BIT_NOT";
+    case IR_ADDR_OF:
+        return "IR_ADDR_OF";
+    case IR_SIZEOF:
+        return "IR_SIZEOF";
     case IR_DEREF:
         return "IR_DEREF";
     case IR_DEREF_COPY:
         return "IR_DEREF_COPY";
-    case IR_ADDR_OF:
-        return "IR_ADDR_OF";
-    case IR_PHONY:
-        return "IR_PHONY";
-    case IR_CONVERT:
-        return "IR_CONVERT";
-    case IR_SIZEOF:
-        return "IR_SIZEOF";
+    case IR_INDEX:
+        return "IR_INDEX";
+    case IR_INDEX_COPY:
+        return "IR_INDEX_COPY";
+    case IR_SLICE:
+        return "IR_SLICE";
+    case IR_DOT:
+        return "IR_DOT";
+    case IR_DOT_COPY:
+        return "IR_DOT_COPY";
+    case IR_CAST:
+        return "IR_CAST";
     case IR_NEW:
         return "IR_NEW";
     case IR_NEW_ARR:
         return "IR_NEW_ARR";
     case IR_FREE:
         return "IR_FREE";
+    case IR_PHONY:
+        return "IR_PHONY";
+    case IR_DECLARE_LABEL:
+        return "IR_DECLARE_LABEL";
+    case IR_JUMP:
+        return "IR_JUMP";
+    case IR_BRANCH_IF_FALSE:
+        return "IR_BRANCH_IF_FALSE";
+    case IR_CALL:
+        return "IR_CALL";
     case IR_PUSH_STACK_TRACE:
         return "IR_PUSH_STACK_TRACE";
     case IR_CLEAR_STACK_TRACE:
         return "IR_CLEAR_STACK_TRACE";
     case IR_ERROR:
         return "IR_ERROR";
+    default:
+        PANIC("unimplemented");
     }
 }
 
+// Pretty-prints out the name and version of a symbol version
 void printSymbver(SymbolVersion* symbver)
 {
     if (symbver) {
@@ -125,6 +139,7 @@ void printSymbver(SymbolVersion* symbver)
     }
 }
 
+// Pretty-prints out an IR instruction
 void printIR(IR* ir)
 {
     if (!ir) {
@@ -150,7 +165,7 @@ void printIR(IR* ir)
         } else if (ir->irType == IR_LOAD_INT) {
             printf("\tint:%d", (int)ir->intData);
         } else if (ir->irType == IR_LOAD_REAL) {
-            printf("\treal:%f", ir->doubleData);
+            printf("\treal:%f", ir->realData);
         } else if (ir->irType == IR_PHONY) {
             printf("\tsize:%d", ir->listData->size);
         }
@@ -158,6 +173,7 @@ void printIR(IR* ir)
     }
 }
 
+// Pretty-prints out a list of IR instructions
 void printInstructionList(CFG* cfg)
 {
     for (IR* ir = cfg->head; ir != NULL; ir = ir->next) {
@@ -165,6 +181,7 @@ void printInstructionList(CFG* cfg)
     }
 }
 
+// Pretty-prints out a list of symbol-versions
 void printSymbverList(List* list)
 {
     printf("(");
@@ -179,6 +196,7 @@ void printSymbverList(List* list)
     printf(")\n");
 }
 
+// Pretty-prints out a basic block graph
 void printBlockGraph(BasicBlock* bb)
 {
     if (!bb || bb->visited) {
@@ -213,20 +231,38 @@ void printBlockGraph(BasicBlock* bb)
     printBlockGraph(bb->next);
 }
 
-BasicBlock* createBasicBlock(CFG* cfg)
+// Creates a new, unversioned symbol version with a version of -1
+static SymbolVersion* unversionedSymbolVersion(CFG* cfg, SymbolNode* symbol, ASTNode* type)
 {
-    static int blockID = 0;
-    BasicBlock* retval = calloc(sizeof(BasicBlock), 1);
-    retval->id = blockID;
-    retval->parameters = List_Create();
-    retval->nextArguments = List_Create();
-    retval->branchArguments = List_Create();
-    blockID++;
-    List_Append(cfg->basicBlocks, retval);
+    SymbolVersion* retval = calloc(sizeof(SymbolVersion), 1);
+    ASSERT(retval != NULL);
+    retval->symbol = symbol;
+    retval->version = -1;
+    retval->type = type;
+    retval->used = false;
     return retval;
 }
 
-IR* createIR(ir_type type, SymbolVersion* dest, IR* src1, IR* src2, struct position pos)
+// Changes the version of a symbol-version to the next available for that symbol if the symbol-version is unversioned
+static void makeSymbolVersionUnique(SymbolVersion* symbver)
+{
+    if (symbver->version != -1) {
+        return;
+    } else {
+        symbver->version = symbver->symbol->numberVersions++;
+    }
+}
+
+// Creates a unique symbol-version for the CFGs temporary symbol
+static SymbolVersion* tempSymbolVersion(CFG* cfg, ASTNode* type)
+{
+    SymbolVersion* retval = unversionedSymbolVersion(cfg, cfg->tempSymbol, type);
+    makeSymbolVersionUnique(retval);
+    return retval;
+}
+
+// Creates a new IR instruction
+static IR* createIR(ir_type type, SymbolVersion* dest, SymbolVersion* src1, SymbolVersion* src2, struct position pos)
 {
     static int id = 0;
     IR* retval = calloc(sizeof(IR), 1);
@@ -242,35 +278,23 @@ IR* createIR(ir_type type, SymbolVersion* dest, IR* src1, IR* src2, struct posit
     return retval;
 }
 
-IR* createIR_int(ir_type type, SymbolVersion* dest, IR* src1, IR* src2, int64_t data, struct position pos)
+// Creates a new IR instruction with branch information
+static IR* createIR_branch(ir_type type, SymbolVersion* dest, SymbolVersion* src1, SymbolVersion* src2, IR* branch, struct position pos)
 {
     IR* retval = createIR(type, dest, src1, src2, pos);
-    retval->intData = data;
+    retval->branch = branch;
     return retval;
 }
 
-IR* createIR_double(ir_type type, SymbolVersion* dest, IR* src1, IR* src2, double data, struct position pos)
+// Creates a new label IR
+static IR* createIR_label(struct position pos)
 {
-    IR* retval = createIR(type, dest, src1, src2, pos);
-    retval->doubleData = data;
+    IR* retval = createIR(IR_DECLARE_LABEL, NULL, NULL, NULL, pos);
     return retval;
 }
 
-IR* createIR_branch(ir_type type, SymbolVersion* dest, IR* src1, IR* src2, IR* data, struct position pos)
-{
-    IR* retval = createIR(type, dest, src1, src2, pos);
-    retval->branch = data;
-    return retval;
-}
-
-IR* createIR_symbol(ir_type type, SymbolVersion* dest, IR* src1, IR* src2, SymbolVersion* data, struct position pos)
-{
-    IR* retval = createIR(type, dest, src1, src2, pos);
-    retval->symbver = data;
-    return retval;
-}
-
-IR* createIR_ast(ir_type type, SymbolVersion* dest, IR* src1, IR* src2, ASTNode* from, ASTNode* to, struct position pos)
+// Creates a new IR instruction with AST information
+static IR* createIR_ast(ir_type type, SymbolVersion* dest, SymbolVersion* src1, SymbolVersion* src2, ASTNode* from, ASTNode* to, struct position pos)
 {
     IR* retval = createIR(type, dest, src1, src2, pos);
     retval->fromType = from;
@@ -278,102 +302,24 @@ IR* createIR_ast(ir_type type, SymbolVersion* dest, IR* src1, IR* src2, ASTNode*
     return retval;
 }
 
-IR* createIR_label(struct position pos)
+// Creates a new IR instruction with integer information
+static IR* createIR_int(ir_type type, SymbolVersion* dest, SymbolVersion* src1, SymbolVersion* src2, int64_t data, struct position pos)
 {
-    IR* retval = createIR(IR_DECLARE_LABEL, NULL, NULL, NULL, pos);
+    IR* retval = createIR(type, dest, src1, src2, pos);
+    retval->intData = data;
     return retval;
 }
 
-void putSymbolVersion(List* symbolVersions, SymbolVersion* symver)
+// Creates a new IR instruction with real-valued information
+static IR* createIR_real(ir_type type, SymbolVersion* dest, SymbolVersion* src1, SymbolVersion* src2, double data, struct position pos)
 {
-    for (ListElem* elem = List_Begin(symbolVersions); elem != List_End(symbolVersions); elem = elem->next) {
-        SymbolVersion* data = elem->data;
-        if (data->symbol == symver->symbol && data->version == symver->version) {
-            return;
-        }
-    }
-    List_Append(symbolVersions, symver);
-}
-
-SymbolVersion* unversionedSymbolVersion(CFG* cfg, SymbolNode* symbol, ASTNode* type)
-{
-    SymbolVersion* retval = calloc(sizeof(SymbolVersion), 1);
-    retval->symbol = symbol;
-    retval->version = -1;
-    retval->type = type;
-    retval->used = false;
+    IR* retval = createIR(type, dest, src1, src2, pos);
+    retval->realData = data;
     return retval;
 }
 
-void makeSymbolVersionUnique(SymbolVersion* symbver)
-{
-    if (symbver->version != -1) {
-        return;
-    } else {
-        symbver->version = symbver->symbol->versions->size;
-        List_Append(symbver->symbol->versions, symbver);
-    }
-}
-
-SymbolVersion* tempSymbolVersion(CFG* cfg, ASTNode* type)
-{
-    SymbolVersion* retval = unversionedSymbolVersion(cfg, cfg->tempSymbol, type);
-    makeSymbolVersionUnique(retval);
-    return retval;
-}
-
-/*
-Starts at the given IR, goes until the given stop IR. Finds the first symbol version with the same symbol that is defined in the block
-*/
-SymbolVersion* findVersion(SymbolVersion* symbver, IR* ir, IR* stop)
-{
-    SymbolVersion* retval = symbver;
-    for (; ir != NULL && ir != stop; ir = ir->next) {
-        if (ir->dest != NULL && ir->dest->symbol == symbver->symbol) {
-            retval = ir->dest;
-        }
-    }
-    return retval;
-}
-
-// Finds the first def and version
-SymbolVersion* findDef(SymbolVersion* symbver, IR* ir, IR* stop)
-{
-    SymbolVersion* retval = symbver;
-    for (; ir != NULL && ir != stop; ir = ir->next) {
-        if (ir->dest != NULL && ir->dest->symbol == symbver->symbol && ir->dest->version == symbver->version) {
-            retval = ir->dest;
-        }
-    }
-    return NULL;
-}
-
-bool putSymbolVersionSet(List* set, SymbolVersion* symbver)
-{
-    forall(elem, set)
-    {
-        SymbolVersion* var = elem->data;
-        if (var->symbol == symbver->symbol) {
-            return false;
-        }
-    }
-    List_Append(set, symbver);
-    return true;
-}
-
-SymbolVersion* findSymbolVersionSet(List* set, SymbolVersion* symbver)
-{
-    forall(elem, set)
-    {
-        SymbolVersion* var = elem->data;
-        if (var->symbol == symbver->symbol) {
-            return var;
-        }
-    }
-    return NULL;
-}
-
-void appendInstruction(CFG* cfg, IR* ir)
+// Appends an IR instruction to the end of a CFGs list of instructions
+static void appendInstruction(CFG* cfg, IR* ir)
 {
     if (cfg->head == NULL) {
         cfg->head = ir;
@@ -388,13 +334,15 @@ void appendInstruction(CFG* cfg, IR* ir)
     }
 }
 
-IR* getTail(IR* head)
+// Returns the last IR instruction in the linked-list of IR instructions
+static IR* getTail(IR* head)
 {
     for (; head->next != NULL; head = head->next) { }
     return head;
 }
 
-IR* appendInstructionBasicBlock(BasicBlock* bb, IR* ir)
+// Appends an IR instruction to the end of a basic blocks list of IR instructions
+static IR* appendInstructionBasicBlock(BasicBlock* bb, IR* ir)
 {
     if (bb->entry == NULL) {
         bb->entry = ir;
@@ -407,7 +355,8 @@ IR* appendInstructionBasicBlock(BasicBlock* bb, IR* ir)
     return ir;
 }
 
-void removeInstruction(BasicBlock* bb, IR* ir)
+// Removes an IR instruction from a basic blocks list of IR instructions
+static void removeInstruction(BasicBlock* bb, IR* ir)
 {
     //printf("removed instruction %d\n", ir->id);
     ir->removed = true;
@@ -422,32 +371,8 @@ void removeInstruction(BasicBlock* bb, IR* ir)
     }
 }
 
-void removeBasicBlock(CFG* cfg, BasicBlock* bb, bool wipeIR)
-{
-    //printf("removed block %d\n", bb->id);
-    List_Remove(cfg->basicBlocks, bb);
-    if (wipeIR) {
-        for (IR* ir = bb->entry; ir != NULL; ir = ir->next) {
-            ir->removed = true;
-        }
-    }
-}
-
-void clearBBVisitedFlags(CFG* cfg)
-{
-    forall(elem, cfg->basicBlocks)
-    {
-        BasicBlock* bb = elem->data;
-        bb->visited = false;
-    }
-}
-
-// Whenever execution exits a block, run the defers in reverse order
-// If execution reaches end of block, run all defers
-// If continue, jump to defer needed to run, go to end of block
-// If break, jump to defer needed to run, go to break label
-// If return, jump to defer needed to run, go to return label
-void generateDefers(CFG* cfg, List* defers, List* deferLabels)
+// In reverse order, appends the defer labels and then the defer code to the CFG list of IRs, from lists of defers and defer codes
+static void generateDefers(CFG* cfg, List* defers, List* deferLabels)
 {
     for (int i = defers->size - 1; i >= 0; i--) {
         appendInstruction(cfg, List_Get(deferLabels, i));
@@ -455,7 +380,8 @@ void generateDefers(CFG* cfg, List* defers, List* deferLabels)
     }
 }
 
-SymbolVersion* defaultValue(CFG* cfg, ASTNode* type)
+// Appends the IRs necessary for generating the default value of a type to the CFG list of IRs, returns the symbol-version where the expression result is stored
+static SymbolVersion* defaultValue(CFG* cfg, ASTNode* type)
 {
     switch (type->astType) {
     default: {
@@ -466,49 +392,18 @@ SymbolVersion* defaultValue(CFG* cfg, ASTNode* type)
         appendInstruction(cfg, ir);
         return temp;
     }
-    case AST_ARRAY: {
-        ASTNode* lengthDefine = List_Get(type->paramlist.defines, 0);
-        SymbolNode* lengthSymbol = lengthDefine->define.symbol;
-        ASTNode* lengthCode = lengthSymbol->def;
-        ASTNode* dataDefine = List_Get(type->paramlist.defines, 1);
-        SymbolNode* dataSymbol = dataDefine->define.symbol;
-        ASTNode* dataType = dataSymbol->type->unop.expr;
-
-        SymbolVersion* temp = tempSymbolVersion(cfg, type);
-
-        IR* ir = createIR(IR_LOAD_ARRAY_LITERAL, temp, NULL, NULL, type->pos);
-        temp->def = ir;
-        ir->listData = List_Create();
-        if (dataType->astType == AST_ARRAY) {
-            if (lengthCode->astType == AST_INT) {
-                for (int i = 0; i < lengthCode->_int.data; i++) {
-                    SymbolVersion* member = defaultValue(cfg, dataType);
-                    List_Append(ir->listData, member);
-                }
-            } else {
-                error(type->pos, "array length is not constant");
-            }
-        } else {
-            SymbolVersion* member = defaultValue(cfg, dataType);
-            if (lengthCode->astType == AST_INT) {
-                for (int i = 0; i < lengthCode->_int.data; i++) {
-                    List_Append(ir->listData, member);
-                }
-            } else {
-                error(type->pos, "array length is not constant");
-            }
-        }
-        appendInstruction(cfg, ir);
-        return temp;
+    case AST_VOID: {
+        return NULL;
     }
-    case AST_PARAMLIST: {
+    case AST_PRODUCT: {
         SymbolVersion* temp = tempSymbolVersion(cfg, type);
 
         IR* ir = createIR(IR_LOAD_ARGLIST, temp, NULL, NULL, type->pos);
         temp->def = ir;
         ir->listData = List_Create();
 
-        for (ListElem* elem = List_Begin(type->paramlist.defines); elem != List_End(type->paramlist.defines); elem = elem->next) {
+        forall(elem, type->product.defines)
+        {
             ASTNode* define = elem->data;
             SymbolNode* var = define->define.symbol;
             if (var->def->astType == AST_UNDEF) {
@@ -520,10 +415,69 @@ SymbolVersion* defaultValue(CFG* cfg, ASTNode* type)
         appendInstruction(cfg, ir);
         return temp;
     }
+    case AST_ARRAY: {
+        ASTNode* lengthDefine = List_Get(type->product.defines, 0);
+        SymbolNode* lengthSymbol = lengthDefine->define.symbol;
+        ASTNode* lengthCode = lengthSymbol->def;
+        ASTNode* dataDefine = List_Get(type->product.defines, 1);
+        SymbolNode* dataSymbol = dataDefine->define.symbol;
+        ASTNode* dataAddrType = dataSymbol->type;
+        ASTNode* dataType = dataAddrType->unop.expr;
+
+        SymbolVersion* temp = tempSymbolVersion(cfg, type);
+        IR* ir = NULL;
+        if (dataType->astType == AST_ARRAY) {
+            if (lengthCode->astType == AST_INT) {
+                ir = createIR(IR_LOAD_ARRAY_LITERAL, temp, NULL, NULL, type->pos);
+                temp->def = ir;
+                ir->listData = List_Create();
+                for (int i = 0; i < lengthCode->_int.data; i++) {
+                    SymbolVersion* member = defaultValue(cfg, dataType);
+                    List_Append(ir->listData, member);
+                }
+            } else {
+                ir = createIR(IR_LOAD_ARGLIST, temp, NULL, NULL, type->pos);
+                temp->def = ir;
+                ir->listData = List_Create();
+
+                SymbolVersion* lengthSymbver = tempSymbolVersion(cfg, INT64_TYPE);
+                IR* lengthIR = createIR_int(IR_LOAD_INT, lengthSymbver, NULL, NULL, 0, type->pos);
+                lengthSymbver->def = lengthIR;
+                appendInstruction(cfg, lengthIR);
+
+                List_Append(ir->listData, lengthSymbver);
+                List_Append(ir->listData, defaultValue(cfg, dataAddrType));
+            }
+        } else {
+            if (lengthCode->astType == AST_INT) {
+                ir = createIR(IR_LOAD_ARRAY_LITERAL, temp, NULL, NULL, type->pos);
+                temp->def = ir;
+                ir->listData = List_Create();
+                SymbolVersion* member = defaultValue(cfg, dataType);
+                for (int i = 0; i < lengthCode->_int.data; i++) {
+                    List_Append(ir->listData, member);
+                }
+            } else {
+                ir = createIR(IR_LOAD_ARGLIST, temp, NULL, NULL, type->pos);
+                temp->def = ir;
+                ir->listData = List_Create();
+
+                SymbolVersion* lengthSymbver = tempSymbolVersion(cfg, INT64_TYPE);
+                IR* lengthIR = createIR_int(IR_LOAD_INT, lengthSymbver, NULL, NULL, 0, type->pos);
+                lengthSymbver->def = lengthIR;
+                appendInstruction(cfg, lengthIR);
+
+                List_Append(ir->listData, lengthSymbver);
+                List_Append(ir->listData, defaultValue(cfg, dataAddrType));
+            }
+        }
+        appendInstruction(cfg, ir);
+        return temp;
+    }
     case AST_ENUM: {
         ASTNode* firstDefine = List_Get(type->_enum.defines, 0);
         SymbolNode* firstVar = firstDefine->define.symbol;
-        int tagID = getTag(firstVar->name, firstVar->type);
+        int64_t tagID = getTag(firstVar->name, firstVar->type);
 
         SymbolVersion* tag = tempSymbolVersion(cfg, INT64_TYPE);
         IR* tagIR = createIR_int(IR_LOAD_INT, tag, NULL, NULL, tagID, type->pos);
@@ -543,23 +497,24 @@ SymbolVersion* defaultValue(CFG* cfg, ASTNode* type)
         appendInstruction(cfg, ir);
         return temp;
     }
-    case AST_VOID: {
-        return NULL;
-    }
     }
 }
 
-// Adds IR instructions to a list of ir instructions, returns instructions that assign a term
-// When converting to SSA, the dest of each instruction will be set to a unique symbol version
-//                         each source will be filled with a pointer to the most recent symbol version
-// Just fill the dest with the current version now, temporary or not
-SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLabel, IR* continueLabel, IR* errorLabel, bool lvalue)
+// Converts an AST to the CFGs list of IR instructions. Requires the label IRs for when to return, break, continue, and error, lvalue determines if the AST is a subtree of an l-value expression
+static SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLabel, IR* continueLabel, IR* errorLabel, bool lvalue)
 {
     switch (node->astType) {
     case AST_IDENT: { // the symbol version for the ident needs to be unversioned, and not shared with any other IR
         SymbolNode* symbol = Symbol_Find(node->ident.data, node->scope);
-        if (symbol->symbolType == SYMBOL_FUNCTION) {
-            createCFG(symbol, cfg);
+        if (symbol->isExtern) {
+            SymbolVersion* temp = tempSymbolVersion(cfg, symbol->type);
+            IR* ir = createIR(IR_LOAD_EXTERN, temp, NULL, NULL, node->pos);
+            ir->symbol = symbol;
+            temp->def = ir;
+            appendInstruction(cfg, ir);
+            return temp;
+        } else if (symbol->symbolType == SYMBOL_FUNCTION) {
+            IR_CreateCFG(symbol, cfg);
             SymbolVersion* temp = tempSymbolVersion(cfg, symbol->type);
 
             IR* ir = createIR(IR_LOAD_SYMBOL, temp, NULL, NULL, node->pos);
@@ -577,22 +532,6 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
         SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
 
         IR* ir = createIR_int(IR_LOAD_INT, temp, NULL, NULL, node->_int.data, node->pos);
-        temp->def = ir;
-        appendInstruction(cfg, ir);
-        return temp;
-    }
-    case AST_TRUE: {
-        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
-
-        IR* ir = createIR_int(IR_LOAD_INT, temp, NULL, NULL, 1, node->pos);
-        temp->def = ir;
-        appendInstruction(cfg, ir);
-        return temp;
-    }
-    case AST_FALSE: {
-        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
-
-        IR* ir = createIR_int(IR_LOAD_INT, temp, NULL, NULL, 0, node->pos);
         temp->def = ir;
         appendInstruction(cfg, ir);
         return temp;
@@ -637,25 +576,27 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
         appendInstruction(cfg, ir);
         return temp;
     }
-    case AST_REAL: {
+    case AST_TRUE: {
         SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
 
-        IR* ir = createIR_double(IR_LOAD_REAL, temp, NULL, NULL, node->real.data, node->pos);
+        IR* ir = createIR_int(IR_LOAD_INT, temp, NULL, NULL, 1, node->pos);
         temp->def = ir;
         appendInstruction(cfg, ir);
         return temp;
     }
-    case AST_ARRAY_LITERAL: {
+    case AST_FALSE: {
         SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
 
-        IR* ir = createIR(IR_LOAD_ARRAY_LITERAL, temp, NULL, NULL, node->pos);
+        IR* ir = createIR_int(IR_LOAD_INT, temp, NULL, NULL, 0, node->pos);
         temp->def = ir;
-        ir->listData = List_Create();
-        forall(elem, node->arrayLiteral.members)
-        {
-            SymbolVersion* member = flattenAST(cfg, elem->data, returnLabel, breakLabel, continueLabel, errorLabel, false);
-            List_Append(ir->listData, member);
-        }
+        appendInstruction(cfg, ir);
+        return temp;
+    }
+    case AST_REAL: {
+        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
+
+        IR* ir = createIR_real(IR_LOAD_REAL, temp, NULL, NULL, node->real.data, node->pos);
+        temp->def = ir;
         appendInstruction(cfg, ir);
         return temp;
     }
@@ -717,6 +658,20 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
         appendInstruction(cfg, ir);
         return temp;
     }
+    case AST_ARRAY_LITERAL: {
+        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
+
+        IR* ir = createIR(IR_LOAD_ARRAY_LITERAL, temp, NULL, NULL, node->pos);
+        temp->def = ir;
+        ir->listData = List_Create();
+        forall(elem, node->arrayLiteral.members)
+        {
+            SymbolVersion* member = flattenAST(cfg, elem->data, returnLabel, breakLabel, continueLabel, errorLabel, false);
+            List_Append(ir->listData, member);
+        }
+        appendInstruction(cfg, ir);
+        return temp;
+    }
     case AST_STRING: {
         SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
 
@@ -726,8 +681,869 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
         appendInstruction(cfg, ir);
         return temp;
     }
+    case AST_UNDEF: {
+        return NULL;
+    }
+    case AST_ASSIGN: {
+        if (node->binop.left->astType == AST_IDENT) {
+            SymbolNode* symbol = Symbol_Find(node->binop.left->ident.data, node->scope);
+            SymbolVersion* var = unversionedSymbolVersion(cfg, symbol, symbol->type);
+            var->lvalue = true;
+            SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
+
+            IR* ir = createIR(IR_COPY, var, right, NULL, node->pos);
+            var->def = ir;
+            appendInstruction(cfg, ir);
+        } else if (node->binop.left->astType == AST_INDEX) {
+            SymbolVersion* arr = flattenAST(cfg, node->binop.left->binop.left, returnLabel, breakLabel, continueLabel, errorLabel, true);
+            arr->lvalue = true;
+            SymbolVersion* index = flattenAST(cfg, node->binop.left->binop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
+            SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
+
+            IR* ir = createIR(IR_INDEX_COPY, NULL, arr, index, node->pos);
+            ir->src3 = right;
+            appendInstruction(cfg, ir);
+        } else if (node->binop.left->astType == AST_DOT) {
+            SymbolVersion* left = flattenAST(cfg, node->binop.left->binop.left, returnLabel, breakLabel, continueLabel, errorLabel, true);
+            left->lvalue = true;
+            SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
+            SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
+
+            IR* ir = createIR(IR_DOT_COPY, NULL, left, right, node->pos);
+            ir->strData = node->binop.left->binop.right->ident.data;
+            appendInstruction(cfg, ir);
+        } else if (node->binop.left->astType == AST_DEREF) {
+            SymbolVersion* left = flattenAST(cfg, node->binop.left->unop.expr, returnLabel, breakLabel, continueLabel, errorLabel, true);
+            left->lvalue = true;
+            SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
+            SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
+
+            IR* ir = createIR(IR_DEREF_COPY, NULL, left, right, node->pos);
+            appendInstruction(cfg, ir);
+        } else if (node->binop.left->astType == AST_PAREN) {
+            node->binop.left = List_Get(node->binop.left->arglist.args, 0);
+            flattenAST(cfg, node, returnLabel, breakLabel, continueLabel, errorLabel, true);
+        } else {
+            PANIC("not an l-value\n");
+        }
+        return NULL;
+    }
+    case AST_OR: {
+        SymbolVersion* var = tempSymbolVersion(cfg, INT8_TYPE);
+        IR* phony = createIR(IR_PHONY, var, NULL, NULL, node->pos);
+        phony->listData = List_Create();
+        var->def = phony; // Done just so that it is considered live, I think. Has no real "def", since it's run-time dependent
+        appendInstruction(cfg, phony);
+
+        IR* elseLabel = createIR_label(node->pos);
+        IR* endLabel = createIR_label(node->pos);
+
+        SymbolVersion* left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel, errorLabel, false);
+        appendInstruction(cfg, createIR_branch(IR_BRANCH_IF_FALSE, NULL, left, NULL, elseLabel, node->pos));
+        IR* loadTrue = createIR_int(IR_LOAD_INT, var, NULL, NULL, 1, node->pos);
+        List_Append(phony->listData, loadTrue);
+        appendInstruction(cfg, loadTrue);
+        appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, endLabel, node->pos));
+        appendInstruction(cfg, elseLabel);
+        SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
+        IR* copyRight = createIR(IR_COPY, var, right, NULL, node->pos);
+        List_Append(phony->listData, copyRight);
+        appendInstruction(cfg, copyRight);
+        appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, endLabel, node->pos));
+        appendInstruction(cfg, endLabel);
+        return var;
+    }
+    case AST_AND: {
+        SymbolVersion* var = tempSymbolVersion(cfg, INT8_TYPE);
+        IR* phony = createIR(IR_PHONY, var, NULL, NULL, node->pos);
+        phony->listData = List_Create();
+        var->def = phony; // Done just so that it is considered live, I think. Has no real "def", since it's run-time dependent
+        appendInstruction(cfg, phony);
+
+        IR* elseLabel = createIR_label(node->pos);
+        IR* endLabel = createIR_label(node->pos);
+
+        SymbolVersion* left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel, errorLabel, false);
+        appendInstruction(cfg, createIR_branch(IR_BRANCH_IF_FALSE, NULL, left, NULL, elseLabel, node->pos));
+        SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
+        IR* copyRight = createIR(IR_COPY, var, right, NULL, node->pos);
+        List_Append(phony->listData, copyRight);
+        appendInstruction(cfg, copyRight);
+        appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, endLabel, node->pos));
+        appendInstruction(cfg, elseLabel);
+        IR* loadFalse = createIR_int(IR_LOAD_INT, var, NULL, NULL, 0, node->pos);
+        List_Append(phony->listData, loadFalse);
+        appendInstruction(cfg, loadFalse);
+        appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, endLabel, node->pos));
+        appendInstruction(cfg, endLabel);
+        return var;
+    }
+    case AST_BIT_OR: {
+        SymbolVersion* left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel, errorLabel, false);
+        SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
+        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
+
+        IR* ir = createIR(IR_BIT_OR, temp, left, right, node->pos);
+        temp->def = ir;
+        appendInstruction(cfg, ir);
+        return temp;
+    }
+    case AST_BIT_XOR: {
+        SymbolVersion* left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel, errorLabel, false);
+        SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
+        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
+
+        IR* ir = createIR(IR_BIT_XOR, temp, left, right, node->pos);
+        temp->def = ir;
+        appendInstruction(cfg, ir);
+        return temp;
+    }
+    case AST_BIT_AND: {
+        SymbolVersion* left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel, errorLabel, false);
+        SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
+        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
+
+        IR* ir = createIR(IR_BIT_AND, temp, left, right, node->pos);
+        temp->def = ir;
+        appendInstruction(cfg, ir);
+        return temp;
+    }
+    case AST_EQ: {
+        SymbolVersion* left = NULL;
+        SymbolVersion* right = NULL;
+        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
+
+        if (node->binop.left->type->astType == AST_ENUM) {
+            SymbolVersion* leftEnum = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel, errorLabel, false);
+            left = tempSymbolVersion(cfg, INT64_TYPE);
+            IR* leftIR = createIR(IR_DOT, left, leftEnum, NULL, node->pos);
+            leftIR->strData = "tag";
+            left->def = leftIR;
+            appendInstruction(cfg, leftIR);
+
+            SymbolVersion* rightEnum = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
+            right = tempSymbolVersion(cfg, INT64_TYPE);
+            IR* rightIR = createIR(IR_DOT, right, rightEnum, NULL, node->pos);
+            rightIR->strData = "tag";
+            right->def = rightIR;
+            appendInstruction(cfg, rightIR);
+        } else {
+            left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel, errorLabel, false);
+            right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
+        }
+
+        IR* ir = createIR(IR_EQ, temp, left, right, node->pos);
+        temp->def = ir;
+        appendInstruction(cfg, ir);
+        return temp;
+    }
+    case AST_NEQ: {
+        SymbolVersion* left = NULL;
+        SymbolVersion* right = NULL;
+        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
+
+        if (node->binop.left->type->astType == AST_ENUM) {
+            SymbolVersion* leftEnum = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel, errorLabel, false);
+            left = tempSymbolVersion(cfg, INT64_TYPE);
+            IR* leftIR = createIR(IR_DOT, left, leftEnum, NULL, node->pos);
+            leftIR->strData = "tag";
+            left->def = leftIR;
+            appendInstruction(cfg, leftIR);
+
+            SymbolVersion* rightEnum = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
+            right = tempSymbolVersion(cfg, INT64_TYPE);
+            IR* rightIR = createIR(IR_DOT, right, rightEnum, NULL, node->pos);
+            rightIR->strData = "tag";
+            right->def = rightIR;
+            appendInstruction(cfg, rightIR);
+        } else {
+            left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel, errorLabel, false);
+            right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
+        }
+
+        IR* ir = createIR(IR_NEQ, temp, left, right, node->pos);
+        temp->def = ir;
+        appendInstruction(cfg, ir);
+        return temp;
+    }
+    case AST_GTR: {
+        SymbolVersion* left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel, errorLabel, false);
+        SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
+        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
+
+        IR* ir = createIR(IR_GTR, temp, left, right, node->pos);
+        temp->def = ir;
+        appendInstruction(cfg, ir);
+        return temp;
+    }
+    case AST_LSR: {
+        SymbolVersion* left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel, errorLabel, false);
+        SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
+        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
+
+        IR* ir = createIR(IR_LSR, temp, left, right, node->pos);
+        temp->def = ir;
+        appendInstruction(cfg, ir);
+        return temp;
+    }
+    case AST_GTE: {
+        SymbolVersion* left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel, errorLabel, false);
+        SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
+        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
+
+        IR* ir = createIR(IR_GTE, temp, left, right, node->pos);
+        temp->def = ir;
+        appendInstruction(cfg, ir);
+        return temp;
+    }
+    case AST_LTE: {
+        SymbolVersion* left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel, errorLabel, false);
+        SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
+        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
+
+        IR* ir = createIR(IR_LTE, temp, left, right, node->pos);
+        temp->def = ir;
+        appendInstruction(cfg, ir);
+        return temp;
+    }
+    case AST_LSHIFT: {
+        SymbolVersion* left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel, errorLabel, false);
+        SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
+        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
+
+        IR* ir = createIR(IR_LSHIFT, temp, left, right, node->pos);
+        temp->def = ir;
+        appendInstruction(cfg, ir);
+        return temp;
+    }
+    case AST_RSHIFT: {
+        SymbolVersion* left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel, errorLabel, false);
+        SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
+        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
+
+        IR* ir = createIR(IR_RSHIFT, temp, left, right, node->pos);
+        temp->def = ir;
+        appendInstruction(cfg, ir);
+        return temp;
+    }
+    case AST_ADD: {
+        SymbolVersion* left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel, errorLabel, false);
+        SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
+        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
+
+        IR* ir = createIR(IR_ADD, temp, left, right, node->pos);
+        temp->def = ir;
+        appendInstruction(cfg, ir);
+        return temp;
+    }
+    case AST_SUBTRACT: {
+        SymbolVersion* left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel, errorLabel, false);
+        SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
+        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
+
+        IR* ir = createIR(IR_SUBTRACT, temp, left, right, node->pos);
+        temp->def = ir;
+        appendInstruction(cfg, ir);
+        return temp;
+    }
+    case AST_MULTIPLY: {
+        SymbolVersion* left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel, errorLabel, false);
+        SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
+        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
+
+        IR* ir = createIR(IR_MULTIPLY, temp, left, right, node->pos);
+        temp->def = ir;
+        appendInstruction(cfg, ir);
+        return temp;
+    }
+    case AST_DIVIDE: {
+        SymbolVersion* left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel, errorLabel, false);
+        SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
+        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
+
+        IR* ir = createIR(IR_DIVIDE, temp, left, right, node->pos);
+        temp->def = ir;
+        appendInstruction(cfg, ir);
+        return temp;
+    }
+    case AST_MODULUS: {
+        SymbolVersion* left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel, errorLabel, false);
+        SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
+        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
+
+        IR* ir = createIR(IR_MODULUS, temp, left, right, node->pos);
+        temp->def = ir;
+        appendInstruction(cfg, ir);
+        return temp;
+    }
+    case AST_EXPONENT: {
+        SymbolVersion* left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel, errorLabel, false);
+        SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
+        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
+
+        IR* ir = createIR(IR_EXPONENT, temp, left, right, node->pos);
+        temp->def = ir;
+        appendInstruction(cfg, ir);
+        return temp;
+    }
+    case AST_NOT: {
+        SymbolVersion* expr = flattenAST(cfg, node->unop.expr, returnLabel, breakLabel, continueLabel, errorLabel, false);
+        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
+
+        IR* ir = createIR(IR_NOT, temp, expr, NULL, node->pos);
+        temp->def = ir;
+        appendInstruction(cfg, ir);
+        return temp;
+    }
+    case AST_NEG: {
+        SymbolVersion* expr = flattenAST(cfg, node->unop.expr, returnLabel, breakLabel, continueLabel, errorLabel, false);
+        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
+
+        IR* ir = createIR(IR_NEG, temp, expr, NULL, node->pos);
+        temp->def = ir;
+        appendInstruction(cfg, ir);
+        return temp;
+    }
+    case AST_BIT_NOT: {
+        SymbolVersion* expr = flattenAST(cfg, node->unop.expr, returnLabel, breakLabel, continueLabel, errorLabel, false);
+        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
+
+        IR* ir = createIR(IR_BIT_NOT, temp, expr, NULL, node->pos);
+        temp->def = ir;
+        appendInstruction(cfg, ir);
+        return temp;
+    }
+    case AST_ADDR_OF: {
+        SymbolVersion* expr = flattenAST(cfg, node->unop.expr, returnLabel, breakLabel, continueLabel, errorLabel, lvalue);
+        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
+        temp->lvalue = lvalue;
+
+        IR* ir = createIR(IR_ADDR_OF, temp, expr, NULL, node->pos);
+        temp->def = ir;
+        appendInstruction(cfg, ir);
+        return temp;
+    }
+    case AST_SIZEOF: {
+        SymbolVersion* temp = tempSymbolVersion(cfg, INT64_TYPE);
+
+        IR* ir = createIR_ast(IR_SIZEOF, temp, NULL, NULL, node->unop.expr, NULL, node->pos);
+        temp->def = ir;
+        appendInstruction(cfg, ir);
+        return temp;
+    }
+    case AST_DEREF: {
+        SymbolVersion* expr = flattenAST(cfg, node->unop.expr, returnLabel, breakLabel, continueLabel, errorLabel, lvalue);
+        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
+        temp->lvalue = lvalue;
+
+        IR* ir = createIR(IR_DEREF, temp, expr, NULL, node->pos);
+        temp->def = ir;
+        appendInstruction(cfg, ir);
+        return temp;
+    }
+    case AST_TRY: {
+        SymbolVersion* var = tempSymbolVersion(cfg, node->type);
+        IR* phony = createIR(IR_PHONY, var, NULL, NULL, node->pos);
+        phony->listData = List_Create();
+        var->def = phony; // Done just so that it is considered live, I think. Has no real "def", since it's run-time dependent
+        appendInstruction(cfg, phony);
+
+        // Get tag of expr
+        SymbolVersion* left = flattenAST(cfg, node->taggedUnop.expr, returnLabel, breakLabel, continueLabel, errorLabel, false);
+        SymbolVersion* enumDot = tempSymbolVersion(cfg, INT64_TYPE);
+        IR* enumIR = createIR(IR_DOT, enumDot, left, NULL, node->pos);
+        enumIR->strData = "tag";
+        enumDot->def = enumIR;
+        appendInstruction(cfg, enumIR);
+
+        // Get tag of success type
+        SymbolVersion* tag = tempSymbolVersion(cfg, INT64_TYPE);
+        IR* tagIR = createIR_int(IR_LOAD_INT, tag, NULL, NULL, node->taggedUnop.tag, node->pos);
+        tag->def = tagIR;
+        appendInstruction(cfg, tagIR);
+
+        // Compare success tag with expr tag
+        SymbolVersion* condition = tempSymbolVersion(cfg, BOOL_TYPE);
+        IR* conditionIR = createIR(IR_EQ, condition, enumDot, tag, node->pos);
+        condition->def = conditionIR;
+        appendInstruction(cfg, conditionIR);
+
+        IR* elseLabel = createIR_label(node->pos);
+        IR* endLabel = createIR_label(node->pos);
+
+        // Success branch
+        appendInstruction(cfg, createIR_branch(IR_BRANCH_IF_FALSE, NULL, condition, NULL, elseLabel, node->pos));
+        SymbolVersion* somethingDot = tempSymbolVersion(cfg, INT64_TYPE);
+        IR* somethingIR = createIR(IR_DOT, somethingDot, left, NULL, node->pos);
+        somethingIR->strData = "success";
+        somethingDot->def = somethingIR;
+        appendInstruction(cfg, somethingIR);
+
+        IR* copy = createIR(IR_COPY, var, somethingDot, NULL, node->pos);
+        List_Append(phony->listData, copy);
+        appendInstruction(cfg, copy);
+        appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, endLabel, node->pos));
+
+        // Error branch, set retval to error message
+        appendInstruction(cfg, elseLabel);
+        SymbolVersion* returnSymbolVersion = unversionedSymbolVersion(cfg, cfg->returnSymbol, cfg->symbol->type->function.codomainType);
+        appendInstruction(cfg, createIR_ast(IR_CAST, returnSymbolVersion, left, NULL, NULL, returnSymbolVersion->type, node->pos)); // Do this rather than a simple copy, may be !() error type, which must be converted
+        appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, errorLabel, node->pos));
+        appendInstruction(cfg, endLabel);
+        return var;
+    }
+    case AST_CATCH: {
+        SymbolVersion* var = tempSymbolVersion(cfg, node->type);
+        IR* phony = createIR(IR_PHONY, var, NULL, NULL, node->pos);
+        phony->listData = List_Create();
+        var->def = phony; // Done just so that it is considered live, I think. Has no real "def", since it's run-time dependent
+        appendInstruction(cfg, phony);
+
+        SymbolVersion* left = flattenAST(cfg, node->taggedBinop.left, returnLabel, breakLabel, continueLabel, errorLabel, false);
+        SymbolVersion* enumDot = tempSymbolVersion(cfg, INT64_TYPE);
+        IR* enumIR = createIR(IR_DOT, enumDot, left, NULL, node->pos);
+        enumIR->strData = "tag";
+        enumDot->def = enumIR;
+        appendInstruction(cfg, enumIR);
+
+        SymbolVersion* tag = tempSymbolVersion(cfg, INT64_TYPE);
+        IR* tagIR = createIR_int(IR_LOAD_INT, tag, NULL, NULL, node->taggedBinop.tag, node->pos);
+        tag->def = tagIR;
+        appendInstruction(cfg, tagIR);
+
+        SymbolVersion* condition = tempSymbolVersion(cfg, BOOL_TYPE);
+        IR* conditionIR = createIR(IR_EQ, condition, enumDot, tag, node->pos);
+        condition->def = conditionIR;
+        appendInstruction(cfg, conditionIR);
+
+        IR* elseLabel = createIR_label(node->pos);
+        IR* endLabel = createIR_label(node->pos);
+
+        appendInstruction(cfg, createIR_branch(IR_BRANCH_IF_FALSE, NULL, condition, NULL, elseLabel, node->pos));
+        SymbolVersion* somethingDot = tempSymbolVersion(cfg, INT64_TYPE);
+        IR* somethingIR = createIR(IR_DOT, somethingDot, left, NULL, node->pos);
+        somethingIR->strData = "success";
+        somethingDot->def = somethingIR;
+        appendInstruction(cfg, somethingIR);
+
+        IR* copy = createIR(IR_COPY, var, somethingDot, NULL, node->pos);
+        List_Append(phony->listData, copy);
+        appendInstruction(cfg, copy);
+
+        appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, endLabel, node->pos));
+        appendInstruction(cfg, elseLabel);
+        SymbolVersion* elseSymbver = flattenAST(cfg, node->taggedBinop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
+        if (elseSymbver) {
+            IR* copy = createIR(IR_COPY, var, elseSymbver, NULL, node->pos);
+            List_Append(phony->listData, copy);
+            appendInstruction(cfg, copy);
+        }
+        appendInstruction(cfg, endLabel);
+        return var;
+    }
+    case AST_ORELSE: {
+        SymbolVersion* var = tempSymbolVersion(cfg, node->type);
+        IR* phony = createIR(IR_PHONY, var, NULL, NULL, node->pos);
+        phony->listData = List_Create();
+        var->def = phony; // Done just so that it is considered live, I think. Has no real "def", since it's run-time dependent
+        appendInstruction(cfg, phony);
+
+        SymbolVersion* left = flattenAST(cfg, node->taggedBinop.left, returnLabel, breakLabel, continueLabel, errorLabel, false);
+        SymbolVersion* enumDot = tempSymbolVersion(cfg, INT64_TYPE);
+        IR* enumIR = createIR(IR_DOT, enumDot, left, NULL, node->pos);
+        enumIR->strData = "tag";
+        enumDot->def = enumIR;
+        appendInstruction(cfg, enumIR);
+
+        SymbolVersion* tag = tempSymbolVersion(cfg, INT64_TYPE);
+        IR* tagIR = createIR_int(IR_LOAD_INT, tag, NULL, NULL, node->taggedBinop.tag, node->pos);
+        tag->def = tagIR;
+        appendInstruction(cfg, tagIR);
+
+        SymbolVersion* condition = tempSymbolVersion(cfg, BOOL_TYPE);
+        IR* conditionIR = createIR(IR_NEQ, condition, enumDot, tag, node->pos);
+        condition->def = conditionIR;
+        appendInstruction(cfg, conditionIR);
+
+        IR* elseLabel = createIR_label(node->pos);
+        IR* endLabel = createIR_label(node->pos);
+
+        appendInstruction(cfg, createIR_branch(IR_BRANCH_IF_FALSE, NULL, condition, NULL, elseLabel, node->pos));
+        SymbolVersion* somethingDot = tempSymbolVersion(cfg, INT64_TYPE);
+        IR* somethingIR = createIR(IR_DOT, somethingDot, left, NULL, node->pos);
+        somethingIR->strData = "something";
+        somethingDot->def = somethingIR;
+        appendInstruction(cfg, somethingIR);
+
+        IR* copy = createIR(IR_COPY, var, somethingDot, NULL, node->pos);
+        List_Append(phony->listData, copy);
+        appendInstruction(cfg, copy);
+
+        appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, endLabel, node->pos));
+        appendInstruction(cfg, elseLabel);
+        SymbolVersion* elseSymbver = flattenAST(cfg, node->taggedBinop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
+        if (elseSymbver) {
+            IR* copy = createIR(IR_COPY, var, elseSymbver, NULL, node->pos);
+            List_Append(phony->listData, copy);
+            appendInstruction(cfg, copy);
+        }
+        appendInstruction(cfg, endLabel);
+        return var;
+    }
+    case AST_CALL: {
+        SymbolVersion* left = flattenAST(cfg, node->call.left, returnLabel, breakLabel, continueLabel, errorLabel, false);
+        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
+
+        IR* ir = createIR(IR_CALL, temp, left, NULL, node->pos);
+        temp->def = ir;
+        ir->listData = List_Create();
+        forall(elem, node->call.right->arglist.args)
+        {
+            SymbolVersion* member = flattenAST(cfg, elem->data, returnLabel, breakLabel, continueLabel, errorLabel, false);
+            List_Append(ir->listData, member);
+        }
+        appendInstruction(cfg, ir);
+        if (node->type->astType == AST_ENUM) {
+            ASTNode* successType = NULL;
+            forall(elem, node->type->_enum.defines)
+            {
+                ASTNode* define = elem->data;
+                SymbolNode* var = define->define.symbol;
+                if (!strcmp(var->name, "success")) {
+                    successType = var->type;
+                    break;
+                }
+            }
+            // if not successful then push pos str to stack, else clear stack
+            if (successType) {
+                SymbolVersion* enumDot = tempSymbolVersion(cfg, INT64_TYPE);
+                IR* enumIR = createIR(IR_DOT, enumDot, temp, NULL, node->pos);
+                enumIR->strData = "tag";
+                enumDot->def = enumIR;
+                appendInstruction(cfg, enumIR);
+
+                // Get tag of success type
+                SymbolVersion* tag = tempSymbolVersion(cfg, INT64_TYPE);
+                IR* tagIR = createIR_int(IR_LOAD_INT, tag, NULL, NULL, getTag("success", successType), node->pos);
+                tag->def = tagIR;
+                appendInstruction(cfg, tagIR);
+
+                // Compare success tag with expr tag
+                SymbolVersion* condition = tempSymbolVersion(cfg, BOOL_TYPE);
+                IR* conditionIR = createIR(IR_NEQ, condition, enumDot, tag, node->pos);
+                condition->def = conditionIR;
+                appendInstruction(cfg, conditionIR);
+
+                IR* elseLabel = createIR_label(node->pos);
+                IR* endLabel = createIR_label(node->pos);
+
+                // Success branch
+                appendInstruction(cfg, createIR_branch(IR_BRANCH_IF_FALSE, NULL, condition, NULL, elseLabel, node->pos));
+                IR* pushStackTraceIR = createIR(IR_PUSH_STACK_TRACE, NULL, NULL, NULL, node->pos);
+                appendInstruction(cfg, pushStackTraceIR);
+                appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, endLabel, node->pos));
+
+                // Error branch, set retval to error message
+                appendInstruction(cfg, elseLabel);
+                IR* clearStackTraceIR = createIR(IR_CLEAR_STACK_TRACE, NULL, NULL, NULL, node->pos);
+                appendInstruction(cfg, clearStackTraceIR);
+                appendInstruction(cfg, endLabel);
+            }
+        }
+        return temp;
+    }
+    case AST_INDEX: {
+        SymbolVersion* left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel, errorLabel, lvalue);
+        left->lvalue = lvalue;
+        SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
+        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
+
+        if (program->isDebug) {
+            // Done so that versioning is correct. Would version array symbol in this BB and other BB as same version, duplicate code
+            SymbolVersion* arrayCopy = NULL;
+            if (left->symbol == cfg->tempSymbol) {
+                arrayCopy = tempSymbolVersion(cfg, left->type);
+                IR* arrayExprCopyIR = createIR(IR_COPY, arrayCopy, left, NULL, node->pos);
+                arrayCopy->def = arrayExprCopyIR;
+                appendInstruction(cfg, arrayExprCopyIR);
+            } else {
+                arrayCopy = unversionedSymbolVersion(cfg, left->symbol, left->type);
+            }
+            SymbolVersion* indexCopy = NULL;
+            if (right->symbol == cfg->tempSymbol) {
+                indexCopy = tempSymbolVersion(cfg, right->type);
+                IR* indexExprCopyIR = createIR(IR_COPY, indexCopy, right, NULL, node->pos);
+                indexCopy->def = indexExprCopyIR;
+                appendInstruction(cfg, indexExprCopyIR);
+            } else {
+                indexCopy = unversionedSymbolVersion(cfg, right->symbol, right->type);
+            }
+
+            IR* tooHighLabel = createIR_label(node->pos);
+            IR* tooLowLabel = createIR_label(node->pos);
+            IR* end = createIR_label(node->pos);
+
+            // 0
+            SymbolVersion* zero = tempSymbolVersion(cfg, INT64_TYPE);
+            IR* zeroIR = createIR_int(IR_LOAD_INT, zero, NULL, NULL, 0, node->pos);
+            zero->def = zeroIR;
+            appendInstruction(cfg, zeroIR);
+
+            // Get array length
+            SymbolVersion* arrayLength = tempSymbolVersion(cfg, INT64_TYPE);
+            IR* lengthIR = createIR(IR_DOT, arrayLength, arrayCopy, NULL, node->pos);
+            lengthIR->strData = "length";
+            arrayLength->def = lengthIR;
+            appendInstruction(cfg, lengthIR);
+
+            // If index >= array length, goto branch error
+            SymbolVersion* upperBound = tempSymbolVersion(cfg, BOOL_TYPE);
+            IR* upperIR = createIR(IR_LSR, upperBound, indexCopy, arrayLength, node->pos);
+            upperBound->def = upperIR;
+            appendInstruction(cfg, upperIR);
+
+            // If index < 0, branch to error
+            SymbolVersion* lowerBound = tempSymbolVersion(cfg, BOOL_TYPE);
+            IR* lowerIR = createIR(IR_GTE, lowerBound, indexCopy, zero, node->pos);
+            lowerBound->def = lowerIR;
+            appendInstruction(cfg, lowerIR);
+
+            appendInstruction(cfg, createIR_branch(IR_BRANCH_IF_FALSE, NULL, upperBound, NULL, tooHighLabel, node->pos));
+            appendInstruction(cfg, createIR_branch(IR_BRANCH_IF_FALSE, NULL, lowerBound, NULL, tooLowLabel, node->pos));
+            appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, end, node->pos));
+            appendInstruction(cfg, tooHighLabel);
+            IR* tooHighError = createIR(IR_ERROR, NULL, NULL, NULL, node->pos);
+            tooHighError->strData = "array index greater than array length";
+            appendInstruction(cfg, tooHighError);
+            appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, end, node->pos));
+
+            appendInstruction(cfg, tooLowLabel);
+            IR* tooLowError = createIR(IR_ERROR, NULL, NULL, NULL, node->pos);
+            tooLowError->strData = "array index is negative";
+            appendInstruction(cfg, tooLowError);
+            appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, end, node->pos));
+
+            appendInstruction(cfg, end);
+        }
+
+        IR* ir = createIR(IR_INDEX, temp, left, right, node->pos);
+        temp->def = ir;
+        appendInstruction(cfg, ir);
+        return temp;
+    }
+    case AST_SLICE: {
+        SymbolVersion* arr = flattenAST(cfg, node->slice.arrayExpr, returnLabel, breakLabel, continueLabel, errorLabel, false);
+        SymbolVersion* lowerBound;
+        if (node->slice.lowerBound->astType != AST_UNDEF) {
+            lowerBound = flattenAST(cfg, node->slice.lowerBound, returnLabel, breakLabel, continueLabel, errorLabel, false);
+        } else {
+            lowerBound = tempSymbolVersion(cfg, INT64_TYPE);
+            IR* loadLowerBoundIR = createIR_int(IR_LOAD_INT, lowerBound, NULL, NULL, 0, node->pos);
+            lowerBound->def = loadLowerBoundIR;
+            appendInstruction(cfg, loadLowerBoundIR);
+        }
+        SymbolVersion* upperBound;
+        if (node->slice.upperBound->astType != AST_UNDEF) {
+            upperBound = flattenAST(cfg, node->slice.upperBound, returnLabel, breakLabel, continueLabel, errorLabel, false);
+        } else {
+            upperBound = tempSymbolVersion(cfg, INT64_TYPE);
+            IR* arrDataIR = createIR(IR_DOT, upperBound, arr, NULL, node->pos);
+            arrDataIR->strData = "length";
+            upperBound->def = arrDataIR;
+            appendInstruction(cfg, arrDataIR);
+        }
+        if (lowerBound->def && lowerBound->def->irType == IR_LOAD_INT && upperBound->def && upperBound->def->irType && upperBound->def->intData - lowerBound->def->intData <= 0) {
+            error(lowerBound->def->pos, "invalid array slice");
+        }
+
+        SymbolVersion* newSizeSymbver = tempSymbolVersion(cfg, INT64_TYPE);
+        IR* newSizeIR = createIR(IR_SUBTRACT, newSizeSymbver, upperBound, lowerBound, node->pos);
+        newSizeSymbver->def = newSizeIR;
+        appendInstruction(cfg, newSizeIR);
+
+        ASTNode* dataAddrType = AST_GetArrayDataTypeAddr(node->slice.arrayExpr->type);
+        SymbolVersion* arrDataSymbver = tempSymbolVersion(cfg, dataAddrType);
+        IR* arrDataIR = createIR(IR_DOT, arrDataSymbver, arr, NULL, node->pos);
+        arrDataIR->strData = "data";
+        arrDataSymbver->def = arrDataIR;
+        appendInstruction(cfg, arrDataIR);
+
+        SymbolVersion* newPtrSymbver = tempSymbolVersion(cfg, dataAddrType);
+        IR* newPtrIR = createIR(IR_ADD, newPtrSymbver, arrDataSymbver, lowerBound, node->pos);
+        newPtrSymbver->def = newPtrIR;
+        appendInstruction(cfg, newPtrIR);
+
+        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
+        IR* ir = createIR(IR_SLICE, temp, arr, NULL, node->pos);
+        ir->listData = List_Create();
+        temp->def = ir;
+        List_Append(ir->listData, newSizeSymbver);
+        List_Append(ir->listData, newPtrSymbver);
+        appendInstruction(cfg, ir);
+        return temp;
+    }
+    case AST_DOT: {
+        if ((node->dot.left->type->astType == AST_IDENT && (!strcmp(node->dot.left->type->ident.data, "Module") || !strcmp(node->dot.left->type->ident.data, "Type")))
+            || (node->dot.symbol && node->dot.symbol->symbolType == SYMBOL_FUNCTION)) {
+            if (node->dot.symbol->symbolType == SYMBOL_FUNCTION) {
+                IR_CreateCFG(node->dot.symbol, cfg);
+            }
+            SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
+
+            IR* ir = createIR(IR_LOAD_SYMBOL, temp, NULL, NULL, node->pos);
+            ir->symbol = node->dot.symbol;
+            temp->def = ir;
+            appendInstruction(cfg, ir);
+            return temp;
+        } else {
+            SymbolVersion* left = flattenAST(cfg, node->dot.left, returnLabel, breakLabel, continueLabel, errorLabel, lvalue);
+            left->lvalue = lvalue;
+            SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
+
+            if (node->dot.left->type->astType == AST_ENUM && program->isDebug) {
+                SymbolVersion* enumLiteralExpr = NULL;
+                if (left->symbol == cfg->tempSymbol) {
+                    enumLiteralExpr = tempSymbolVersion(cfg, left->type);
+                    IR* enumExprCopyIR = createIR(IR_COPY, enumLiteralExpr, left, NULL, node->pos);
+                    enumLiteralExpr->def = enumExprCopyIR;
+                    appendInstruction(cfg, enumExprCopyIR);
+                } else {
+                    enumLiteralExpr = unversionedSymbolVersion(cfg, left->symbol, left->type);
+                }
+
+                IR* endLabel = createIR_label(node->pos);
+                // Get tag of expr
+                SymbolVersion* enumDot = tempSymbolVersion(cfg, INT64_TYPE);
+                IR* enumIR = createIR(IR_DOT, enumDot, enumLiteralExpr, NULL, node->pos);
+                enumIR->strData = "tag";
+                enumDot->def = enumIR;
+                appendInstruction(cfg, enumIR);
+
+                // Get tag of enum
+                SymbolVersion* tag = tempSymbolVersion(cfg, INT64_TYPE);
+                IR* tagIR = createIR_int(IR_LOAD_INT, tag, NULL, NULL, getTagEnum(node->dot.right->ident.data, node->dot.left->type), node->pos);
+                tag->def = tagIR;
+                appendInstruction(cfg, tagIR);
+
+                // Compare success tag with expr tag
+                SymbolVersion* condition = tempSymbolVersion(cfg, BOOL_TYPE);
+                IR* conditionIR = createIR(IR_NEQ, condition, enumDot, tag, node->pos);
+                condition->def = conditionIR;
+                appendInstruction(cfg, conditionIR);
+
+                appendInstruction(cfg, createIR_branch(IR_BRANCH_IF_FALSE, NULL, condition, NULL, endLabel, node->pos));
+                IR* fieldError = createIR(IR_ERROR, NULL, NULL, NULL, node->pos);
+                char* fieldStr = calloc(255, sizeof(char));
+                sprintf(fieldStr, "field '%s' not active", node->dot.right->ident.data);
+                fieldError->strData = fieldStr;
+                appendInstruction(cfg, fieldError);
+                appendInstruction(cfg, endLabel);
+            }
+            IR* ir = createIR(IR_DOT, temp, left, NULL, node->pos);
+            ir->strData = node->dot.right->ident.data;
+            temp->def = ir;
+            appendInstruction(cfg, ir);
+            return temp;
+        }
+    }
+    case AST_CAST: {
+        SymbolVersion* left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel, errorLabel, false);
+        SymbolVersion* temp = tempSymbolVersion(cfg, node->binop.right);
+
+        IR* ir = NULL;
+        if (node->binop.right->astType == AST_PRODUCT) { // C doesn't allow explicit casts to structs, but does allow implicit copies
+            ir = createIR(IR_COPY, temp, left, NULL, node->pos);
+        } else {
+            ir = createIR_ast(IR_CAST, temp, left, NULL, node->binop.left->type, node->binop.right, node->pos);
+        }
+        temp->def = ir;
+        appendInstruction(cfg, ir);
+        return temp;
+    }
+    case AST_NEW: {
+        SymbolVersion* addr = tempSymbolVersion(cfg, node->type);
+        SymbolVersion* init = NULL;
+
+        if (node->binop.left->astType == AST_ARRAY) {
+            // List of array type length symbol versions flattened from array type
+            List* lengthCodeSymbvers = List_Create();
+            ASTNode* arrType = node->binop.left;
+            while (arrType->astType == AST_ARRAY) {
+                SymbolVersion* lengthCodeSymbver = flattenAST(cfg, AST_GetArrayLengthAST(arrType), NULL, NULL, NULL, NULL, false);
+                if (lengthCodeSymbver) { // If AST_GetArrayLengthAST(arrType) is undef, this is NULL, ruins things when iterating over the ir's listData
+                    List_Append(lengthCodeSymbvers, lengthCodeSymbver);
+                }
+                if (AST_GetArrayDataType(arrType)->astType == AST_ARRAY && AST_GetArrayLengthAST(AST_GetArrayDataType(arrType))->astType == AST_UNDEF) {
+                    break;
+                }
+                arrType = AST_GetArrayDataType(arrType);
+            }
+
+            IR* ir = NULL;
+            if (node->binop.right->astType != AST_UNDEF) {
+                init = flattenAST(cfg, node->binop.right, NULL, NULL, NULL, NULL, false);
+                ir = createIR(IR_NEW_ARR, addr, NULL, init, node->pos);
+            } else if (arrType->astType == AST_ARRAY) {
+                init = defaultValue(cfg, AST_GetArrayDataType(arrType));
+                ir = createIR(IR_NEW_ARR, addr, init, NULL, node->pos);
+            } else {
+                init = defaultValue(cfg, arrType);
+                ir = createIR(IR_NEW_ARR, addr, init, NULL, node->pos);
+            }
+            addr->def = ir;
+            ir->listData = lengthCodeSymbvers;
+            appendInstruction(cfg, ir);
+        } else {
+            if (node->binop.right->astType != AST_UNDEF) {
+                init = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
+            } else {
+                init = defaultValue(cfg, node->binop.left);
+            }
+            IR* ir = createIR_ast(IR_NEW, addr, init, NULL, node->binop.left, node->binop.right, node->pos);
+            addr->def = ir;
+            appendInstruction(cfg, ir);
+        }
+        return addr;
+    }
+    case AST_FREE: {
+        SymbolVersion* expr = NULL;
+
+        if (node->unop.expr->type->astType == AST_ARRAY) {
+            SymbolVersion* left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel, errorLabel, false);
+            expr = tempSymbolVersion(cfg, AST_GetArrayDataTypeAddr(node->unop.expr->type));
+
+            IR* dotIR = createIR(IR_DOT, expr, left, NULL, node->pos);
+            dotIR->strData = "data";
+            expr->def = dotIR;
+            appendInstruction(cfg, dotIR);
+        } else {
+            expr = flattenAST(cfg, node->unop.expr, returnLabel, breakLabel, continueLabel, errorLabel, false);
+        }
+
+        IR* ir = createIR(IR_FREE, NULL, expr, NULL, node->pos);
+        appendInstruction(cfg, ir);
+        return NULL;
+    }
     case AST_PAREN: {
         return flattenAST(cfg, List_Get(node->arglist.args, 0), returnLabel, breakLabel, continueLabel, errorLabel, lvalue);
+    }
+    case AST_DEFINE: {
+        if (node->define.symbol->type->isConst) {
+            return NULL;
+        }
+
+        SymbolVersion* var = unversionedSymbolVersion(cfg, node->define.symbol, node->define.symbol->type);
+        SymbolVersion* def = NULL;
+        if (node->define.symbol->def->astType != AST_UNDEF) {
+            def = flattenAST(cfg, node->define.symbol->def, returnLabel, breakLabel, continueLabel, errorLabel, lvalue);
+        } else {
+            def = defaultValue(cfg, node->define.symbol->type);
+        }
+
+        IR* ir = createIR(IR_COPY, var, def, NULL, node->pos);
+        var->def = ir;
+        appendInstruction(cfg, ir);
+        return var;
     }
     case AST_BLOCK: {
         // Each defer has 3 labels, continue, break, return
@@ -758,7 +1574,8 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
         int errDeferLabelIndex = 0;
 
         SymbolVersion* var = NULL;
-        for (ListElem* elem = List_Begin(node->block.children); elem != List_End(node->block.children); elem = elem->next) {
+        forall(elem, node->block.children)
+        {
             ASTNode* child = elem->data;
             var = flattenAST(cfg, child, thisReturnLabel, thisBreakLabel, thisContinueLabel, thisErrorLabel, false);
             if (child->astType == AST_DEFER) {
@@ -802,7 +1619,7 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
 
                 // Get tag of success type
                 SymbolVersion* tag = tempSymbolVersion(cfg, INT64_TYPE);
-                int tagID = getTagEnum("success", var->type);
+                int64_t tagID = getTagEnum("success", var->type);
                 IR* tagIR = createIR_int(IR_LOAD_INT, tag, NULL, NULL, tagID, node->pos);
                 tag->def = tagIR;
                 appendInstruction(cfg, tagIR);
@@ -904,7 +1721,10 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
         }
         IR* endLabel = createIR_label(node->pos);
 
+        // TODO: if case expr is enum type, make a set of tags. Add each mapping expr's tag to the set. Afterwards, go through enum defines and get tag, remove tag. If tag not found, error (field not in enum), if set is empty before done with enum type defines, error (some fields not handled)
+
         // For each expr in each mapping, branch if false to the mapping's label if caseExpr does not equal mapping expr
+        SymbolVersion* caseExpr = flattenAST(cfg, node->_case.expr, returnLabel, breakLabel, continueLabel, errorLabel, false);
         int i = 0;
         forall(elem, node->_case.mappings)
         {
@@ -914,8 +1734,17 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
             {
                 SymbolVersion* mappingExpr = flattenAST(cfg, elem2->data, returnLabel, breakLabel, continueLabel, errorLabel, false);
                 SymbolVersion* notEqualSymbol = tempSymbolVersion(cfg, BOOL_TYPE);
-                SymbolVersion* caseExpr = flattenAST(cfg, node->_case.expr, returnLabel, breakLabel, continueLabel, errorLabel, false);
-                IR* notEqualIR = createIR(IR_NEQ, notEqualSymbol, caseExpr, mappingExpr, node->pos);
+                // Done so that versioning is correct. Would version array symbol in this BB and other BB as same version, duplicate code
+                SymbolVersion* caseExprCopy = NULL;
+                if (caseExpr->symbol == cfg->tempSymbol) {
+                    caseExprCopy = tempSymbolVersion(cfg, caseExpr->type);
+                    IR* caseExprCopyIR = createIR(IR_COPY, caseExprCopy, caseExpr, NULL, node->pos);
+                    caseExprCopy->def = caseExprCopyIR;
+                    appendInstruction(cfg, caseExprCopyIR);
+                } else {
+                    caseExprCopy = unversionedSymbolVersion(cfg, caseExpr->symbol, caseExpr->type);
+                }
+                IR* notEqualIR = createIR(IR_NEQ, notEqualSymbol, caseExprCopy, mappingExpr, node->pos);
                 notEqualSymbol->def = notEqualIR;
                 appendInstruction(cfg, notEqualIR);
                 appendInstruction(cfg, createIR_branch(IR_BRANCH_IF_FALSE, NULL, notEqualSymbol, NULL, mappingLabel, node->pos));
@@ -1046,7 +1875,7 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
 
             // Get tag of success type
             SymbolVersion* tag = tempSymbolVersion(cfg, INT64_TYPE);
-            int tagID = getTagEnum("success", var->type);
+            int64_t tagID = getTagEnum("success", var->type);
             IR* tagIR = createIR_int(IR_LOAD_INT, tag, NULL, NULL, tagID, node->pos);
             tag->def = tagIR;
             appendInstruction(cfg, tagIR);
@@ -1073,835 +1902,18 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
         appendInstruction(cfg, ir);
         return NULL;
     }
-    case AST_DEFER: {
-        return NULL;
-    }
-    case AST_ERRDEFER: {
-        return NULL;
-    }
-    case AST_DEFINE: {
-        if (node->define.symbol->type->isConst) {
-            return NULL;
-        }
-
-        SymbolVersion* var = unversionedSymbolVersion(cfg, node->define.symbol, node->define.symbol->type);
-        SymbolVersion* def = NULL;
-        if (node->define.symbol->def->astType != AST_UNDEF) {
-            def = flattenAST(cfg, node->define.symbol->def, returnLabel, breakLabel, continueLabel, errorLabel, lvalue);
-        } else {
-            def = defaultValue(cfg, node->define.symbol->type);
-        }
-
-        IR* ir = createIR(IR_COPY, var, def, NULL, node->pos);
-        var->def = ir;
-        appendInstruction(cfg, ir);
-        return var;
-    }
-    case AST_CALL: {
-        SymbolVersion* left = flattenAST(cfg, node->call.left, returnLabel, breakLabel, continueLabel, errorLabel, false);
-        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
-
-        IR* ir = createIR(IR_CALL, temp, left, NULL, node->pos);
-        temp->def = ir;
-        ir->listData = List_Create();
-        forall(elem, node->call.right->arglist.args)
-        {
-            SymbolVersion* member = flattenAST(cfg, elem->data, returnLabel, breakLabel, continueLabel, errorLabel, false);
-            List_Append(ir->listData, member);
-        }
-        appendInstruction(cfg, ir);
-        if (node->type->astType == AST_ENUM) {
-            ASTNode* successType = NULL;
-            forall(elem, node->type->_enum.defines)
-            {
-                ASTNode* define = elem->data;
-                SymbolNode* var = define->define.symbol;
-                if (!strcmp(var->name, "success")) {
-                    successType = var->type;
-                    break;
-                }
-            }
-            // if not successful then push pos str to stack, else clear stack
-            if (successType) {
-                SymbolVersion* enumDot = tempSymbolVersion(cfg, INT64_TYPE);
-                IR* enumIR = createIR(IR_DOT, enumDot, temp, NULL, node->pos);
-                enumIR->strData = "tag";
-                enumDot->def = enumIR;
-                appendInstruction(cfg, enumIR);
-
-                // Get tag of success type
-                SymbolVersion* tag = tempSymbolVersion(cfg, INT64_TYPE);
-                IR* tagIR = createIR_int(IR_LOAD_INT, tag, NULL, NULL, getTag("success", successType), node->pos);
-                tag->def = tagIR;
-                appendInstruction(cfg, tagIR);
-
-                // Compare success tag with expr tag
-                SymbolVersion* condition = tempSymbolVersion(cfg, BOOL_TYPE);
-                IR* conditionIR = createIR(IR_NEQ, condition, enumDot, tag, node->pos);
-                condition->def = conditionIR;
-                appendInstruction(cfg, conditionIR);
-
-                IR* elseLabel = createIR_label(node->pos);
-                IR* endLabel = createIR_label(node->pos);
-
-                // Success branch
-                appendInstruction(cfg, createIR_branch(IR_BRANCH_IF_FALSE, NULL, condition, NULL, elseLabel, node->pos));
-                IR* pushStackTraceIR = createIR(IR_PUSH_STACK_TRACE, NULL, NULL, NULL, node->pos);
-                appendInstruction(cfg, pushStackTraceIR);
-                appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, endLabel, node->pos));
-
-                // Error branch, set retval to error message
-                appendInstruction(cfg, elseLabel);
-                IR* clearStackTraceIR = createIR(IR_CLEAR_STACK_TRACE, NULL, NULL, NULL, node->pos);
-                appendInstruction(cfg, clearStackTraceIR);
-                appendInstruction(cfg, endLabel);
-            }
-        }
-        return temp;
-    }
-    case AST_INDEX: {
-        SymbolVersion* left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel, errorLabel, lvalue);
-        left->lvalue = lvalue;
-        SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
-        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
-
-        if (isDebug) {
-            // Done so that versioning is correct. Would version array symbol in this BB and other BB as same version, duplicate code
-            SymbolVersion* arrayCopy = unversionedSymbolVersion(cfg, left->symbol, left->type);
-
-            IR* tooHighLabel = createIR_label(node->pos);
-            IR* tooLowLabel = createIR_label(node->pos);
-            IR* end = createIR_label(node->pos);
-
-            // 0
-            SymbolVersion* zero = tempSymbolVersion(cfg, INT64_TYPE);
-            IR* zeroIR = createIR_int(IR_LOAD_INT, zero, NULL, NULL, 0, node->pos);
-            zero->def = zeroIR;
-            appendInstruction(cfg, zeroIR);
-
-            // Get array length
-            SymbolVersion* arrayLength = tempSymbolVersion(cfg, INT64_TYPE);
-            IR* lengthIR = createIR(IR_DOT, arrayLength, arrayCopy, NULL, node->pos);
-            lengthIR->strData = "length";
-            arrayLength->def = lengthIR;
-            appendInstruction(cfg, lengthIR);
-
-            // If index >= array length, goto branch error
-            SymbolVersion* upperBound = tempSymbolVersion(cfg, BOOL_TYPE);
-            IR* upperIR = createIR(IR_LSR, upperBound, right, arrayLength, node->pos);
-            upperBound->def = upperIR;
-            appendInstruction(cfg, upperIR);
-
-            // If index < 0, branch to error
-            SymbolVersion* lowerBound = tempSymbolVersion(cfg, BOOL_TYPE);
-            IR* lowerIR = createIR(IR_GTE, lowerBound, right, zero, node->pos);
-            lowerBound->def = lowerIR;
-            appendInstruction(cfg, lowerIR);
-
-            appendInstruction(cfg, createIR_branch(IR_BRANCH_IF_FALSE, NULL, upperBound, NULL, tooHighLabel, node->pos));
-            appendInstruction(cfg, createIR_branch(IR_BRANCH_IF_FALSE, NULL, lowerBound, NULL, tooLowLabel, node->pos));
-            appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, end, node->pos));
-            appendInstruction(cfg, tooHighLabel);
-            IR* tooHighError = createIR(IR_ERROR, NULL, NULL, NULL, node->pos);
-            tooHighError->strData = "array index greater than array length";
-            appendInstruction(cfg, tooHighError);
-            appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, end, node->pos));
-
-            appendInstruction(cfg, tooLowLabel);
-            IR* tooLowError = createIR(IR_ERROR, NULL, NULL, NULL, node->pos);
-            tooLowError->strData = "array index is negative";
-            appendInstruction(cfg, tooLowError);
-            appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, end, node->pos));
-
-            appendInstruction(cfg, end);
-        }
-
-        IR* ir = createIR(IR_INDEX, temp, left, right, node->pos);
-        temp->def = ir;
-        appendInstruction(cfg, ir);
-        return temp;
-    }
-    case AST_SLICE: {
-        SymbolVersion* arr = flattenAST(cfg, node->slice.arrayExpr, returnLabel, breakLabel, continueLabel, errorLabel, false);
-        SymbolVersion* lowerBound;
-        if (node->slice.lowerBound->astType != AST_UNDEF) {
-            lowerBound = flattenAST(cfg, node->slice.lowerBound, returnLabel, breakLabel, continueLabel, errorLabel, false);
-            if (lowerBound->def && lowerBound->def->irType == IR_LOAD_INT && lowerBound->def->intData < 0) {
-                error(lowerBound->def->pos, "lower bound is negative");
-            }
-        } else {
-            lowerBound = tempSymbolVersion(cfg, INT64_TYPE);
-            IR* loadLowerBoundIR = createIR_int(IR_LOAD_INT, lowerBound, NULL, NULL, 0, node->pos);
-            lowerBound->def = loadLowerBoundIR;
-            appendInstruction(cfg, loadLowerBoundIR);
-        }
-        SymbolVersion* upperBound;
-        if (node->slice.upperBound->astType != AST_UNDEF) {
-            upperBound = flattenAST(cfg, node->slice.upperBound, returnLabel, breakLabel, continueLabel, errorLabel, false);
-        } else {
-            upperBound = tempSymbolVersion(cfg, INT64_TYPE);
-            IR* arrDataIR = createIR(IR_DOT, upperBound, arr, NULL, node->pos);
-            arrDataIR->strData = "length";
-            upperBound->def = arrDataIR;
-            appendInstruction(cfg, arrDataIR);
-        }
-
-        SymbolVersion* newSizeSymbver = tempSymbolVersion(cfg, INT64_TYPE);
-        IR* newSizeIR = createIR(IR_SUBTRACT, newSizeSymbver, upperBound, lowerBound, node->pos);
-        newSizeSymbver->def = newSizeIR;
-        appendInstruction(cfg, newSizeIR);
-
-        ASTNode* dataAddrType = getArrayDataTypeAddr(node->slice.arrayExpr->type);
-        SymbolVersion* arrDataSymbver = tempSymbolVersion(cfg, dataAddrType);
-        IR* arrDataIR = createIR(IR_DOT, arrDataSymbver, arr, NULL, node->pos);
-        arrDataIR->strData = "data";
-        arrDataSymbver->def = arrDataIR;
-        appendInstruction(cfg, arrDataIR);
-
-        SymbolVersion* newPtrSymbver = tempSymbolVersion(cfg, dataAddrType);
-        IR* newPtrIR = createIR(IR_ADD, newPtrSymbver, arrDataSymbver, lowerBound, node->pos);
-        newPtrSymbver->def = newPtrIR;
-        appendInstruction(cfg, newPtrIR);
-
-        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
-        IR* ir = createIR(IR_SLICE, temp, arr, NULL, node->pos);
-        ir->listData = List_Create();
-        temp->def = ir;
-        List_Append(ir->listData, newSizeSymbver);
-        List_Append(ir->listData, newPtrSymbver);
-        appendInstruction(cfg, ir);
-        return temp;
-    }
-    case AST_DOT: {
-        if (node->dot.left->type->astType == AST_IDENT && (!strcmp(node->dot.left->type->ident.data, "Module") || !strcmp(node->dot.left->type->ident.data, "Type"))) {
-            if (node->dot.symbol->symbolType == SYMBOL_FUNCTION) {
-                createCFG(node->dot.symbol, cfg);
-            }
-            SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
-
-            IR* ir = createIR(IR_LOAD_SYMBOL, temp, NULL, NULL, node->pos);
-            ir->symbol = node->dot.symbol;
-            temp->def = ir;
-            appendInstruction(cfg, ir);
-            return temp;
-        } else {
-            SymbolVersion* left = flattenAST(cfg, node->dot.left, returnLabel, breakLabel, continueLabel, errorLabel, lvalue);
-            left->lvalue = lvalue;
-            SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
-
-            if (node->dot.left->type->astType == AST_ENUM && isDebug) {
-                SymbolVersion* enumLiteralExpr = unversionedSymbolVersion(cfg, left->symbol, left->type);
-                IR* endLabel = createIR_label(node->pos);
-                // Get tag of expr
-                SymbolVersion* enumDot = tempSymbolVersion(cfg, INT64_TYPE);
-                IR* enumIR = createIR(IR_DOT, enumDot, enumLiteralExpr, NULL, node->pos);
-                enumIR->strData = "tag";
-                enumDot->def = enumIR;
-                appendInstruction(cfg, enumIR);
-
-                // Get tag of success type
-                SymbolVersion* tag = tempSymbolVersion(cfg, INT64_TYPE);
-                IR* tagIR = createIR_int(IR_LOAD_INT, tag, NULL, NULL, getTagEnum(node->dot.right->ident.data, node->dot.left->type), node->pos);
-                tag->def = tagIR;
-                appendInstruction(cfg, tagIR);
-
-                // Compare success tag with expr tag
-                SymbolVersion* condition = tempSymbolVersion(cfg, BOOL_TYPE);
-                IR* conditionIR = createIR(IR_NEQ, condition, enumDot, tag, node->pos);
-                condition->def = conditionIR;
-                appendInstruction(cfg, conditionIR);
-
-                appendInstruction(cfg, createIR_branch(IR_BRANCH_IF_FALSE, NULL, condition, NULL, endLabel, node->pos));
-                IR* fieldError = createIR(IR_ERROR, NULL, NULL, NULL, node->pos);
-                fieldError->strData = "field not active";
-                appendInstruction(cfg, fieldError);
-                appendInstruction(cfg, endLabel);
-            }
-
-            IR* ir = createIR(IR_DOT, temp, left, NULL, node->pos);
-            ir->strData = node->dot.right->ident.data;
-            temp->def = ir;
-            appendInstruction(cfg, ir);
-            return temp;
-        }
-    }
-    case AST_OR: {
-        SymbolVersion* var = tempSymbolVersion(cfg, INT8_TYPE);
-        IR* phony = createIR(IR_PHONY, var, NULL, NULL, node->pos);
-        phony->listData = List_Create();
-        var->def = phony; // Done just so that it is considered live, I think. Has no real "def", since it's run-time dependent
-        appendInstruction(cfg, phony);
-
-        IR* elseLabel = createIR_label(node->pos);
-        IR* endLabel = createIR_label(node->pos);
-
-        SymbolVersion* left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel, errorLabel, false);
-        appendInstruction(cfg, createIR_branch(IR_BRANCH_IF_FALSE, NULL, left, NULL, elseLabel, node->pos));
-        IR* loadTrue = createIR_int(IR_LOAD_INT, var, NULL, NULL, 1, node->pos);
-        List_Append(phony->listData, loadTrue);
-        appendInstruction(cfg, loadTrue);
-        appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, endLabel, node->pos));
-        appendInstruction(cfg, elseLabel);
-        SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
-        IR* copyRight = createIR(IR_COPY, var, right, NULL, node->pos);
-        List_Append(phony->listData, copyRight);
-        appendInstruction(cfg, copyRight);
-        appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, endLabel, node->pos));
-        appendInstruction(cfg, endLabel);
-        return var;
-    }
-    case AST_AND: {
-        SymbolVersion* var = tempSymbolVersion(cfg, INT8_TYPE);
-        IR* phony = createIR(IR_PHONY, var, NULL, NULL, node->pos);
-        phony->listData = List_Create();
-        var->def = phony; // Done just so that it is considered live, I think. Has no real "def", since it's run-time dependent
-        appendInstruction(cfg, phony);
-
-        IR* elseLabel = createIR_label(node->pos);
-        IR* endLabel = createIR_label(node->pos);
-
-        SymbolVersion* left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel, errorLabel, false);
-        appendInstruction(cfg, createIR_branch(IR_BRANCH_IF_FALSE, NULL, left, NULL, elseLabel, node->pos));
-        SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
-        IR* copyRight = createIR(IR_COPY, var, right, NULL, node->pos);
-        List_Append(phony->listData, copyRight);
-        appendInstruction(cfg, copyRight);
-        appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, endLabel, node->pos));
-        appendInstruction(cfg, elseLabel);
-        IR* loadFalse = createIR_int(IR_LOAD_INT, var, NULL, NULL, 0, node->pos);
-        List_Append(phony->listData, loadFalse);
-        appendInstruction(cfg, loadFalse);
-        appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, endLabel, node->pos));
-        appendInstruction(cfg, endLabel);
-        return var;
-    }
-    case AST_BIT_OR: {
-        SymbolVersion* left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel, errorLabel, false);
-        SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
-        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
-
-        IR* ir = createIR(IR_BIT_OR, temp, left, right, node->pos);
-        temp->def = ir;
-        appendInstruction(cfg, ir);
-        return temp;
-    }
-    case AST_BIT_XOR: {
-        SymbolVersion* left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel, errorLabel, false);
-        SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
-        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
-
-        IR* ir = createIR(IR_BIT_XOR, temp, left, right, node->pos);
-        temp->def = ir;
-        appendInstruction(cfg, ir);
-        return temp;
-    }
-    case AST_BIT_AND: {
-        SymbolVersion* left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel, errorLabel, false);
-        SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
-        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
-
-        IR* ir = createIR(IR_BIT_AND, temp, left, right, node->pos);
-        temp->def = ir;
-        appendInstruction(cfg, ir);
-        return temp;
-    }
-    case AST_LSHIFT: {
-        SymbolVersion* left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel, errorLabel, false);
-        SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
-        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
-
-        IR* ir = createIR(IR_LSHIFT, temp, left, right, node->pos);
-        temp->def = ir;
-        appendInstruction(cfg, ir);
-        return temp;
-    }
-    case AST_RSHIFT: {
-        SymbolVersion* left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel, errorLabel, false);
-        SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
-        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
-
-        IR* ir = createIR(IR_RSHIFT, temp, left, right, node->pos);
-        temp->def = ir;
-        appendInstruction(cfg, ir);
-        return temp;
-    }
-    case AST_EQ: {
-        SymbolVersion* left = NULL;
-        SymbolVersion* right = NULL;
-        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
-
-        if (node->binop.left->type->astType == AST_ENUM) {
-            SymbolVersion* leftEnum = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel, errorLabel, false);
-            left = tempSymbolVersion(cfg, INT64_TYPE);
-            IR* leftIR = createIR(IR_DOT, left, leftEnum, NULL, node->pos);
-            leftIR->strData = "tag";
-            left->def = leftIR;
-            appendInstruction(cfg, leftIR);
-
-            SymbolVersion* rightEnum = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
-            right = tempSymbolVersion(cfg, INT64_TYPE);
-            IR* rightIR = createIR(IR_DOT, right, rightEnum, NULL, node->pos);
-            rightIR->strData = "tag";
-            right->def = rightIR;
-            appendInstruction(cfg, rightIR);
-        } else {
-            left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel, errorLabel, false);
-            right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
-        }
-
-        IR* ir = createIR(IR_EQ, temp, left, right, node->pos);
-        temp->def = ir;
-        appendInstruction(cfg, ir);
-        return temp;
-    }
-    case AST_NEQ: {
-        SymbolVersion* left = NULL;
-        SymbolVersion* right = NULL;
-        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
-
-        if (node->binop.left->type->astType == AST_ENUM) {
-            SymbolVersion* leftEnum = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel, errorLabel, false);
-            left = tempSymbolVersion(cfg, INT64_TYPE);
-            IR* leftIR = createIR(IR_DOT, left, leftEnum, NULL, node->pos);
-            leftIR->strData = "tag";
-            left->def = leftIR;
-            appendInstruction(cfg, leftIR);
-
-            SymbolVersion* rightEnum = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
-            right = tempSymbolVersion(cfg, INT64_TYPE);
-            IR* rightIR = createIR(IR_DOT, right, rightEnum, NULL, node->pos);
-            rightIR->strData = "tag";
-            right->def = rightIR;
-            appendInstruction(cfg, rightIR);
-        } else {
-            left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel, errorLabel, false);
-            right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
-        }
-
-        IR* ir = createIR(IR_NEQ, temp, left, right, node->pos);
-        temp->def = ir;
-        appendInstruction(cfg, ir);
-        return temp;
-    }
-    case AST_GTR: {
-        SymbolVersion* left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel, errorLabel, false);
-        SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
-        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
-
-        IR* ir = createIR(IR_GTR, temp, left, right, node->pos);
-        temp->def = ir;
-        appendInstruction(cfg, ir);
-        return temp;
-    }
-    case AST_LSR: {
-        SymbolVersion* left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel, errorLabel, false);
-        SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
-        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
-
-        IR* ir = createIR(IR_LSR, temp, left, right, node->pos);
-        temp->def = ir;
-        appendInstruction(cfg, ir);
-        return temp;
-    }
-    case AST_GTE: {
-        SymbolVersion* left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel, errorLabel, false);
-        SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
-        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
-
-        IR* ir = createIR(IR_GTE, temp, left, right, node->pos);
-        temp->def = ir;
-        appendInstruction(cfg, ir);
-        return temp;
-    }
-    case AST_LTE: {
-        SymbolVersion* left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel, errorLabel, false);
-        SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
-        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
-
-        IR* ir = createIR(IR_LTE, temp, left, right, node->pos);
-        temp->def = ir;
-        appendInstruction(cfg, ir);
-        return temp;
-    }
-    case AST_ADD: {
-        SymbolVersion* left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel, errorLabel, false);
-        SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
-        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
-
-        IR* ir = createIR(IR_ADD, temp, left, right, node->pos);
-        temp->def = ir;
-        appendInstruction(cfg, ir);
-        return temp;
-    }
-    case AST_SUBTRACT: {
-        SymbolVersion* left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel, errorLabel, false);
-        SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
-        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
-
-        IR* ir = createIR(IR_SUBTRACT, temp, left, right, node->pos);
-        temp->def = ir;
-        appendInstruction(cfg, ir);
-        return temp;
-    }
-    case AST_MULTIPLY: {
-        SymbolVersion* left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel, errorLabel, false);
-        SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
-        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
-
-        IR* ir = createIR(IR_MULTIPLY, temp, left, right, node->pos);
-        temp->def = ir;
-        appendInstruction(cfg, ir);
-        return temp;
-    }
-    case AST_DIVIDE: {
-        SymbolVersion* left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel, errorLabel, false);
-        SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
-        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
-
-        IR* ir = createIR(IR_DIVIDE, temp, left, right, node->pos);
-        temp->def = ir;
-        appendInstruction(cfg, ir);
-        return temp;
-    }
-    case AST_MODULUS: {
-        SymbolVersion* left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel, errorLabel, false);
-        SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
-        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
-
-        IR* ir = createIR(IR_MODULUS, temp, left, right, node->pos);
-        temp->def = ir;
-        appendInstruction(cfg, ir);
-        return temp;
-    }
-    case AST_ASSIGN: {
-        if (node->binop.left->astType == AST_IDENT) {
-            SymbolNode* symbol = Symbol_Find(node->binop.left->ident.data, node->scope);
-            SymbolVersion* var = unversionedSymbolVersion(cfg, symbol, symbol->type);
-            var->lvalue = true;
-            SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
-
-            IR* ir = createIR(IR_COPY, var, right, NULL, node->pos);
-            var->def = ir;
-            appendInstruction(cfg, ir);
-        } else if (node->binop.left->astType == AST_INDEX) {
-            SymbolVersion* arr = flattenAST(cfg, node->binop.left->binop.left, returnLabel, breakLabel, continueLabel, errorLabel, true);
-            arr->lvalue = true;
-            SymbolVersion* index = flattenAST(cfg, node->binop.left->binop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
-            SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
-
-            IR* ir = createIR(IR_INDEX_COPY, NULL, arr, index, node->pos);
-            ir->src3 = right;
-            appendInstruction(cfg, ir);
-        } else if (node->binop.left->astType == AST_DOT) {
-            SymbolVersion* left = flattenAST(cfg, node->binop.left->binop.left, returnLabel, breakLabel, continueLabel, errorLabel, true);
-            left->lvalue = true;
-            SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
-            SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
-
-            IR* ir = createIR(IR_DOT_COPY, NULL, left, right, node->pos);
-            ir->strData = node->binop.left->binop.right->ident.data;
-            appendInstruction(cfg, ir);
-        } else if (node->binop.left->astType == AST_DEREF) {
-            SymbolVersion* left = flattenAST(cfg, node->binop.left->unop.expr, returnLabel, breakLabel, continueLabel, errorLabel, true);
-            left->lvalue = true;
-            SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
-            SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
-
-            IR* ir = createIR(IR_DEREF_COPY, NULL, left, right, node->pos);
-            appendInstruction(cfg, ir);
-        } else if (node->binop.left->astType == AST_PAREN) {
-            node->binop.left = List_Get(node->binop.left->arglist.args, 0);
-            flattenAST(cfg, node, returnLabel, breakLabel, continueLabel, errorLabel, true);
-        } else {
-            PANIC("not an l-value\n");
-        }
-        // TODO: go through each L value IR and set an L value flag
-        // TODO: generate L value IR's inline
-        return NULL;
-    }
-    case AST_NOT: {
-        SymbolVersion* expr = flattenAST(cfg, node->unop.expr, returnLabel, breakLabel, continueLabel, errorLabel, false);
-        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
-
-        IR* ir = createIR(IR_NOT, temp, expr, NULL, node->pos);
-        temp->def = ir;
-        appendInstruction(cfg, ir);
-        return temp;
-    }
-    case AST_NEG: {
-        SymbolVersion* expr = flattenAST(cfg, node->unop.expr, returnLabel, breakLabel, continueLabel, errorLabel, false);
-        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
-
-        IR* ir = createIR(IR_NEGATE, temp, expr, NULL, node->pos);
-        temp->def = ir;
-        appendInstruction(cfg, ir);
-        return temp;
-    }
-    case AST_BIT_NOT: {
-        SymbolVersion* expr = flattenAST(cfg, node->unop.expr, returnLabel, breakLabel, continueLabel, errorLabel, false);
-        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
-
-        IR* ir = createIR(IR_BIT_NOT, temp, expr, NULL, node->pos);
-        temp->def = ir;
-        appendInstruction(cfg, ir);
-        return temp;
-    }
-    case AST_ADDROF: {
-        SymbolVersion* expr = flattenAST(cfg, node->unop.expr, returnLabel, breakLabel, continueLabel, errorLabel, lvalue);
-        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
-        temp->lvalue = lvalue;
-
-        IR* ir = createIR(IR_ADDR_OF, temp, expr, NULL, node->pos);
-        temp->def = ir;
-        appendInstruction(cfg, ir);
-        return temp;
-    }
-    case AST_DEREF: {
-        SymbolVersion* expr = flattenAST(cfg, node->unop.expr, returnLabel, breakLabel, continueLabel, errorLabel, lvalue);
-        SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
-        temp->lvalue = lvalue;
-
-        IR* ir = createIR(IR_DEREF, temp, expr, NULL, node->pos);
-        temp->def = ir;
-        appendInstruction(cfg, ir);
-        return temp;
-    }
-    case AST_CAST: {
-        SymbolVersion* left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel, errorLabel, false);
-        SymbolVersion* temp = tempSymbolVersion(cfg, node->binop.right);
-
-        IR* ir = NULL;
-        if (node->binop.right->astType == AST_PARAMLIST) { // C doesn't allow explicit casts to structs, but does allow implicit copies
-            ir = createIR(IR_COPY, temp, left, NULL, node->pos);
-        } else {
-            ir = createIR_ast(IR_CONVERT, temp, left, NULL, node->binop.left->type, node->binop.right, node->pos);
-        }
-        temp->def = ir;
-        appendInstruction(cfg, ir);
-        return temp;
-    }
-    case AST_SIZEOF: {
-        SymbolVersion* temp = tempSymbolVersion(cfg, INT64_TYPE);
-
-        IR* ir = createIR_ast(IR_SIZEOF, temp, NULL, NULL, node->unop.expr, NULL, node->pos);
-        temp->def = ir;
-        appendInstruction(cfg, ir);
-        return temp;
-    }
-    case AST_ORELSE: {
-        SymbolVersion* var = tempSymbolVersion(cfg, node->type);
-        IR* phony = createIR(IR_PHONY, var, NULL, NULL, node->pos);
-        phony->listData = List_Create();
-        var->def = phony; // Done just so that it is considered live, I think. Has no real "def", since it's run-time dependent
-        appendInstruction(cfg, phony);
-
-        SymbolVersion* left = flattenAST(cfg, node->taggedBinop.left, returnLabel, breakLabel, continueLabel, errorLabel, false);
-        SymbolVersion* enumDot = tempSymbolVersion(cfg, INT64_TYPE);
-        IR* enumIR = createIR(IR_DOT, enumDot, left, NULL, node->pos);
-        enumIR->strData = "tag";
-        enumDot->def = enumIR;
-        appendInstruction(cfg, enumIR);
-
-        SymbolVersion* tag = tempSymbolVersion(cfg, INT64_TYPE);
-        IR* tagIR = createIR_int(IR_LOAD_INT, tag, NULL, NULL, node->taggedBinop.tag, node->pos);
-        tag->def = tagIR;
-        appendInstruction(cfg, tagIR);
-
-        SymbolVersion* condition = tempSymbolVersion(cfg, BOOL_TYPE);
-        IR* conditionIR = createIR(IR_NEQ, condition, enumDot, tag, node->pos);
-        condition->def = conditionIR;
-        appendInstruction(cfg, conditionIR);
-
-        IR* elseLabel = createIR_label(node->pos);
-        IR* endLabel = createIR_label(node->pos);
-
-        appendInstruction(cfg, createIR_branch(IR_BRANCH_IF_FALSE, NULL, condition, NULL, elseLabel, node->pos));
-        SymbolVersion* somethingDot = tempSymbolVersion(cfg, INT64_TYPE);
-        IR* somethingIR = createIR(IR_DOT, somethingDot, left, NULL, node->pos);
-        somethingIR->strData = "something";
-        somethingDot->def = somethingIR;
-        appendInstruction(cfg, somethingIR);
-
-        IR* copy = createIR(IR_COPY, var, somethingDot, NULL, node->pos);
-        List_Append(phony->listData, copy);
-        appendInstruction(cfg, copy);
-
-        appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, endLabel, node->pos));
-        appendInstruction(cfg, elseLabel);
-        SymbolVersion* elseSymbver = flattenAST(cfg, node->taggedBinop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
-        if (elseSymbver) {
-            IR* copy = createIR(IR_COPY, var, elseSymbver, NULL, node->pos);
-            List_Append(phony->listData, copy);
-            appendInstruction(cfg, copy);
-        }
-        appendInstruction(cfg, endLabel);
-        return var;
-    }
-    case AST_CATCH: {
-        SymbolVersion* var = tempSymbolVersion(cfg, node->type);
-        IR* phony = createIR(IR_PHONY, var, NULL, NULL, node->pos);
-        phony->listData = List_Create();
-        var->def = phony; // Done just so that it is considered live, I think. Has no real "def", since it's run-time dependent
-        appendInstruction(cfg, phony);
-
-        SymbolVersion* left = flattenAST(cfg, node->taggedBinop.left, returnLabel, breakLabel, continueLabel, errorLabel, false);
-        SymbolVersion* enumDot = tempSymbolVersion(cfg, INT64_TYPE);
-        IR* enumIR = createIR(IR_DOT, enumDot, left, NULL, node->pos);
-        enumIR->strData = "tag";
-        enumDot->def = enumIR;
-        appendInstruction(cfg, enumIR);
-
-        SymbolVersion* tag = tempSymbolVersion(cfg, INT64_TYPE);
-        IR* tagIR = createIR_int(IR_LOAD_INT, tag, NULL, NULL, node->taggedBinop.tag, node->pos);
-        tag->def = tagIR;
-        appendInstruction(cfg, tagIR);
-
-        SymbolVersion* condition = tempSymbolVersion(cfg, BOOL_TYPE);
-        IR* conditionIR = createIR(IR_EQ, condition, enumDot, tag, node->pos);
-        condition->def = conditionIR;
-        appendInstruction(cfg, conditionIR);
-
-        IR* elseLabel = createIR_label(node->pos);
-        IR* endLabel = createIR_label(node->pos);
-
-        appendInstruction(cfg, createIR_branch(IR_BRANCH_IF_FALSE, NULL, condition, NULL, elseLabel, node->pos));
-        SymbolVersion* somethingDot = tempSymbolVersion(cfg, INT64_TYPE);
-        IR* somethingIR = createIR(IR_DOT, somethingDot, left, NULL, node->pos);
-        somethingIR->strData = "success";
-        somethingDot->def = somethingIR;
-        appendInstruction(cfg, somethingIR);
-
-        IR* copy = createIR(IR_COPY, var, somethingDot, NULL, node->pos);
-        List_Append(phony->listData, copy);
-        appendInstruction(cfg, copy);
-
-        appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, endLabel, node->pos));
-        appendInstruction(cfg, elseLabel);
-        SymbolVersion* elseSymbver = flattenAST(cfg, node->taggedBinop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
-        if (elseSymbver) {
-            IR* copy = createIR(IR_COPY, var, elseSymbver, NULL, node->pos);
-            List_Append(phony->listData, copy);
-            appendInstruction(cfg, copy);
-        }
-        appendInstruction(cfg, endLabel);
-        return var;
-    }
-    case AST_TRY: {
-        SymbolVersion* var = tempSymbolVersion(cfg, node->type);
-        IR* phony = createIR(IR_PHONY, var, NULL, NULL, node->pos);
-        phony->listData = List_Create();
-        var->def = phony; // Done just so that it is considered live, I think. Has no real "def", since it's run-time dependent
-        appendInstruction(cfg, phony);
-
-        // Get tag of expr
-        SymbolVersion* left = flattenAST(cfg, node->taggedUnop.expr, returnLabel, breakLabel, continueLabel, errorLabel, false);
-        SymbolVersion* enumDot = tempSymbolVersion(cfg, INT64_TYPE);
-        IR* enumIR = createIR(IR_DOT, enumDot, left, NULL, node->pos);
-        enumIR->strData = "tag";
-        enumDot->def = enumIR;
-        appendInstruction(cfg, enumIR);
-
-        // Get tag of success type
-        SymbolVersion* tag = tempSymbolVersion(cfg, INT64_TYPE);
-        IR* tagIR = createIR_int(IR_LOAD_INT, tag, NULL, NULL, node->taggedUnop.tag, node->pos);
-        tag->def = tagIR;
-        appendInstruction(cfg, tagIR);
-
-        // Compare success tag with expr tag
-        SymbolVersion* condition = tempSymbolVersion(cfg, BOOL_TYPE);
-        IR* conditionIR = createIR(IR_EQ, condition, enumDot, tag, node->pos);
-        condition->def = conditionIR;
-        appendInstruction(cfg, conditionIR);
-
-        IR* elseLabel = createIR_label(node->pos);
-        IR* endLabel = createIR_label(node->pos);
-
-        // Success branch
-        appendInstruction(cfg, createIR_branch(IR_BRANCH_IF_FALSE, NULL, condition, NULL, elseLabel, node->pos));
-        SymbolVersion* somethingDot = tempSymbolVersion(cfg, INT64_TYPE);
-        IR* somethingIR = createIR(IR_DOT, somethingDot, left, NULL, node->pos);
-        somethingIR->strData = "success";
-        somethingDot->def = somethingIR;
-        appendInstruction(cfg, somethingIR);
-
-        IR* copy = createIR(IR_COPY, var, somethingDot, NULL, node->pos);
-        List_Append(phony->listData, copy);
-        appendInstruction(cfg, copy);
-        appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, endLabel, node->pos));
-
-        // Error branch, set retval to error message
-        appendInstruction(cfg, elseLabel);
-        SymbolVersion* returnSymbolVersion = unversionedSymbolVersion(cfg, cfg->returnSymbol, cfg->symbol->type->function.codomainType);
-        appendInstruction(cfg, createIR_ast(IR_CONVERT, returnSymbolVersion, left, NULL, NULL, returnSymbolVersion->type, node->pos)); // Do this rather than a simple copy, may be !() error type, which must be converted
-        appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, errorLabel, node->pos));
-        appendInstruction(cfg, endLabel);
-        return var;
-    }
-    case AST_NEW: {
-        SymbolVersion* addr = tempSymbolVersion(cfg, node->type);
-        SymbolVersion* init = NULL;
-
-        if (node->binop.left->astType == AST_ARRAY) {
-            // List of array type length symbol versions flattened from array type
-            List* lengthCodeSymbvers = List_Create();
-            ASTNode* arrType = node->binop.left;
-            while (arrType->astType == AST_ARRAY) {
-                SymbolVersion* lengthCodeSymbver = flattenAST(cfg, getArrayLengthAST(arrType), NULL, NULL, NULL, NULL, false);
-                List_Append(lengthCodeSymbvers, lengthCodeSymbver);
-                arrType = getArrayDataType(arrType);
-            }
-
-            IR* ir = NULL;
-            if (node->binop.right->astType != AST_UNDEF) {
-                init = flattenAST(cfg, node->binop.right, NULL, NULL, NULL, NULL, false);
-                ir = createIR(IR_NEW_ARR, addr, NULL, init, node->pos);
-            } else {
-                init = defaultValue(cfg, arrType);
-                ir = createIR(IR_NEW_ARR, addr, init, NULL, node->pos);
-            }
-            addr->def = ir;
-            ir->listData = lengthCodeSymbvers;
-            appendInstruction(cfg, ir);
-        } else {
-            if (node->binop.right->astType != AST_UNDEF) {
-                init = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
-            } else {
-                init = defaultValue(cfg, node->binop.left);
-            }
-            IR* ir = createIR_ast(IR_NEW, addr, init, NULL, node->binop.left, node->binop.right, node->pos);
-            addr->def = ir;
-            appendInstruction(cfg, ir);
-        }
-        return addr;
-    }
     case AST_UNREACHABLE: {
-        if (isDebug) {
+        if (program->isDebug) {
             IR* error = createIR(IR_ERROR, NULL, NULL, NULL, node->pos);
             error->strData = "unreachable";
             appendInstruction(cfg, error);
         }
         return NULL;
     }
-    case AST_FREE: {
-        SymbolVersion* expr = NULL;
-
-        if (node->unop.expr->type->astType == AST_ARRAY) {
-            SymbolVersion* left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel, errorLabel, false);
-            expr = tempSymbolVersion(cfg, getArrayDataTypeAddr(node->unop.expr->type));
-
-            IR* dotIR = createIR(IR_DOT, expr, left, NULL, node->pos);
-            dotIR->strData = "data";
-            expr->def = dotIR;
-            appendInstruction(cfg, dotIR);
-        } else {
-            expr = flattenAST(cfg, node->unop.expr, returnLabel, breakLabel, continueLabel, errorLabel, false);
-        }
-
-        IR* ir = createIR(IR_FREE, NULL, expr, NULL, node->pos);
-        appendInstruction(cfg, ir);
+    case AST_DEFER: {
         return NULL;
     }
-    case AST_UNDEF: {
+    case AST_ERRDEFER: {
         return NULL;
     }
     default: {
@@ -1910,7 +1922,23 @@ SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* breakLab
     }
 }
 
-BasicBlock* convertToBasicBlock(CFG* cfg, IR* ir, BasicBlock* predecessor)
+// Creates and adds a new basic block to the CFG
+static BasicBlock* createBasicBlock(CFG* cfg)
+{
+    static int blockID = 0;
+    BasicBlock* retval = calloc(sizeof(BasicBlock), 1);
+    ASSERT(retval != NULL);
+    retval->id = blockID;
+    retval->parameters = List_Create();
+    retval->nextArguments = List_Create();
+    retval->branchArguments = List_Create();
+    blockID++;
+    List_Append(cfg->basicBlocks, retval);
+    return retval;
+}
+
+// Converts a CFGs list of IR instructions into a basic block graph
+static BasicBlock* convertToBasicBlock(CFG* cfg, IR* ir, BasicBlock* predecessor)
 {
     BasicBlock* retval;
     int instruction = 0;
@@ -1967,8 +1995,9 @@ BasicBlock* convertToBasicBlock(CFG* cfg, IR* ir, BasicBlock* predecessor)
     return retval;
 }
 
-// Cannot do this during basic block conversion because the ir.next pointers are needed
-void removeBasicBlockInstructions(CFG* cfg)
+// Removes the last IR instruction (always either NULL, or of ir type IR_JUMP or IR_BRANCH_IF_FALSE) from a basic blocks list of IR instruction
+//! Cannot do this during basic block conversion because the ir.next pointers are needed
+static void removeBasicBlockLastInstruction(CFG* cfg)
 {
     forall(elem, cfg->basicBlocks)
     {
@@ -1985,7 +2014,8 @@ void removeBasicBlockInstructions(CFG* cfg)
     }
 }
 
-bool copyAndConstantPropagation(CFG* cfg)
+// Performs copy propagation and constant propagation onto a CFG
+static bool copyAndConstantPropagation(CFG* cfg)
 {
     bool retval = false;
     forall(elem, cfg->basicBlocks)
@@ -2010,7 +2040,7 @@ bool copyAndConstantPropagation(CFG* cfg)
                 // Real constant propagation
                 else if (def->src1->def && def->src1->def->irType == IR_LOAD_REAL && !def->src1->symbol->isVolatile) {
                     def->irType = IR_LOAD_REAL;
-                    def->doubleData = def->src1->def->doubleData;
+                    def->realData = def->src1->def->realData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2043,12 +2073,12 @@ bool copyAndConstantPropagation(CFG* cfg)
                 break;
             case IR_INDEX:
                 if (def->src2->def && def->src2->def->irType == IR_LOAD_INT && def->src2->def->intData < 0) {
-                    error(def->pos, "array index is negative");
-                } else if (def->src2->def && def->src2->def->irType == IR_LOAD_INT && getArrayLength(def->src1->type) != -1 && def->src2->def->intData >= getArrayLength(def->src1->type)) {
-                    error(def->pos, "array index greater than array length");
-                } else if (def->src1->def && def->src2 && def->src1->def->irType == IR_LOAD_ARRAY_LITERAL && def->src2->def->irType == IR_LOAD_INT && List_Get(def->src1->def->listData, def->src2->def->intData) != NULL) {
+                    error(def->pos, "negative array index");
+                } else if (def->src2->def && def->src2->def->irType == IR_LOAD_INT && AST_GetArrayLength(def->src1->type) != -1 && def->src2->def->intData >= AST_GetArrayLength(def->src1->type)) {
+                    error(def->pos, "array index exceeds array length");
+                } else if (def->src1->def && def->src2 && def->src1->def->irType == IR_LOAD_ARRAY_LITERAL && def->src2->def->irType == IR_LOAD_INT && List_Get(def->src1->def->listData, (int)def->src2->def->intData) != NULL) {
                     def->irType = IR_COPY;
-                    def->src1 = List_Get(def->src1->def->listData, def->src2->def->intData);
+                    def->src1 = List_Get(def->src1->def->listData, (int)def->src2->def->intData);
                     def->src2 = NULL;
                     retval = true;
                 }
@@ -2072,7 +2102,7 @@ bool copyAndConstantPropagation(CFG* cfg)
                 // Known real value
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_REAL && def->src2->def->irType == IR_LOAD_REAL) {
                     def->irType = IR_LOAD_INT;
-                    def->intData = def->src1->def->doubleData == def->src2->def->doubleData;
+                    def->intData = def->src1->def->realData == def->src2->def->realData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2080,7 +2110,7 @@ bool copyAndConstantPropagation(CFG* cfg)
                 // Known int/real value
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_INT && def->src2->def->irType == IR_LOAD_REAL) {
                     def->irType = IR_LOAD_INT;
-                    def->doubleData = def->src1->def->intData == def->src2->def->doubleData;
+                    def->realData = def->src1->def->intData == def->src2->def->realData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2088,7 +2118,7 @@ bool copyAndConstantPropagation(CFG* cfg)
                 // Known real/real value
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_REAL && def->src2->def->irType == IR_LOAD_INT) {
                     def->irType = IR_LOAD_INT;
-                    def->intData = def->src1->def->doubleData == def->src2->def->intData;
+                    def->intData = def->src1->def->realData == def->src2->def->intData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2106,7 +2136,7 @@ bool copyAndConstantPropagation(CFG* cfg)
                 // Known real value
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_REAL && def->src2->def->irType == IR_LOAD_REAL) {
                     def->irType = IR_LOAD_INT;
-                    def->intData = def->src1->def->doubleData != def->src2->def->doubleData;
+                    def->intData = def->src1->def->realData != def->src2->def->realData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2114,7 +2144,7 @@ bool copyAndConstantPropagation(CFG* cfg)
                 // Known int/real value
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_INT && def->src2->def->irType == IR_LOAD_REAL) {
                     def->irType = IR_LOAD_INT;
-                    def->doubleData = def->src1->def->intData != def->src2->def->doubleData;
+                    def->realData = def->src1->def->intData != def->src2->def->realData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2122,7 +2152,7 @@ bool copyAndConstantPropagation(CFG* cfg)
                 // Known real/real value
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_REAL && def->src2->def->irType == IR_LOAD_INT) {
                     def->irType = IR_LOAD_INT;
-                    def->intData = def->src1->def->doubleData != def->src2->def->intData;
+                    def->intData = def->src1->def->realData != def->src2->def->intData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2140,7 +2170,7 @@ bool copyAndConstantPropagation(CFG* cfg)
                 // Known real value
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_REAL && def->src2->def->irType == IR_LOAD_REAL) {
                     def->irType = IR_LOAD_INT;
-                    def->intData = def->src1->def->doubleData > def->src2->def->doubleData;
+                    def->intData = def->src1->def->realData > def->src2->def->realData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2148,7 +2178,7 @@ bool copyAndConstantPropagation(CFG* cfg)
                 // Known int/real value
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_INT && def->src2->def->irType == IR_LOAD_REAL) {
                     def->irType = IR_LOAD_INT;
-                    def->doubleData = def->src1->def->intData > def->src2->def->doubleData;
+                    def->realData = def->src1->def->intData > def->src2->def->realData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2156,7 +2186,7 @@ bool copyAndConstantPropagation(CFG* cfg)
                 // Known real/real value
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_REAL && def->src2->def->irType == IR_LOAD_INT) {
                     def->irType = IR_LOAD_INT;
-                    def->intData = def->src1->def->doubleData > def->src2->def->intData;
+                    def->intData = def->src1->def->realData > def->src2->def->intData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2174,7 +2204,7 @@ bool copyAndConstantPropagation(CFG* cfg)
                 // Known real value
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_REAL && def->src2->def->irType == IR_LOAD_REAL) {
                     def->irType = IR_LOAD_INT;
-                    def->intData = def->src1->def->doubleData < def->src2->def->doubleData;
+                    def->intData = def->src1->def->realData < def->src2->def->realData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2182,7 +2212,7 @@ bool copyAndConstantPropagation(CFG* cfg)
                 // Known int/real value
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_INT && def->src2->def->irType == IR_LOAD_REAL) {
                     def->irType = IR_LOAD_INT;
-                    def->doubleData = def->src1->def->intData < def->src2->def->doubleData;
+                    def->realData = def->src1->def->intData < def->src2->def->realData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2190,7 +2220,7 @@ bool copyAndConstantPropagation(CFG* cfg)
                 // Known real/real value
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_REAL && def->src2->def->irType == IR_LOAD_INT) {
                     def->irType = IR_LOAD_INT;
-                    def->intData = def->src1->def->doubleData < def->src2->def->intData;
+                    def->intData = def->src1->def->realData < def->src2->def->intData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2208,7 +2238,7 @@ bool copyAndConstantPropagation(CFG* cfg)
                 // Known real value
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_REAL && def->src2->def->irType == IR_LOAD_REAL) {
                     def->irType = IR_LOAD_INT;
-                    def->intData = def->src1->def->doubleData >= def->src2->def->doubleData;
+                    def->intData = def->src1->def->realData >= def->src2->def->realData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2216,7 +2246,7 @@ bool copyAndConstantPropagation(CFG* cfg)
                 // Known int/real value
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_INT && def->src2->def->irType == IR_LOAD_REAL) {
                     def->irType = IR_LOAD_INT;
-                    def->doubleData = def->src1->def->intData >= def->src2->def->doubleData;
+                    def->realData = def->src1->def->intData >= def->src2->def->realData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2224,7 +2254,7 @@ bool copyAndConstantPropagation(CFG* cfg)
                 // Known real/real value
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_REAL && def->src2->def->irType == IR_LOAD_INT) {
                     def->irType = IR_LOAD_INT;
-                    def->intData = def->src1->def->doubleData >= def->src2->def->intData;
+                    def->intData = def->src1->def->realData >= def->src2->def->intData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2242,7 +2272,7 @@ bool copyAndConstantPropagation(CFG* cfg)
                 // Known real value
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_REAL && def->src2->def->irType == IR_LOAD_REAL) {
                     def->irType = IR_LOAD_INT;
-                    def->intData = def->src1->def->doubleData <= def->src2->def->doubleData;
+                    def->intData = def->src1->def->realData <= def->src2->def->realData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2250,7 +2280,7 @@ bool copyAndConstantPropagation(CFG* cfg)
                 // Known int/real value
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_INT && def->src2->def->irType == IR_LOAD_REAL) {
                     def->irType = IR_LOAD_INT;
-                    def->doubleData = def->src1->def->intData <= def->src2->def->doubleData;
+                    def->realData = def->src1->def->intData <= def->src2->def->realData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2258,7 +2288,7 @@ bool copyAndConstantPropagation(CFG* cfg)
                 // Known real/real value
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_REAL && def->src2->def->irType == IR_LOAD_INT) {
                     def->irType = IR_LOAD_INT;
-                    def->intData = def->src1->def->doubleData <= def->src2->def->intData;
+                    def->intData = def->src1->def->realData <= def->src2->def->intData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2276,7 +2306,7 @@ bool copyAndConstantPropagation(CFG* cfg)
                 // Known real value
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_REAL && def->src2->def->irType == IR_LOAD_REAL) {
                     def->irType = IR_LOAD_REAL;
-                    def->doubleData = def->src1->def->doubleData + def->src2->def->doubleData;
+                    def->realData = def->src1->def->realData + def->src2->def->realData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2284,7 +2314,7 @@ bool copyAndConstantPropagation(CFG* cfg)
                 // Known int/real value
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_INT && def->src2->def->irType == IR_LOAD_REAL) {
                     def->irType = IR_LOAD_REAL;
-                    def->doubleData = def->src1->def->intData + def->src2->def->doubleData;
+                    def->realData = def->src1->def->intData + def->src2->def->realData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2292,7 +2322,7 @@ bool copyAndConstantPropagation(CFG* cfg)
                 // Known real/real value
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_REAL && def->src2->def->irType == IR_LOAD_INT) {
                     def->irType = IR_LOAD_REAL;
-                    def->doubleData = def->src1->def->doubleData + def->src2->def->intData;
+                    def->realData = def->src1->def->realData + def->src2->def->intData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2323,7 +2353,7 @@ bool copyAndConstantPropagation(CFG* cfg)
                 // Known real value
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_REAL && def->src2->def->irType == IR_LOAD_REAL) {
                     def->irType = IR_LOAD_REAL;
-                    def->doubleData = def->src1->def->doubleData - def->src2->def->doubleData;
+                    def->realData = def->src1->def->realData - def->src2->def->realData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2331,7 +2361,7 @@ bool copyAndConstantPropagation(CFG* cfg)
                 // Known int/real value
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_INT && def->src2->def->irType == IR_LOAD_REAL) {
                     def->irType = IR_LOAD_REAL;
-                    def->doubleData = def->src1->def->intData - def->src2->def->doubleData;
+                    def->realData = def->src1->def->intData - def->src2->def->realData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2339,7 +2369,7 @@ bool copyAndConstantPropagation(CFG* cfg)
                 // Known real/real value
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_REAL && def->src2->def->irType == IR_LOAD_INT) {
                     def->irType = IR_LOAD_REAL;
-                    def->doubleData = def->src1->def->doubleData - def->src2->def->intData;
+                    def->realData = def->src1->def->realData - def->src2->def->intData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2370,7 +2400,7 @@ bool copyAndConstantPropagation(CFG* cfg)
                 // Known real value
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_REAL && def->src2->def->irType == IR_LOAD_REAL) {
                     def->irType = IR_LOAD_REAL;
-                    def->doubleData = def->src1->def->doubleData * def->src2->def->doubleData;
+                    def->realData = def->src1->def->realData * def->src2->def->realData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2378,7 +2408,7 @@ bool copyAndConstantPropagation(CFG* cfg)
                 // Known int/real value
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_INT && def->src2->def->irType == IR_LOAD_REAL) {
                     def->irType = IR_LOAD_REAL;
-                    def->doubleData = def->src1->def->intData * def->src2->def->doubleData;
+                    def->realData = def->src1->def->intData * def->src2->def->realData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2386,7 +2416,7 @@ bool copyAndConstantPropagation(CFG* cfg)
                 // Known real/real value
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_REAL && def->src2->def->irType == IR_LOAD_INT) {
                     def->irType = IR_LOAD_REAL;
-                    def->doubleData = def->src1->def->doubleData * def->src2->def->intData;
+                    def->realData = def->src1->def->realData * def->src2->def->intData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2427,7 +2457,7 @@ bool copyAndConstantPropagation(CFG* cfg)
                     error(def->pos, "division by zero");
                 }
                 // Cannot divide by real zero
-                else if (def->src2->def && def->src2->def->irType == IR_LOAD_REAL && def->src2->def->doubleData == 0.0) {
+                else if (def->src2->def && def->src2->def->irType == IR_LOAD_REAL && def->src2->def->realData == 0.0) {
                     error(def->pos, "division by zero");
                 }
                 // Known int value
@@ -2441,7 +2471,7 @@ bool copyAndConstantPropagation(CFG* cfg)
                 // Known real value
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_REAL && def->src2->def->irType == IR_LOAD_REAL) {
                     def->irType = IR_LOAD_REAL;
-                    def->doubleData = def->src1->def->doubleData / def->src2->def->doubleData;
+                    def->realData = def->src1->def->realData / def->src2->def->realData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2449,7 +2479,7 @@ bool copyAndConstantPropagation(CFG* cfg)
                 // Known int/real value
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_INT && def->src2->def->irType == IR_LOAD_REAL) {
                     def->irType = IR_LOAD_REAL;
-                    def->doubleData = def->src1->def->intData / def->src2->def->doubleData;
+                    def->realData = def->src1->def->intData / def->src2->def->realData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2457,7 +2487,7 @@ bool copyAndConstantPropagation(CFG* cfg)
                 // Known real/real value
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_REAL && def->src2->def->irType == IR_LOAD_INT) {
                     def->irType = IR_LOAD_REAL;
-                    def->doubleData = def->src1->def->doubleData / def->src2->def->intData;
+                    def->realData = def->src1->def->realData / def->src2->def->intData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2601,7 +2631,7 @@ bool copyAndConstantPropagation(CFG* cfg)
                     retval = true;
                 }
                 break;
-            case IR_NEGATE:
+            case IR_NEG:
                 // Known int value
                 if (def->src1->def && def->src1->def->irType == IR_LOAD_INT) {
                     def->irType = IR_LOAD_INT;
@@ -2613,7 +2643,7 @@ bool copyAndConstantPropagation(CFG* cfg)
                 // Known real value
                 else if (def->src1->def && def->src1->def->irType == IR_LOAD_REAL) {
                     def->irType = IR_LOAD_INT;
-                    def->doubleData = -def->src1->def->doubleData;
+                    def->realData = -def->src1->def->realData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2666,7 +2696,57 @@ bool copyAndConstantPropagation(CFG* cfg)
     return retval;
 }
 
-bool addArgs(CFG* cfg, BasicBlock* bb)
+// Finds the first symbol-version defined by an IR instruction, from a starting IR instruction to excluding a stopping IR (which may be NULL for the entire linked-list), that has the same symbol as a given symbol-version
+static SymbolVersion* findVersion(SymbolVersion* symbver, IR* ir, IR* stop)
+{
+    SymbolVersion* retval = symbver;
+    for (; ir != NULL && ir != stop; ir = ir->next) {
+        if (ir->dest != NULL && ir->dest->symbol == symbver->symbol) {
+            retval = ir->dest;
+        }
+    }
+    return retval;
+}
+
+// Returns the symbol-version that has the same symbol as a given symbol-version in a set of symbol-versions, or NULL if not found
+static SymbolVersion* findSymbolVersionSet(List* set, SymbolVersion* symbver)
+{
+    forall(elem, set)
+    {
+        SymbolVersion* var = elem->data;
+        if (var->symbol == symbver->symbol) {
+            return var;
+        }
+    }
+    return NULL;
+}
+
+// Adds a symbol-version to a set of symbol-versions so that no two symbol-version have the same symbol. Returns true when added, else false
+static bool putSymbolVersionSet(List* set, SymbolVersion* symbver)
+{
+    forall(elem, set)
+    {
+        SymbolVersion* var = elem->data;
+        if (var->symbol == symbver->symbol) {
+            return false;
+        }
+    }
+    List_Append(set, symbver);
+    return true;
+}
+
+// Sets the 'visited' flags for all basic blocks in a CFG to false
+static void clearBBVisitedFlags(CFG* cfg)
+{
+    forall(elem, cfg->basicBlocks)
+    {
+        BasicBlock* bb = elem->data;
+        bb->visited = false;
+    }
+}
+
+// Adds children basic blocks phi parameters to this basic block's arguments, requests as phi parameter if undefined in this block. Returns whether there was any changes.
+static bool childrenArgPropagation(CFG* cfg, BasicBlock* bb)
 {
     bool retval = false;
     if (bb->visited) {
@@ -2675,7 +2755,7 @@ bool addArgs(CFG* cfg, BasicBlock* bb)
     bb->visited = true;
 
     if (bb->next) {
-        retval |= addArgs(cfg, bb->next);
+        retval |= childrenArgPropagation(cfg, bb->next);
         forall(elem, bb->next->parameters)
         {
             SymbolVersion* param = elem->data; // parameter symbol for next block
@@ -2697,7 +2777,7 @@ bool addArgs(CFG* cfg, BasicBlock* bb)
     }
 
     if (bb->branch && bb->hasBranch) {
-        retval |= addArgs(cfg, bb->branch);
+        retval |= childrenArgPropagation(cfg, bb->branch);
         forall(elem, bb->branch->parameters)
         {
             SymbolVersion* param = elem->data;
@@ -2721,7 +2801,8 @@ bool addArgs(CFG* cfg, BasicBlock* bb)
     return retval;
 }
 
-void calculateArgs(CFG* cfg)
+// Determines which symbol-versions need to be requested as phi parameters, and which need to be passed to children basic blocks as phi arguments
+static void calculatePhiParamsAndArgs(CFG* cfg)
 {
     // Clear arguments
     forall(elem, cfg->basicBlocks)
@@ -2755,9 +2836,13 @@ void calculateArgs(CFG* cfg)
                 }
             }
 
+            // For all symbol-versions in IRs with lists of symbol-versions, if undefined in this block, request as parameter
             if (ir->irType == IR_CALL || ir->irType == IR_LOAD_ARGLIST || ir->irType == IR_LOAD_ARRAY_LITERAL || ir->irType == IR_NEW_ARR) {
                 forall(elem, ir->listData)
                 {
+                    if (!elem->data) {
+                        PANIC("WHOA!\n");
+                    }
                     if (((SymbolVersion*)elem->data)->symbol != cfg->tempSymbol && ((SymbolVersion*)elem->data)->version == -1) {
                         elem->data = findVersion(((SymbolVersion*)elem->data), bb->entry, ir);
                         if (((SymbolVersion*)elem->data)->version == -1) {
@@ -2777,7 +2862,7 @@ void calculateArgs(CFG* cfg)
     }
 
     // Add function parameters as basic block symbol version parameters
-    forall(elem, cfg->symbol->type->function.domainType->paramlist.defines)
+    forall(elem, cfg->symbol->type->function.domainType->product.defines)
     {
         ASTNode* define = elem->data;
         SymbolNode* param = define->define.symbol;
@@ -2788,10 +2873,11 @@ void calculateArgs(CFG* cfg)
     // Find phi arguments
     do {
         clearBBVisitedFlags(cfg);
-    } while (addArgs(cfg, cfg->blockGraph));
+    } while (childrenArgPropagation(cfg, cfg->blockGraph));
 }
 
-void findUnusedSymbolVersions(CFG* cfg)
+// Marks symbol-versions which are defined but never used as unused
+static void markUnusedSymbolVersions(CFG* cfg)
 {
     // Find out which symbols are used
     forall(elem, cfg->basicBlocks)
@@ -2846,40 +2932,38 @@ void findUnusedSymbolVersions(CFG* cfg)
     }
 }
 
-void calculateIncomingNode(BasicBlock* bb)
+// Traverses graph to find predecessor number
+static void _countPredecessors(BasicBlock* bb)
 {
-    bb->incoming++;
+    bb->numberPredecessors++;
     if (bb->visited) {
         return;
     }
     bb->visited = true;
     if (bb->next) {
-        calculateIncomingNode(bb->next);
+        _countPredecessors(bb->next);
     }
     if (bb->hasBranch && bb->branch) {
-        calculateIncomingNode(bb->branch);
+        _countPredecessors(bb->branch);
     }
 }
 
-// Basic blocks with only one incoming node may be adopted into the node that calls them
-void calculateIncomingNodes(CFG* cfg)
+// Resets all basic blocks predecessor number to 0, then counts the number of predecessors each basic block has in the basic block graph
+static void countPredecessors(CFG* cfg)
 {
     // Clear incoming counters
     forall(elem, cfg->basicBlocks)
     {
         BasicBlock* bb = elem->data;
-        bb->incoming = 0;
+        bb->numberPredecessors = 0;
     }
 
     clearBBVisitedFlags(cfg);
-    calculateIncomingNode(cfg->blockGraph);
+    _countPredecessors(cfg->blockGraph);
 }
 
-/*
-Volatile symbols may change unpredictably throughout the program. Some optimizations don't work on volatile symbols.
-Find those symbols that are volatile.
-*/
-void calculateVolatility(CFG* cfg)
+// Marks symbol-versions which may change unpredictably
+static void markVolatile(CFG* cfg)
 {
     // Clear volatility flag
     forall(elem, cfg->basicBlocks)
@@ -2904,24 +2988,36 @@ void calculateVolatility(CFG* cfg)
     }
 }
 
-// Removes code that has no effect
-bool deadCode(CFG* cfg)
+// Removes a basic block from a CFG, wipeIR determines if all IRs in the basic blocks list get marked as removed as well
+static void removeBasicBlock(CFG* cfg, BasicBlock* bb, bool wipeIR)
+{
+    //printf("removed block %d\n", bb->id);
+    List_Remove(cfg->basicBlocks, bb);
+    if (wipeIR) {
+        for (IR* ir = bb->entry; ir != NULL; ir = ir->next) {
+            ir->removed = true;
+        }
+    }
+}
+
+// Performs dead-code optimization to remove code that has no effect
+static bool deadCode(CFG* cfg)
 {
     bool retval = false;
     if (!cfg->blockGraph) {
         return retval;
     }
 
-    calculateArgs(cfg); // Needs to be recalculated each time, because args need to be counted as 'used'. So need to find what args are
-    findUnusedSymbolVersions(cfg);
-    calculateIncomingNodes(cfg);
-    calculateVolatility(cfg);
+    calculatePhiParamsAndArgs(cfg); // Needs to be recalculated each time, because args need to be counted as 'used'. So need to find what args are
+    markUnusedSymbolVersions(cfg);
+    countPredecessors(cfg);
+    markVolatile(cfg);
 
     // Remove basic blocks with no incoming basic blocks from the list of basic blocks
     forall(elem, cfg->basicBlocks)
     {
         BasicBlock* bb = elem->data;
-        if (bb->incoming == 0) {
+        if (bb->numberPredecessors == 0) {
             removeBasicBlock(cfg, bb, true);
             LOG("remove from L%d block list, no incoming basic blocks\n", bb->id);
             return true;
@@ -2947,7 +3043,7 @@ bool deadCode(CFG* cfg)
         }
 
         // Adopt basic blocks with only one incoming block
-        if (bb->next && bb->entry && !bb->hasBranch && bb->next->incoming == 1) {
+        if (bb->next && bb->entry && !bb->hasBranch && bb->next->numberPredecessors == 1) {
             IR* end = getTail(bb->entry);
             LOG("block adoption of L%d\n", bb->next->id);
 
@@ -3033,10 +3129,11 @@ bool deadCode(CFG* cfg)
     return retval;
 }
 
-List* createCFG(SymbolNode* functionSymbol, CFG* caller)
+// Creates and optimizes a control-flow-graph node for a function symbol
+CFG* IR_CreateCFG(struct symbolNode* functionSymbol, CFG* caller)
 {
-    if (functionSymbol->ir || functionSymbol->isExtern) {
-        return;
+    if (functionSymbol->cfg || functionSymbol->isExtern) {
+        return NULL;
     }
     CFG* cfg = calloc(sizeof(CFG), 1);
     if (!cfg) {
@@ -3051,7 +3148,7 @@ List* createCFG(SymbolNode* functionSymbol, CFG* caller)
     cfg->basicBlocks = List_Create();
     cfg->leaves = List_Create();
 
-    functionSymbol->ir = cfg;
+    functionSymbol->cfg = cfg;
     if (caller && !List_Contains(caller->leaves, cfg)) {
         List_Append(caller->leaves, cfg);
     }
@@ -3083,18 +3180,18 @@ List* createCFG(SymbolNode* functionSymbol, CFG* caller)
         appendInstruction(cfg, createIR(IR_COPY, returnVersion, eval, NULL, invalid_pos));
         appendInstruction(cfg, createIR_branch(IR_JUMP, NULL, NULL, NULL, NULL, invalid_pos));
     }
-    printf("\n%s\n", functionSymbol->name);
-    printInstructionList(cfg);
+    //printf("\n%s\n", functionSymbol->name);
+    //printInstructionList(cfg);
 
     // Convert quadruple list to CFG of basic blocks, find versions!
     cfg->blockGraph = convertToBasicBlock(cfg, cfg->head, NULL);
-    removeBasicBlockInstructions(cfg);
+    removeBasicBlockLastInstruction(cfg);
 
     // Optimize
     do {
-        printf("\n\n%s\n", cfg->symbol->name);
-        clearBBVisitedFlags(cfg);
-        printBlockGraph(cfg->blockGraph);
+        //printf("\n\n%s\n", cfg->symbol->name);
+        //clearBBVisitedFlags(cfg);
+        //printBlockGraph(cfg->blockGraph);
     } while (copyAndConstantPropagation(cfg) | deadCode(cfg));
 
     // Parameters and the such are kept
@@ -3126,19 +3223,19 @@ List* createCFG(SymbolNode* functionSymbol, CFG* caller)
         for (IR* ir = bb->entry; ir != NULL; ir = ir->next) {
             if (ir->src1 && ir->src1->version == -1) {
                 ir->src1 = findSymbolVersionSet(bb->parameters, ir->src1);
-                if (ir->src1->version == -1) {
+                if (!ir->src1 || ir->src1->version == -1) {
                     PANIC("AH\n");
                 }
             }
             if (ir->src2 && ir->src2->version == -1) {
                 ir->src2 = findSymbolVersionSet(bb->parameters, ir->src2);
-                if (ir->src2->version == -1) {
+                if (!ir->src2 || ir->src2->version == -1) {
                     PANIC("AH\n");
                 }
             }
             if (ir->src3 && ir->src3->version == -1) {
                 ir->src3 = findSymbolVersionSet(bb->parameters, ir->src3);
-                if (ir->src3->version == -1) {
+                if (!ir->src3 || ir->src3->version == -1) {
                     PANIC("AH\n");
                 }
             }
@@ -3155,8 +3252,9 @@ List* createCFG(SymbolNode* functionSymbol, CFG* caller)
             }
         }
     }
+    clearBBVisitedFlags(cfg);
 
-    // TODO: Possibly collect strings
+    // TODO: Register allocation
 
     return cfg;
 }
