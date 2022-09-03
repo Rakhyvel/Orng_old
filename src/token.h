@@ -14,7 +14,6 @@ typedef enum {
     TOKEN_INT,
     TOKEN_HEX,
     TOKEN_BIN,
-    TOKEN_REAL,
     TOKEN_DOC_DATA,
     // Punctuation
     TOKEN_NEWLINE,
