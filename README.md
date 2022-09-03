@@ -1,7 +1,7 @@
 # Orng
 Orng is a simple, modular general-purpose programming language for hobby programmers. Hobbyist programmers continuously modify their projects as living-breathing documents. Orng has many constructs that are more aligned with this type of programming.
 
-[![Alt Text](https://github.com/Rakhyvel/Orng/blob/rakhyvel_cleanup/splash.png?raw=true)](https://github.com/Rakhyvel/Orng/blob/rakhyvel_cleanup/splash.png?raw=true)
+[![Alt Text](https://github.com/Rakhyvel/Orng/blob/main/splash.png)](https://github.com/Rakhyvel/Orng/blob/rakhyvel_cleanup/splash.png?raw=true)
 
 [Read the documentation here!](https://github.com/Rakhyvel/Orng/blob/main/documentation.md)
 
