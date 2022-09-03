@@ -5,8 +5,10 @@
 #include "./ir.h"
 #include "../util/debug.h"
 #include "./ast.h"
+#include "./errors.h"
 #include "./main.h"
 #include "./parse.h"
+#include "./program.h"
 #include "./symbol.h"
 #include "./validator.h"
 #include <stdio.h>
@@ -119,6 +121,8 @@ char* IR_ToString(ir_type type)
         return "IR_CLEAR_STACK_TRACE";
     case IR_ERROR:
         return "IR_ERROR";
+    default:
+        PANIC("unimplemented");
     }
 }
 
@@ -161,7 +165,7 @@ void printIR(IR* ir)
         } else if (ir->irType == IR_LOAD_INT) {
             printf("\tint:%d", (int)ir->intData);
         } else if (ir->irType == IR_LOAD_REAL) {
-            printf("\treal:%f", ir->doubleData);
+            printf("\treal:%f", ir->realData);
         } else if (ir->irType == IR_PHONY) {
             printf("\tsize:%d", ir->listData->size);
         }
@@ -231,6 +235,7 @@ void printBlockGraph(BasicBlock* bb)
 static SymbolVersion* unversionedSymbolVersion(CFG* cfg, SymbolNode* symbol, ASTNode* type)
 {
     SymbolVersion* retval = calloc(sizeof(SymbolVersion), 1);
+    ASSERT(retval != NULL);
     retval->symbol = symbol;
     retval->version = -1;
     retval->type = type;
@@ -257,7 +262,7 @@ static SymbolVersion* tempSymbolVersion(CFG* cfg, ASTNode* type)
 }
 
 // Creates a new IR instruction
-static IR* createIR(ir_type type, SymbolVersion* dest, IR* src1, IR* src2, struct position pos)
+static IR* createIR(ir_type type, SymbolVersion* dest, SymbolVersion* src1, SymbolVersion* src2, struct position pos)
 {
     static int id = 0;
     IR* retval = calloc(sizeof(IR), 1);
@@ -274,7 +279,7 @@ static IR* createIR(ir_type type, SymbolVersion* dest, IR* src1, IR* src2, struc
 }
 
 // Creates a new IR instruction with branch information
-static IR* createIR_branch(ir_type type, SymbolVersion* dest, IR* src1, IR* src2, IR* branch, struct position pos)
+static IR* createIR_branch(ir_type type, SymbolVersion* dest, SymbolVersion* src1, SymbolVersion* src2, IR* branch, struct position pos)
 {
     IR* retval = createIR(type, dest, src1, src2, pos);
     retval->branch = branch;
@@ -289,7 +294,7 @@ static IR* createIR_label(struct position pos)
 }
 
 // Creates a new IR instruction with AST information
-static IR* createIR_ast(ir_type type, SymbolVersion* dest, IR* src1, IR* src2, ASTNode* from, ASTNode* to, struct position pos)
+static IR* createIR_ast(ir_type type, SymbolVersion* dest, SymbolVersion* src1, SymbolVersion* src2, ASTNode* from, ASTNode* to, struct position pos)
 {
     IR* retval = createIR(type, dest, src1, src2, pos);
     retval->fromType = from;
@@ -298,7 +303,7 @@ static IR* createIR_ast(ir_type type, SymbolVersion* dest, IR* src1, IR* src2, A
 }
 
 // Creates a new IR instruction with integer information
-static IR* createIR_int(ir_type type, SymbolVersion* dest, IR* src1, IR* src2, int64_t data, struct position pos)
+static IR* createIR_int(ir_type type, SymbolVersion* dest, SymbolVersion* src1, SymbolVersion* src2, int64_t data, struct position pos)
 {
     IR* retval = createIR(type, dest, src1, src2, pos);
     retval->intData = data;
@@ -306,10 +311,10 @@ static IR* createIR_int(ir_type type, SymbolVersion* dest, IR* src1, IR* src2, i
 }
 
 // Creates a new IR instruction with real-valued information
-static IR* createIR_double(ir_type type, SymbolVersion* dest, IR* src1, IR* src2, double data, struct position pos)
+static IR* createIR_real(ir_type type, SymbolVersion* dest, SymbolVersion* src1, SymbolVersion* src2, double data, struct position pos)
 {
     IR* retval = createIR(type, dest, src1, src2, pos);
-    retval->doubleData = data;
+    retval->realData = data;
     return retval;
 }
 
@@ -390,14 +395,14 @@ static SymbolVersion* defaultValue(CFG* cfg, ASTNode* type)
     case AST_VOID: {
         return NULL;
     }
-    case AST_PARAMLIST: {
+    case AST_PRODUCT: {
         SymbolVersion* temp = tempSymbolVersion(cfg, type);
 
         IR* ir = createIR(IR_LOAD_ARGLIST, temp, NULL, NULL, type->pos);
         temp->def = ir;
         ir->listData = List_Create();
 
-        forall(elem, type->paramlist.defines)
+        forall(elem, type->product.defines)
         {
             ASTNode* define = elem->data;
             SymbolNode* var = define->define.symbol;
@@ -411,10 +416,10 @@ static SymbolVersion* defaultValue(CFG* cfg, ASTNode* type)
         return temp;
     }
     case AST_ARRAY: {
-        ASTNode* lengthDefine = List_Get(type->paramlist.defines, 0);
+        ASTNode* lengthDefine = List_Get(type->product.defines, 0);
         SymbolNode* lengthSymbol = lengthDefine->define.symbol;
         ASTNode* lengthCode = lengthSymbol->def;
-        ASTNode* dataDefine = List_Get(type->paramlist.defines, 1);
+        ASTNode* dataDefine = List_Get(type->product.defines, 1);
         SymbolNode* dataSymbol = dataDefine->define.symbol;
         ASTNode* dataAddrType = dataSymbol->type;
         ASTNode* dataType = dataAddrType->unop.expr;
@@ -472,7 +477,7 @@ static SymbolVersion* defaultValue(CFG* cfg, ASTNode* type)
     case AST_ENUM: {
         ASTNode* firstDefine = List_Get(type->_enum.defines, 0);
         SymbolNode* firstVar = firstDefine->define.symbol;
-        int tagID = getTag(firstVar->name, firstVar->type);
+        int64_t tagID = getTag(firstVar->name, firstVar->type);
 
         SymbolVersion* tag = tempSymbolVersion(cfg, INT64_TYPE);
         IR* tagIR = createIR_int(IR_LOAD_INT, tag, NULL, NULL, tagID, type->pos);
@@ -509,7 +514,7 @@ static SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* b
             appendInstruction(cfg, ir);
             return temp;
         } else if (symbol->symbolType == SYMBOL_FUNCTION) {
-            createCFG(symbol, cfg);
+            IR_CreateCFG(symbol, cfg);
             SymbolVersion* temp = tempSymbolVersion(cfg, symbol->type);
 
             IR* ir = createIR(IR_LOAD_SYMBOL, temp, NULL, NULL, node->pos);
@@ -590,7 +595,7 @@ static SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* b
     case AST_REAL: {
         SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
 
-        IR* ir = createIR_double(IR_LOAD_REAL, temp, NULL, NULL, node->real.data, node->pos);
+        IR* ir = createIR_real(IR_LOAD_REAL, temp, NULL, NULL, node->real.data, node->pos);
         temp->def = ir;
         appendInstruction(cfg, ir);
         return temp;
@@ -1253,7 +1258,7 @@ static SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* b
         SymbolVersion* right = flattenAST(cfg, node->binop.right, returnLabel, breakLabel, continueLabel, errorLabel, false);
         SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
 
-        if (isDebug) {
+        if (program->isDebug) {
             // Done so that versioning is correct. Would version array symbol in this BB and other BB as same version, duplicate code
             SymbolVersion* arrayCopy = NULL;
             if (left->symbol == cfg->tempSymbol) {
@@ -1331,9 +1336,6 @@ static SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* b
         SymbolVersion* lowerBound;
         if (node->slice.lowerBound->astType != AST_UNDEF) {
             lowerBound = flattenAST(cfg, node->slice.lowerBound, returnLabel, breakLabel, continueLabel, errorLabel, false);
-            if (lowerBound->def && lowerBound->def->irType == IR_LOAD_INT && lowerBound->def->intData < 0) {
-                error(lowerBound->def->pos, "lower bound is negative");
-            }
         } else {
             lowerBound = tempSymbolVersion(cfg, INT64_TYPE);
             IR* loadLowerBoundIR = createIR_int(IR_LOAD_INT, lowerBound, NULL, NULL, 0, node->pos);
@@ -1350,13 +1352,16 @@ static SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* b
             upperBound->def = arrDataIR;
             appendInstruction(cfg, arrDataIR);
         }
+        if (lowerBound->def && lowerBound->def->irType == IR_LOAD_INT && upperBound->def && upperBound->def->irType && upperBound->def->intData - lowerBound->def->intData <= 0) {
+            error(lowerBound->def->pos, "invalid array slice");
+        }
 
         SymbolVersion* newSizeSymbver = tempSymbolVersion(cfg, INT64_TYPE);
         IR* newSizeIR = createIR(IR_SUBTRACT, newSizeSymbver, upperBound, lowerBound, node->pos);
         newSizeSymbver->def = newSizeIR;
         appendInstruction(cfg, newSizeIR);
 
-        ASTNode* dataAddrType = getArrayDataTypeAddr(node->slice.arrayExpr->type);
+        ASTNode* dataAddrType = AST_GetArrayDataTypeAddr(node->slice.arrayExpr->type);
         SymbolVersion* arrDataSymbver = tempSymbolVersion(cfg, dataAddrType);
         IR* arrDataIR = createIR(IR_DOT, arrDataSymbver, arr, NULL, node->pos);
         arrDataIR->strData = "data";
@@ -1381,7 +1386,7 @@ static SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* b
         if ((node->dot.left->type->astType == AST_IDENT && (!strcmp(node->dot.left->type->ident.data, "Module") || !strcmp(node->dot.left->type->ident.data, "Type")))
             || (node->dot.symbol && node->dot.symbol->symbolType == SYMBOL_FUNCTION)) {
             if (node->dot.symbol->symbolType == SYMBOL_FUNCTION) {
-                createCFG(node->dot.symbol, cfg);
+                IR_CreateCFG(node->dot.symbol, cfg);
             }
             SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
 
@@ -1395,7 +1400,7 @@ static SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* b
             left->lvalue = lvalue;
             SymbolVersion* temp = tempSymbolVersion(cfg, node->type);
 
-            if (node->dot.left->type->astType == AST_ENUM && isDebug) {
+            if (node->dot.left->type->astType == AST_ENUM && program->isDebug) {
                 SymbolVersion* enumLiteralExpr = NULL;
                 if (left->symbol == cfg->tempSymbol) {
                     enumLiteralExpr = tempSymbolVersion(cfg, left->type);
@@ -1446,7 +1451,7 @@ static SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* b
         SymbolVersion* temp = tempSymbolVersion(cfg, node->binop.right);
 
         IR* ir = NULL;
-        if (node->binop.right->astType == AST_PARAMLIST) { // C doesn't allow explicit casts to structs, but does allow implicit copies
+        if (node->binop.right->astType == AST_PRODUCT) { // C doesn't allow explicit casts to structs, but does allow implicit copies
             ir = createIR(IR_COPY, temp, left, NULL, node->pos);
         } else {
             ir = createIR_ast(IR_CAST, temp, left, NULL, node->binop.left->type, node->binop.right, node->pos);
@@ -1464,14 +1469,14 @@ static SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* b
             List* lengthCodeSymbvers = List_Create();
             ASTNode* arrType = node->binop.left;
             while (arrType->astType == AST_ARRAY) {
-                SymbolVersion* lengthCodeSymbver = flattenAST(cfg, getArrayLengthAST(arrType), NULL, NULL, NULL, NULL, false);
-                if (lengthCodeSymbver) { // If getArrayLengthAST(arrType) is undef, this is NULL, ruins things when iterating over the ir's listData
+                SymbolVersion* lengthCodeSymbver = flattenAST(cfg, AST_GetArrayLengthAST(arrType), NULL, NULL, NULL, NULL, false);
+                if (lengthCodeSymbver) { // If AST_GetArrayLengthAST(arrType) is undef, this is NULL, ruins things when iterating over the ir's listData
                     List_Append(lengthCodeSymbvers, lengthCodeSymbver);
                 }
-                if (getArrayDataType(arrType)->astType == AST_ARRAY && getArrayLengthAST(getArrayDataType(arrType))->astType == AST_UNDEF) {
+                if (AST_GetArrayDataType(arrType)->astType == AST_ARRAY && AST_GetArrayLengthAST(AST_GetArrayDataType(arrType))->astType == AST_UNDEF) {
                     break;
                 }
-                arrType = getArrayDataType(arrType);
+                arrType = AST_GetArrayDataType(arrType);
             }
 
             IR* ir = NULL;
@@ -1479,7 +1484,7 @@ static SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* b
                 init = flattenAST(cfg, node->binop.right, NULL, NULL, NULL, NULL, false);
                 ir = createIR(IR_NEW_ARR, addr, NULL, init, node->pos);
             } else if (arrType->astType == AST_ARRAY) {
-                init = defaultValue(cfg, getArrayDataType(arrType));
+                init = defaultValue(cfg, AST_GetArrayDataType(arrType));
                 ir = createIR(IR_NEW_ARR, addr, init, NULL, node->pos);
             } else {
                 init = defaultValue(cfg, arrType);
@@ -1505,7 +1510,7 @@ static SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* b
 
         if (node->unop.expr->type->astType == AST_ARRAY) {
             SymbolVersion* left = flattenAST(cfg, node->binop.left, returnLabel, breakLabel, continueLabel, errorLabel, false);
-            expr = tempSymbolVersion(cfg, getArrayDataTypeAddr(node->unop.expr->type));
+            expr = tempSymbolVersion(cfg, AST_GetArrayDataTypeAddr(node->unop.expr->type));
 
             IR* dotIR = createIR(IR_DOT, expr, left, NULL, node->pos);
             dotIR->strData = "data";
@@ -1614,7 +1619,7 @@ static SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* b
 
                 // Get tag of success type
                 SymbolVersion* tag = tempSymbolVersion(cfg, INT64_TYPE);
-                int tagID = getTagEnum("success", var->type);
+                int64_t tagID = getTagEnum("success", var->type);
                 IR* tagIR = createIR_int(IR_LOAD_INT, tag, NULL, NULL, tagID, node->pos);
                 tag->def = tagIR;
                 appendInstruction(cfg, tagIR);
@@ -1870,7 +1875,7 @@ static SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* b
 
             // Get tag of success type
             SymbolVersion* tag = tempSymbolVersion(cfg, INT64_TYPE);
-            int tagID = getTagEnum("success", var->type);
+            int64_t tagID = getTagEnum("success", var->type);
             IR* tagIR = createIR_int(IR_LOAD_INT, tag, NULL, NULL, tagID, node->pos);
             tag->def = tagIR;
             appendInstruction(cfg, tagIR);
@@ -1898,7 +1903,7 @@ static SymbolVersion* flattenAST(CFG* cfg, ASTNode* node, IR* returnLabel, IR* b
         return NULL;
     }
     case AST_UNREACHABLE: {
-        if (isDebug) {
+        if (program->isDebug) {
             IR* error = createIR(IR_ERROR, NULL, NULL, NULL, node->pos);
             error->strData = "unreachable";
             appendInstruction(cfg, error);
@@ -1922,6 +1927,7 @@ static BasicBlock* createBasicBlock(CFG* cfg)
 {
     static int blockID = 0;
     BasicBlock* retval = calloc(sizeof(BasicBlock), 1);
+    ASSERT(retval != NULL);
     retval->id = blockID;
     retval->parameters = List_Create();
     retval->nextArguments = List_Create();
@@ -2034,7 +2040,7 @@ static bool copyAndConstantPropagation(CFG* cfg)
                 // Real constant propagation
                 else if (def->src1->def && def->src1->def->irType == IR_LOAD_REAL && !def->src1->symbol->isVolatile) {
                     def->irType = IR_LOAD_REAL;
-                    def->doubleData = def->src1->def->doubleData;
+                    def->realData = def->src1->def->realData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2067,12 +2073,12 @@ static bool copyAndConstantPropagation(CFG* cfg)
                 break;
             case IR_INDEX:
                 if (def->src2->def && def->src2->def->irType == IR_LOAD_INT && def->src2->def->intData < 0) {
-                    error(def->pos, "array index is negative");
-                } else if (def->src2->def && def->src2->def->irType == IR_LOAD_INT && getArrayLength(def->src1->type) != -1 && def->src2->def->intData >= getArrayLength(def->src1->type)) {
-                    error(def->pos, "array index greater than array length");
-                } else if (def->src1->def && def->src2 && def->src1->def->irType == IR_LOAD_ARRAY_LITERAL && def->src2->def->irType == IR_LOAD_INT && List_Get(def->src1->def->listData, def->src2->def->intData) != NULL) {
+                    error(def->pos, "negative array index");
+                } else if (def->src2->def && def->src2->def->irType == IR_LOAD_INT && AST_GetArrayLength(def->src1->type) != -1 && def->src2->def->intData >= AST_GetArrayLength(def->src1->type)) {
+                    error(def->pos, "array index exceeds array length");
+                } else if (def->src1->def && def->src2 && def->src1->def->irType == IR_LOAD_ARRAY_LITERAL && def->src2->def->irType == IR_LOAD_INT && List_Get(def->src1->def->listData, (int)def->src2->def->intData) != NULL) {
                     def->irType = IR_COPY;
-                    def->src1 = List_Get(def->src1->def->listData, def->src2->def->intData);
+                    def->src1 = List_Get(def->src1->def->listData, (int)def->src2->def->intData);
                     def->src2 = NULL;
                     retval = true;
                 }
@@ -2096,7 +2102,7 @@ static bool copyAndConstantPropagation(CFG* cfg)
                 // Known real value
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_REAL && def->src2->def->irType == IR_LOAD_REAL) {
                     def->irType = IR_LOAD_INT;
-                    def->intData = def->src1->def->doubleData == def->src2->def->doubleData;
+                    def->intData = def->src1->def->realData == def->src2->def->realData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2104,7 +2110,7 @@ static bool copyAndConstantPropagation(CFG* cfg)
                 // Known int/real value
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_INT && def->src2->def->irType == IR_LOAD_REAL) {
                     def->irType = IR_LOAD_INT;
-                    def->doubleData = def->src1->def->intData == def->src2->def->doubleData;
+                    def->realData = def->src1->def->intData == def->src2->def->realData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2112,7 +2118,7 @@ static bool copyAndConstantPropagation(CFG* cfg)
                 // Known real/real value
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_REAL && def->src2->def->irType == IR_LOAD_INT) {
                     def->irType = IR_LOAD_INT;
-                    def->intData = def->src1->def->doubleData == def->src2->def->intData;
+                    def->intData = def->src1->def->realData == def->src2->def->intData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2130,7 +2136,7 @@ static bool copyAndConstantPropagation(CFG* cfg)
                 // Known real value
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_REAL && def->src2->def->irType == IR_LOAD_REAL) {
                     def->irType = IR_LOAD_INT;
-                    def->intData = def->src1->def->doubleData != def->src2->def->doubleData;
+                    def->intData = def->src1->def->realData != def->src2->def->realData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2138,7 +2144,7 @@ static bool copyAndConstantPropagation(CFG* cfg)
                 // Known int/real value
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_INT && def->src2->def->irType == IR_LOAD_REAL) {
                     def->irType = IR_LOAD_INT;
-                    def->doubleData = def->src1->def->intData != def->src2->def->doubleData;
+                    def->realData = def->src1->def->intData != def->src2->def->realData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2146,7 +2152,7 @@ static bool copyAndConstantPropagation(CFG* cfg)
                 // Known real/real value
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_REAL && def->src2->def->irType == IR_LOAD_INT) {
                     def->irType = IR_LOAD_INT;
-                    def->intData = def->src1->def->doubleData != def->src2->def->intData;
+                    def->intData = def->src1->def->realData != def->src2->def->intData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2164,7 +2170,7 @@ static bool copyAndConstantPropagation(CFG* cfg)
                 // Known real value
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_REAL && def->src2->def->irType == IR_LOAD_REAL) {
                     def->irType = IR_LOAD_INT;
-                    def->intData = def->src1->def->doubleData > def->src2->def->doubleData;
+                    def->intData = def->src1->def->realData > def->src2->def->realData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2172,7 +2178,7 @@ static bool copyAndConstantPropagation(CFG* cfg)
                 // Known int/real value
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_INT && def->src2->def->irType == IR_LOAD_REAL) {
                     def->irType = IR_LOAD_INT;
-                    def->doubleData = def->src1->def->intData > def->src2->def->doubleData;
+                    def->realData = def->src1->def->intData > def->src2->def->realData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2180,7 +2186,7 @@ static bool copyAndConstantPropagation(CFG* cfg)
                 // Known real/real value
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_REAL && def->src2->def->irType == IR_LOAD_INT) {
                     def->irType = IR_LOAD_INT;
-                    def->intData = def->src1->def->doubleData > def->src2->def->intData;
+                    def->intData = def->src1->def->realData > def->src2->def->intData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2198,7 +2204,7 @@ static bool copyAndConstantPropagation(CFG* cfg)
                 // Known real value
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_REAL && def->src2->def->irType == IR_LOAD_REAL) {
                     def->irType = IR_LOAD_INT;
-                    def->intData = def->src1->def->doubleData < def->src2->def->doubleData;
+                    def->intData = def->src1->def->realData < def->src2->def->realData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2206,7 +2212,7 @@ static bool copyAndConstantPropagation(CFG* cfg)
                 // Known int/real value
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_INT && def->src2->def->irType == IR_LOAD_REAL) {
                     def->irType = IR_LOAD_INT;
-                    def->doubleData = def->src1->def->intData < def->src2->def->doubleData;
+                    def->realData = def->src1->def->intData < def->src2->def->realData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2214,7 +2220,7 @@ static bool copyAndConstantPropagation(CFG* cfg)
                 // Known real/real value
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_REAL && def->src2->def->irType == IR_LOAD_INT) {
                     def->irType = IR_LOAD_INT;
-                    def->intData = def->src1->def->doubleData < def->src2->def->intData;
+                    def->intData = def->src1->def->realData < def->src2->def->intData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2232,7 +2238,7 @@ static bool copyAndConstantPropagation(CFG* cfg)
                 // Known real value
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_REAL && def->src2->def->irType == IR_LOAD_REAL) {
                     def->irType = IR_LOAD_INT;
-                    def->intData = def->src1->def->doubleData >= def->src2->def->doubleData;
+                    def->intData = def->src1->def->realData >= def->src2->def->realData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2240,7 +2246,7 @@ static bool copyAndConstantPropagation(CFG* cfg)
                 // Known int/real value
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_INT && def->src2->def->irType == IR_LOAD_REAL) {
                     def->irType = IR_LOAD_INT;
-                    def->doubleData = def->src1->def->intData >= def->src2->def->doubleData;
+                    def->realData = def->src1->def->intData >= def->src2->def->realData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2248,7 +2254,7 @@ static bool copyAndConstantPropagation(CFG* cfg)
                 // Known real/real value
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_REAL && def->src2->def->irType == IR_LOAD_INT) {
                     def->irType = IR_LOAD_INT;
-                    def->intData = def->src1->def->doubleData >= def->src2->def->intData;
+                    def->intData = def->src1->def->realData >= def->src2->def->intData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2266,7 +2272,7 @@ static bool copyAndConstantPropagation(CFG* cfg)
                 // Known real value
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_REAL && def->src2->def->irType == IR_LOAD_REAL) {
                     def->irType = IR_LOAD_INT;
-                    def->intData = def->src1->def->doubleData <= def->src2->def->doubleData;
+                    def->intData = def->src1->def->realData <= def->src2->def->realData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2274,7 +2280,7 @@ static bool copyAndConstantPropagation(CFG* cfg)
                 // Known int/real value
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_INT && def->src2->def->irType == IR_LOAD_REAL) {
                     def->irType = IR_LOAD_INT;
-                    def->doubleData = def->src1->def->intData <= def->src2->def->doubleData;
+                    def->realData = def->src1->def->intData <= def->src2->def->realData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2282,7 +2288,7 @@ static bool copyAndConstantPropagation(CFG* cfg)
                 // Known real/real value
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_REAL && def->src2->def->irType == IR_LOAD_INT) {
                     def->irType = IR_LOAD_INT;
-                    def->intData = def->src1->def->doubleData <= def->src2->def->intData;
+                    def->intData = def->src1->def->realData <= def->src2->def->intData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2300,7 +2306,7 @@ static bool copyAndConstantPropagation(CFG* cfg)
                 // Known real value
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_REAL && def->src2->def->irType == IR_LOAD_REAL) {
                     def->irType = IR_LOAD_REAL;
-                    def->doubleData = def->src1->def->doubleData + def->src2->def->doubleData;
+                    def->realData = def->src1->def->realData + def->src2->def->realData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2308,7 +2314,7 @@ static bool copyAndConstantPropagation(CFG* cfg)
                 // Known int/real value
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_INT && def->src2->def->irType == IR_LOAD_REAL) {
                     def->irType = IR_LOAD_REAL;
-                    def->doubleData = def->src1->def->intData + def->src2->def->doubleData;
+                    def->realData = def->src1->def->intData + def->src2->def->realData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2316,7 +2322,7 @@ static bool copyAndConstantPropagation(CFG* cfg)
                 // Known real/real value
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_REAL && def->src2->def->irType == IR_LOAD_INT) {
                     def->irType = IR_LOAD_REAL;
-                    def->doubleData = def->src1->def->doubleData + def->src2->def->intData;
+                    def->realData = def->src1->def->realData + def->src2->def->intData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2347,7 +2353,7 @@ static bool copyAndConstantPropagation(CFG* cfg)
                 // Known real value
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_REAL && def->src2->def->irType == IR_LOAD_REAL) {
                     def->irType = IR_LOAD_REAL;
-                    def->doubleData = def->src1->def->doubleData - def->src2->def->doubleData;
+                    def->realData = def->src1->def->realData - def->src2->def->realData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2355,7 +2361,7 @@ static bool copyAndConstantPropagation(CFG* cfg)
                 // Known int/real value
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_INT && def->src2->def->irType == IR_LOAD_REAL) {
                     def->irType = IR_LOAD_REAL;
-                    def->doubleData = def->src1->def->intData - def->src2->def->doubleData;
+                    def->realData = def->src1->def->intData - def->src2->def->realData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2363,7 +2369,7 @@ static bool copyAndConstantPropagation(CFG* cfg)
                 // Known real/real value
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_REAL && def->src2->def->irType == IR_LOAD_INT) {
                     def->irType = IR_LOAD_REAL;
-                    def->doubleData = def->src1->def->doubleData - def->src2->def->intData;
+                    def->realData = def->src1->def->realData - def->src2->def->intData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2394,7 +2400,7 @@ static bool copyAndConstantPropagation(CFG* cfg)
                 // Known real value
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_REAL && def->src2->def->irType == IR_LOAD_REAL) {
                     def->irType = IR_LOAD_REAL;
-                    def->doubleData = def->src1->def->doubleData * def->src2->def->doubleData;
+                    def->realData = def->src1->def->realData * def->src2->def->realData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2402,7 +2408,7 @@ static bool copyAndConstantPropagation(CFG* cfg)
                 // Known int/real value
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_INT && def->src2->def->irType == IR_LOAD_REAL) {
                     def->irType = IR_LOAD_REAL;
-                    def->doubleData = def->src1->def->intData * def->src2->def->doubleData;
+                    def->realData = def->src1->def->intData * def->src2->def->realData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2410,7 +2416,7 @@ static bool copyAndConstantPropagation(CFG* cfg)
                 // Known real/real value
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_REAL && def->src2->def->irType == IR_LOAD_INT) {
                     def->irType = IR_LOAD_REAL;
-                    def->doubleData = def->src1->def->doubleData * def->src2->def->intData;
+                    def->realData = def->src1->def->realData * def->src2->def->intData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2451,7 +2457,7 @@ static bool copyAndConstantPropagation(CFG* cfg)
                     error(def->pos, "division by zero");
                 }
                 // Cannot divide by real zero
-                else if (def->src2->def && def->src2->def->irType == IR_LOAD_REAL && def->src2->def->doubleData == 0.0) {
+                else if (def->src2->def && def->src2->def->irType == IR_LOAD_REAL && def->src2->def->realData == 0.0) {
                     error(def->pos, "division by zero");
                 }
                 // Known int value
@@ -2465,7 +2471,7 @@ static bool copyAndConstantPropagation(CFG* cfg)
                 // Known real value
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_REAL && def->src2->def->irType == IR_LOAD_REAL) {
                     def->irType = IR_LOAD_REAL;
-                    def->doubleData = def->src1->def->doubleData / def->src2->def->doubleData;
+                    def->realData = def->src1->def->realData / def->src2->def->realData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2473,7 +2479,7 @@ static bool copyAndConstantPropagation(CFG* cfg)
                 // Known int/real value
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_INT && def->src2->def->irType == IR_LOAD_REAL) {
                     def->irType = IR_LOAD_REAL;
-                    def->doubleData = def->src1->def->intData / def->src2->def->doubleData;
+                    def->realData = def->src1->def->intData / def->src2->def->realData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2481,7 +2487,7 @@ static bool copyAndConstantPropagation(CFG* cfg)
                 // Known real/real value
                 else if (def->src1->def && def->src2->def && def->src1->def->irType == IR_LOAD_REAL && def->src2->def->irType == IR_LOAD_INT) {
                     def->irType = IR_LOAD_REAL;
-                    def->doubleData = def->src1->def->doubleData / def->src2->def->intData;
+                    def->realData = def->src1->def->realData / def->src2->def->intData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2637,7 +2643,7 @@ static bool copyAndConstantPropagation(CFG* cfg)
                 // Known real value
                 else if (def->src1->def && def->src1->def->irType == IR_LOAD_REAL) {
                     def->irType = IR_LOAD_INT;
-                    def->doubleData = -def->src1->def->doubleData;
+                    def->realData = -def->src1->def->realData;
                     def->src1 = NULL;
                     def->src2 = NULL;
                     retval = true;
@@ -2830,7 +2836,7 @@ static void calculatePhiParamsAndArgs(CFG* cfg)
                 }
             }
 
-			// For all symbol-versions in IRs with lists of symbol-versions, if undefined in this block, request as parameter
+            // For all symbol-versions in IRs with lists of symbol-versions, if undefined in this block, request as parameter
             if (ir->irType == IR_CALL || ir->irType == IR_LOAD_ARGLIST || ir->irType == IR_LOAD_ARRAY_LITERAL || ir->irType == IR_NEW_ARR) {
                 forall(elem, ir->listData)
                 {
@@ -2856,7 +2862,7 @@ static void calculatePhiParamsAndArgs(CFG* cfg)
     }
 
     // Add function parameters as basic block symbol version parameters
-    forall(elem, cfg->symbol->type->function.domainType->paramlist.defines)
+    forall(elem, cfg->symbol->type->function.domainType->product.defines)
     {
         ASTNode* define = elem->data;
         SymbolNode* param = define->define.symbol;
@@ -3124,10 +3130,10 @@ static bool deadCode(CFG* cfg)
 }
 
 // Creates and optimizes a control-flow-graph node for a function symbol
-List* createCFG(struct symbolNode* functionSymbol, CFG* caller)
+CFG* IR_CreateCFG(struct symbolNode* functionSymbol, CFG* caller)
 {
     if (functionSymbol->cfg || functionSymbol->isExtern) {
-        return;
+        return NULL;
     }
     CFG* cfg = calloc(sizeof(CFG), 1);
     if (!cfg) {

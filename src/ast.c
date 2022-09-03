@@ -75,13 +75,13 @@ int AST_TypeRepr(char* str, ASTNode* type)
         str += AST_TypeRepr(str, type->unop.expr);
         break;
     }
-    case AST_PARAMLIST: {
+    case AST_PRODUCT: {
         str += sprintf(str, "(");
-        forall(elem, type->paramlist.defines)
+        forall(elem, type->product.defines)
         {
             ASTNode* param = elem->data;
             str += AST_TypeRepr(str, param);
-            if (elem->next == List_End(type->paramlist.defines)) {
+            if (elem->next == List_End(type->product.defines)) {
                 str += sprintf(str, ")");
             } else {
                 str += sprintf(str, ", ");
@@ -90,10 +90,10 @@ int AST_TypeRepr(char* str, ASTNode* type)
         break;
     }
     case AST_ARRAY: {
-        ASTNode* lengthDefine = List_Get(type->paramlist.defines, 0);
+        ASTNode* lengthDefine = List_Get(type->product.defines, 0);
         SymbolNode* lengthSymbol = lengthDefine->define.symbol;
         ASTNode* lengthCode = lengthSymbol->def;
-        ASTNode* dataDefine = List_Get(type->paramlist.defines, 1);
+        ASTNode* dataDefine = List_Get(type->product.defines, 1);
         SymbolNode* dataSymbol = dataDefine->define.symbol;
         ASTNode* dataType = dataSymbol->type;
         if (lengthCode->astType == AST_INT) {
@@ -308,8 +308,8 @@ char* AST_GetString(enum astType type)
         return "AST_VOID";
     case AST_ADDR:
         return "AST_ADDR";
-    case AST_PARAMLIST:
-        return "AST_PARAMLIST";
+    case AST_PRODUCT:
+        return "AST_PRODUCT";
     case AST_ARRAY:
         return "AST_ARRAY";
     case AST_ENUM:
@@ -342,10 +342,10 @@ void AST_Print(ASTNode* root, char* prefix, char* childrenPrefix)
         printf("%s%s [%s]\n", prefix, AST_GetString(root->astType), root->ident.data);
         break;
     case AST_INT:
-        printf("%s%s [%d]\n", prefix, AST_GetString(root->astType), root->_int.data);
+        printf("%s%s [%d]\n", prefix, AST_GetString(root->astType), (int)root->_int.data);
         break;
     case AST_CHAR:
-        printf("%s%s [%c]\n", prefix, AST_GetString(root->astType), root->_char.data);
+        printf("%s%s [%s]\n", prefix, AST_GetString(root->astType), root->_char.data);
         break;
     case AST_STRING:
         printf("%s%s [%s]\n", prefix, AST_GetString(root->astType), root->_char.data);
@@ -363,43 +363,43 @@ void AST_Print(ASTNode* root, char* prefix, char* childrenPrefix)
 }
 
 // Returns the element data type of an array type AST
-ASTNode* getArrayDataType(ASTNode* type)
+ASTNode* AST_GetArrayDataType(ASTNode* type)
 {
-    ASTNode* dataDefine = List_Get(type->paramlist.defines, 1);
+    ASTNode* dataDefine = List_Get(type->product.defines, 1);
     SymbolNode* dataSymbol = dataDefine->define.symbol;
     ASTNode* dataType = dataSymbol->type->unop.expr;
     return dataType;
 }
 
 // Returns the integer length of an array type AST if there is one, otherwise returns -1
-int getArrayLength(ASTNode* type)
+int64_t AST_GetArrayLength(ASTNode* type)
 {
-    ASTNode* lengthDefine = List_Get(type->paramlist.defines, 0);
+    ASTNode* lengthDefine = List_Get(type->product.defines, 0);
     SymbolNode* lengthSymbol = lengthDefine->define.symbol;
     ASTNode* lengthCode = lengthSymbol->def;
     return lengthCode->astType == AST_INT ? lengthCode->_int.data : -1;
 }
 
 // Returns the AST expression for the length of an array type AST
-ASTNode* getArrayLengthAST(ASTNode* type)
+ASTNode* AST_GetArrayLengthAST(ASTNode* type)
 {
-    ASTNode* lengthDefine = List_Get(type->paramlist.defines, 0);
+    ASTNode* lengthDefine = List_Get(type->product.defines, 0);
     SymbolNode* lengthSymbol = lengthDefine->define.symbol;
     ASTNode* lengthCode = lengthSymbol->def;
     return lengthCode;
 }
 
 // Returns the element data address type of an array type AST
-ASTNode* getArrayDataTypeAddr(ASTNode* type)
+ASTNode* AST_GetArrayDataTypeAddr(ASTNode* type)
 {
-    ASTNode* dataDefine = List_Get(type->paramlist.defines, 1);
+    ASTNode* dataDefine = List_Get(type->product.defines, 1);
     SymbolNode* dataSymbol = dataDefine->define.symbol;
     ASTNode* dataType = dataSymbol->type;
     return dataType;
 }
 
 // Given an operator-assign AST type, returns the function to create the operator AST node
-BinopConstructor getBinopConstructor(enum astType astType)
+BinopConstructor AST_GetBinopConstructor(enum astType astType)
 {
     switch (astType) {
     case AST_ADD_ASSIGN:
@@ -434,7 +434,7 @@ BinopConstructor getBinopConstructor(enum astType astType)
 }
 
 // Generates an array type AST given a basetype. `length` should be -1 if array length is undefined
-ASTNode* createArrayTypeNode(ASTNode* baseType, int length, struct position pos)
+ASTNode* AST_CreateArrayTypeNode(ASTNode* baseType, int length, struct position pos)
 {
     ASTNode* array = AST_Create_array(NULL, (Position) { NULL, 0, 0, 0 });
 
@@ -458,14 +458,14 @@ ASTNode* createArrayTypeNode(ASTNode* baseType, int length, struct position pos)
     dataSymbol->def = dataCode;
     dataSymbol->type = dataType;
 
-    List_Append(array->paramlist.defines, lengthDefine);
-    List_Append(array->paramlist.defines, dataDefine);
+    List_Append(array->product.defines, lengthDefine);
+    List_Append(array->product.defines, dataDefine);
 
     return array;
 }
 
 // Creates a maybe type around a base `something` type
-ASTNode* createMaybeType(ASTNode* somethingBaseType)
+ASTNode* AST_CreateMaybeType(ASTNode* somethingBaseType)
 {
     ASTNode* maybe = AST_Create_enum(NULL, (Position) { NULL, 0, 0, 0 });
 
@@ -493,9 +493,9 @@ void AST_Init()
     INT64_TYPE = AST_Create_ident("Int64", NULL, (Position) { NULL, 0, 0, 0 });
     CONST_CHAR_TYPE = AST_Create_ident("Char", NULL, (Position) { NULL, 0, 0, 0 });
     CHAR_TYPE = AST_Create_ident("Char", NULL, (Position) { NULL, 0, 0, 0 });
-    CONST_STRING_TYPE = createArrayTypeNode(CHAR_TYPE, -1, invalid_pos);
-    STRING_TYPE = createArrayTypeNode(CHAR_TYPE, -1, invalid_pos);
-    STRING_ARR_TYPE = createArrayTypeNode(STRING_TYPE, -1, invalid_pos);
+    CONST_STRING_TYPE = AST_CreateArrayTypeNode(CHAR_TYPE, -1, invalid_pos);
+    STRING_TYPE = AST_CreateArrayTypeNode(CHAR_TYPE, -1, invalid_pos);
+    STRING_ARR_TYPE = AST_CreateArrayTypeNode(STRING_TYPE, -1, invalid_pos);
     REAL32_TYPE = AST_Create_ident("Real32", NULL, (Position) { NULL, 0, 0, 0 });
     REAL64_TYPE = AST_Create_ident("Real64", NULL, (Position) { NULL, 0, 0, 0 });
     CONST_BOOL_TYPE = AST_Create_ident("Bool", NULL, (Position) { NULL, 0, 0, 0 });
@@ -503,19 +503,20 @@ void AST_Init()
     TYPE_TYPE = AST_Create_ident("Type", NULL, (Position) { NULL, 0, 0, 0 });
     PACKAGE_TYPE = AST_Create_ident("Package", NULL, (Position) { NULL, 0, 0, 0 });
     UNDEF_TYPE = AST_Create_undef(NULL, (Position) { NULL, 0, 0, 0 });
-    VOID_ADDR_TYPE = AST_Create_addr(AST_Create_paramlist(NULL, (Position) { NULL, 0, 0, 0 }), NULL, (Position) { NULL, 0, 0, 0 });
+    VOID_ADDR_TYPE = AST_Create_addr(AST_Create_product(NULL, (Position) { NULL, 0, 0, 0 }), NULL, (Position) { NULL, 0, 0, 0 });
     VOID_TYPE = AST_Create_void(NULL, (Position) { NULL, 0, 0, 0 });
     TRUE_AST = AST_Create_true(NULL, (Position) { NULL, 0, 0, 0 });
     FALSE_AST = AST_Create_false(NULL, (Position) { NULL, 0, 0, 0 });
     NOTHING_AST = AST_Create_nothing(NULL, (Position) { NULL, 0, 0, 0 });
 
-    MAYBE_VOID_TYPE = createMaybeType(VOID_TYPE);
+    MAYBE_VOID_TYPE = AST_CreateMaybeType(VOID_TYPE);
 }
 
 // Creates an AST node. Used by other functions that create more specific AST nodes
 static ASTNode* AST_Create(enum astType type, SymbolNode* scope, struct position pos)
 {
     ASTNode* retval = calloc(1, sizeof(ASTNode));
+    ASSERT(retval != NULL);
     retval->astType = type;
     retval->scope = scope;
     retval->pos = pos;
@@ -583,7 +584,7 @@ ASTNode* AST_Create_nothing(struct symbolNode* scope, struct position pos)
     return retval;
 }
 
-ASTNode* AST_Create_enumLiteral(int tag, struct astNode* expr, struct symbolNode* scope, struct position pos)
+ASTNode* AST_Create_enumLiteral(int64_t tag, struct astNode* expr, struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_ENUM_LITERAL, scope, pos);
     retval->enumLiteral.tag = tag;
@@ -1128,24 +1129,24 @@ ASTNode* AST_Create_addr(struct astNode* type, struct symbolNode* scope, struct 
     return retval;
 }
 
-ASTNode* AST_Create_paramlist(struct symbolNode* scope, struct position pos)
+ASTNode* AST_Create_product(struct symbolNode* scope, struct position pos)
 {
-    ASTNode* retval = AST_Create(AST_PARAMLIST, scope, pos);
-    retval->paramlist.defines = List_Create();
+    ASTNode* retval = AST_Create(AST_PRODUCT, scope, pos);
+    retval->product.defines = List_Create();
     return retval;
 }
 
 ASTNode* AST_Create_array(struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_ARRAY, scope, pos);
-    retval->paramlist.defines = List_Create();
+    retval->product.defines = List_Create();
     return retval;
 }
 
 ASTNode* AST_Create_enum(struct symbolNode* scope, struct position pos)
 {
     ASTNode* retval = AST_Create(AST_ENUM, scope, pos);
-    retval->paramlist.defines = List_Create();
+    retval->product.defines = List_Create();
     return retval;
 }
 

@@ -5,6 +5,6 @@
 
 #include <stdio.h>
 
-void Generator_Generate(FILE* out, struct program program);
+void Generator_Generate(FILE* out);
 
 #endif

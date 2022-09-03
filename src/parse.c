@@ -5,6 +5,7 @@
 #include "parse.h"
 #include "../util/debug.h"
 #include "./ast.h"
+#include "./errors.h"
 #include "./lexer.h"
 #include "./main.h"
 #include "./position.h"
@@ -26,13 +27,17 @@ static ASTNode* parseStatement(SymbolNode* scope);
 static ASTNode* parseExpr(SymbolNode* scope);
 static ASTNode* parseDefine(SymbolNode* scope);
 
-// Converts integers to base 10 ascii. Used for text representation of UID's 
+// Converts integers to base 10 ascii. Used for text representation of UID's
 char* myItoa(int val)
 {
     char* buf = (char*)calloc(1, 32);
+    if (!buf) {
+        gen_error("memory error");
+    }
     int i = 30;
-    for (; val && i; --i, val /= 10)
+    for (; val && i; --i, val /= 10) {
         buf[i] = "0123456789"[val % 10];
+    }
     return &buf[i + 1];
 }
 
@@ -142,7 +147,7 @@ static ASTNode* parseEnumDefine(SymbolNode* scope)
 
     if (accept(TOKEN_COLON)) {
         ASTNode* type = NULL;
-        type = parseType(symbol, false);
+        type = parseType(symbol);
         if (type->astType == AST_IDENT && !strcmp(type->ident.data, "Package")) {
             symbol->symbolType = SYMBOL_PACKAGE;
         } else if (type->astType == AST_IDENT && !strcmp(type->ident.data, "Module")) {
@@ -157,7 +162,7 @@ static ASTNode* parseEnumDefine(SymbolNode* scope)
         if (accept(TOKEN_ELLIPSES)) {
             symbol->isVararg = true;
         }
-        symbol->pos = merge(symbol->pos, type->pos);
+        symbol->pos = Position_Merge(symbol->pos, type->pos);
         symbol->type = type;
     } else {
         symbol->type = AST_Create_void(scope, symbol->pos);
@@ -171,13 +176,16 @@ static ASTNode* parseTypeAtom(SymbolNode* scope)
     ASTNode* child = NULL;
     if ((token = accept(TOKEN_IDENT)) != NULL) {
         char* text = malloc(sizeof(char) * 255);
+        if (!text) {
+            gen_error("memory error");
+        }
         strncpy_s(text, 255, token->data, 254);
         child = AST_Create_ident(text, scope, token->pos);
     } else if ((token = accept(TOKEN_LPAREN)) != NULL) {
-        child = AST_Create_paramlist(scope, token->pos);
+        child = AST_Create_product(scope, token->pos);
         while (!accept(TOKEN_RPAREN)) {
             ASTNode* define = parseDefine(scope);
-            List_Append(child->paramlist.defines, define);
+            List_Append(child->product.defines, define);
             if (accept(TOKEN_COMMA)) {
                 if (nextTokenMaybeNewline()->type == TOKEN_NEWLINE) {
                     error(nextTokenMaybeNewline()->pos, "unexpected newline");
@@ -188,8 +196,8 @@ static ASTNode* parseTypeAtom(SymbolNode* scope)
                 break;
             }
         }
-        child->pos = merge(child->pos, token->pos);
-        if (child->paramlist.defines->size == 0) {
+        child->pos = Position_Merge(child->pos, token->pos);
+        if (child->product.defines->size == 0) {
             child->astType = AST_VOID;
         }
     } else if ((token = accept(TOKEN_LSR)) != NULL) {
@@ -202,7 +210,7 @@ static ASTNode* parseTypeAtom(SymbolNode* scope)
                 }
             }
         }
-        child->pos = merge(child->pos, token->pos);
+        child->pos = Position_Merge(child->pos, token->pos);
         if (child->_enum.defines->size == 0) {
             error(token->pos, "empty enum");
         }
@@ -260,10 +268,10 @@ static ASTNode* parseTypeFunction(SymbolNode* scope)
     struct token* token = NULL;
     while (true) {
         if ((token = accept(TOKEN_ARROW)) != NULL) {
-            if (child->astType != AST_FUNCTION && child->astType != AST_PARAMLIST && child->astType != AST_VOID) {
+            if (child->astType != AST_FUNCTION && child->astType != AST_PRODUCT && child->astType != AST_VOID) {
                 error(child->pos, "expected parameter list or function");
             }
-            SymbolNode* hiddenSymbol = Symbol_Create("", SYMBOL_BLOCK, scope, child->pos); // So that paramlist members are not visible in function
+            SymbolNode* hiddenSymbol = Symbol_Create("", SYMBOL_BLOCK, scope, child->pos); // So that product members are not visible in function
             ASTNode* right = parseType(hiddenSymbol);
             ASTNode* parent = AST_Create_function(child, right, scope, token->pos);
             child = parent;
@@ -312,9 +320,9 @@ static ASTNode* parseTypeNonConst(SymbolNode* scope)
 
         return errorEnum;
     } else if ((token = accept(TOKEN_LSQUARE)) != NULL) {
-        ASTNode* arrStruct = AST_Create_array(scope, token->pos);
+        ASTNode* arrProduct = AST_Create_array(scope, token->pos);
 
-        SymbolNode* lengthSymbol = Symbol_Create("length", SYMBOL_VARIABLE, NULL, arrStruct->pos);
+        SymbolNode* lengthSymbol = Symbol_Create("length", SYMBOL_VARIABLE, NULL, arrProduct->pos);
         ASTNode* lengthDefine = AST_Create_define(lengthSymbol, scope, token->pos);
         ASTNode* lengthType = AST_Create_ident("Int", scope, token->pos);
         ASTNode* lengthCode;
@@ -324,22 +332,22 @@ static ASTNode* parseTypeNonConst(SymbolNode* scope)
         } else {
             lengthCode = AST_Create_undef(scope, token->pos);
         }
-        arrStruct->pos = merge(arrStruct->pos, token->pos);
+        arrProduct->pos = Position_Merge(arrProduct->pos, token->pos);
         lengthSymbol->def = lengthCode;
         lengthSymbol->type = lengthType;
         lengthSymbol->type->isConst = true;
 
-        SymbolNode* dataSymbol = Symbol_Create("data", SYMBOL_VARIABLE, NULL, arrStruct->pos);
+        SymbolNode* dataSymbol = Symbol_Create("data", SYMBOL_VARIABLE, NULL, arrProduct->pos);
         ASTNode* dataDefine = AST_Create_define(dataSymbol, scope, token->pos);
         ASTNode* dataType = AST_Create_addr(parseType(scope), scope, token->pos);
-        arrStruct->pos = merge(arrStruct->pos, dataType->pos);
+        arrProduct->pos = Position_Merge(arrProduct->pos, dataType->pos);
         ASTNode* dataCode = AST_Create_undef(scope, token->pos);
         dataSymbol->def = dataCode;
         dataSymbol->type = dataType;
 
-        List_Append(arrStruct->paramlist.defines, lengthDefine);
-        List_Append(arrStruct->paramlist.defines, dataDefine);
-        return arrStruct;
+        List_Append(arrProduct->product.defines, lengthDefine);
+        List_Append(arrProduct->product.defines, dataDefine);
+        return arrProduct;
     } else {
         return parseTypeFunction(scope);
     }
@@ -398,7 +406,7 @@ static ASTNode* parseErrdefer(SymbolNode* scope)
 static ASTNode* parseStatement(SymbolNode* scope)
 {
     if (nextIsDef()) {
-        return parseDefine(scope, false);
+        return parseDefine(scope);
     } else if (accept(TOKEN_FREE)) {
         return AST_Create_free(parseExpr(scope), scope, prevToken->pos);
     } else if (accept(TOKEN_RETURN)) {
@@ -513,7 +521,7 @@ static ASTNode* parseFor(SymbolNode* scope)
         elseBlock = AST_Create_undef(scope, prevToken->pos);
     }
 
-    return AST_Create_for(pre, condition, post, body, elseBlock, scope, prevToken->pos, false);
+    return AST_Create_for(pre, condition, post, body, elseBlock, scope, prevToken->pos);
 }
 
 static ASTNode* parseMapping(SymbolNode* scope)
@@ -542,6 +550,9 @@ static ASTNode* parseFieldMapping(SymbolNode* scope)
     } else {
         expect(TOKEN_DOT);
         char* text = malloc(sizeof(char) * 255);
+        if (!text) {
+            gen_error("memory error");
+        }
         if (token = accept(TOKEN_IDENT)) {
             strncpy_s(text, 255, token->data, 254);
         } else {
@@ -595,6 +606,9 @@ static ASTNode* parseFactor(SymbolNode* scope)
     struct token* token = NULL;
     if ((token = accept(TOKEN_IDENT)) != NULL) {
         char* text = malloc(sizeof(char) * 255);
+        if (!text) {
+            gen_error("memory error");
+        }
         strncpy_s(text, 255, token->data, 254);
         child = AST_Create_ident(text, scope, token->pos);
     } else if ((token = accept(TOKEN_INT)) != NULL) {
@@ -613,14 +627,16 @@ static ASTNode* parseFactor(SymbolNode* scope)
     } else if ((token = accept(TOKEN_FALSE)) != NULL) {
         child = AST_Create_false(scope, token->pos);
     } else if ((token = accept(TOKEN_REAL)) != NULL) {
-        float data = atof(token->data);
-        child = AST_Create_real(data, scope, token->pos);
+        child = AST_Create_real(atof(token->data), scope, token->pos);
     } else if ((token = accept(TOKEN_LPAREN)) != NULL) {
         child = parseArgList(scope);
     } else if ((token = accept(TOKEN_DOT)) != NULL) {
         struct token* ident = expect(TOKEN_IDENT);
         expect(TOKEN_ASSIGN);
         char* text = malloc(sizeof(char) * 255);
+        if (!text) {
+            gen_error("memory error");
+        }
         strncpy_s(text, 255, ident->data, 254);
         child = AST_Create_namedArg(text, parseExpr(scope), scope, token->pos);
     } else if ((token = accept(TOKEN_NOTHING)) != NULL) {
@@ -631,7 +647,7 @@ static ASTNode* parseFactor(SymbolNode* scope)
             List_Append(child->arrayLiteral.members, parseExpr(scope));
             accept(TOKEN_COMMA);
         }
-        child->pos = merge(child->pos, token->pos);
+        child->pos = Position_Merge(child->pos, token->pos);
     } else if ((token = accept(TOKEN_STR)) != NULL) {
         child = AST_Create_string(token->data, scope, token->pos);
         while (accept(TOKEN_DPLUS)) {
@@ -640,10 +656,13 @@ static ASTNode* parseFactor(SymbolNode* scope)
         }
     } else if ((token = accept(TOKEN_NEW)) != NULL) {
         char* str = calloc(255, 1);
+        if (!str) {
+            gen_error("memory error");
+        }
         strcat_s(str, 255, myItoa(arrayUID++));
         strcat_s(str, 255, "arr");
         SymbolNode* dumbyScope = Symbol_Create(str, SYMBOL_VARIABLE, scope, token->pos);
-        ASTNode* type = parseType(dumbyScope, false);
+        ASTNode* type = parseType(dumbyScope);
         ASTNode* init = NULL;
         if (nextToken()->type == TOKEN_LSQUARE || nextToken()->type == TOKEN_LPAREN) {
             init = parseFactor(scope);
@@ -712,18 +731,21 @@ static ASTNode* parsePostfix(SymbolNode* scope)
             } else {
                 parent = AST_Create_index(arrayExpr, subscriptOrLowerBound, scope, token->pos);
             }
-            parent->pos = merge(parent->pos, token->pos);
+            parent->pos = Position_Merge(parent->pos, token->pos);
             child = parent;
         } else if ((token = accept(TOKEN_DOT)) != NULL) {
             token = expect(TOKEN_IDENT);
             char* text = malloc(sizeof(char) * 255);
+            if (!text) {
+                gen_error("memory error");
+            }
             strncpy_s(text, 255, token->data, 254);
             ASTNode* ident = AST_Create_ident(text, scope, token->pos);
-            child = AST_Create_dot(child, ident, scope, token->pos, false);
+            child = AST_Create_dot(child, ident, scope, token->pos);
         } else if ((token = accept(TOKEN_QMARK)) != NULL) {
             child = AST_Create_maybe(child, scope, token->pos);
         } else if ((token = accept(TOKEN_COLON)) != NULL) {
-            child = AST_Create_cast(child, parseType(scope, false), scope, token->pos);
+            child = AST_Create_cast(child, parseType(scope), scope, token->pos);
         } else {
             break;
         }
@@ -744,7 +766,7 @@ static ASTNode* parsePrefix(SymbolNode* scope)
     } else if ((token = accept(TOKEN_AMPERSAND)) != NULL) {
         prefix = AST_Create_addrOf(parsePrefix(scope), scope, token->pos);
     } else if ((token = accept(TOKEN_SIZEOF)) != NULL) {
-        prefix = AST_Create_sizeof(parseType(scope, false), scope, token->pos);
+        prefix = AST_Create_sizeof(parseType(scope), scope, token->pos);
     } else if ((token = accept(TOKEN_STAR)) != NULL) {
         prefix = AST_Create_deref(parsePrefix(scope), scope, token->pos);
     } else if ((token = accept(TOKEN_TRY)) != NULL) {
@@ -1008,7 +1030,7 @@ static ASTNode* parseDefine(SymbolNode* scope)
     bool inferType = accept(TOKEN_ASSIGN);
 
     if (!inferType) {
-        type = parseType(symbol, false);
+        type = parseType(symbol);
         symbol->isError = type->astType == AST_ERROR || type->astType == AST_INFER_ERROR;
         type->isConst |= isConst;
         if (type->astType == AST_IDENT && !strcmp(type->ident.data, "Package")) {
@@ -1023,7 +1045,7 @@ static ASTNode* parseDefine(SymbolNode* scope)
         } else {
             symbol->symbolType = SYMBOL_VARIABLE;
         }
-        symbol->pos = merge(symbol->pos, type->pos);
+        symbol->pos = Position_Merge(symbol->pos, type->pos);
     } else {
         type = AST_Create_undef(scope, prevToken->pos);
         type->isConst |= isConst;
@@ -1035,11 +1057,11 @@ static ASTNode* parseDefine(SymbolNode* scope)
 
     if (inferType || accept(TOKEN_ASSIGN)) {
         if (symbol->symbolType == SYMBOL_MODULE || symbol->symbolType == SYMBOL_PACKAGE) {
-            def = parseType(symbol, false);
+            def = parseType(symbol);
         } else if (symbol->symbolType == SYMBOL_MODULE) {
-            def = parseType(symbol, false);
+            def = parseType(symbol);
         } else if (symbol->symbolType == SYMBOL_TYPE) {
-            def = parseType(symbol, true);
+            def = parseType(symbol);
         } else {
             def = parseExpr(symbol);
         }
@@ -1058,7 +1080,7 @@ ASTNode* Parser_Parse(FILE* _in, SymbolNode* program)
     in = _in;
     tokens = List_Create();
 
-    ASTNode* module = parseDefine(program, true);
+    ASTNode* module = parseDefine(program);
     expect(TOKEN_EOF);
     List_Destroy(tokens);
 

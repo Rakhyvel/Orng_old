@@ -5,6 +5,7 @@
 #include "../util/debug.h"
 #include "../util/list.h"
 #include "../util/map.h"
+#include "./errors.h"
 #include "./lexer.h"
 #include "./main.h"
 #include <fcntl.h>
@@ -17,7 +18,7 @@
 struct symbolNode* Symbol_Create(char* name, SymbolType symbolType, struct symbolNode* parent, struct position pos)
 {
     struct symbolNode* retval = (struct symbolNode*)calloc(1, sizeof(struct symbolNode));
-
+    ASSERT(retval != NULL);
     retval->symbolType = symbolType;
     retval->parent = parent;
     retval->children = Map_Create();
@@ -66,7 +67,7 @@ struct symbolNode* Symbol_Find(const char* symbolName, const struct symbolNode* 
         SymbolNode* var = Map_Get(parentNode->children, symbolName);
         if (scope->hasRestrictions && !List_Contains(scope->restrictions, var) && scope != var && var != 0) {
             rejectingSymbol = scope;
-            return -1;
+            return RESTRICTED_SYMBOL;
         } else {
             return Symbol_Find(symbolName, scope->parent);
         }
@@ -86,7 +87,7 @@ struct symbolNode* Symbol_TypeAncestor(struct symbolNode* scope, SymbolType type
 }
 
 // Pretty-prints out a symbol tree
-void Symbol_Print(SymbolNode* root, wchar_t* prefix, wchar_t* childrenPrefix)
+void Symbol_Print(SymbolNode* root, char* prefix, char* childrenPrefix)
 {
     ASSERT(root != NULL);
 
@@ -130,18 +131,16 @@ void Symbol_Print(SymbolNode* root, wchar_t* prefix, wchar_t* childrenPrefix)
 }
 
 // Resets the 'visited' flag in an entire symbol tree to false
-void unVisitSymbolTree(SymbolNode* node)
+void Symbol_UnvisitTree(SymbolNode* node)
 {
     if (node == NULL) {
         return;
     }
     node->visited = false;
 
-    List* children = node->children->keyList;
-    ListElem* elem = List_Begin(children);
-    for (; elem != List_End(children); elem = elem->next) {
-        SymbolNode* child = Map_Get(node->children, elem->data);
-        unVisitSymbolTree(child);
+    forall(elem, node->children->keyList)
+    {
+        Symbol_UnvisitTree(Map_Get(node->children, elem->data));
     }
 }
 

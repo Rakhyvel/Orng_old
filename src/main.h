@@ -9,28 +9,7 @@
 #include "./symbol.h"
 #include <stdio.h>
 
-char* filename;
-Map* files;
-
-// Represents a node in the product/sum dependency graph
-typedef struct {
-    ASTNode* typeDef; // Definition of the product/sum type
-    int id; // The unique ID of this dependency graph node
-    List* dependencies; // List of other DGraph nodes for product/sum types used by the fields of the type of this DGraph node
-    bool visited; // Used for graph traversal
-} DGraph;
-
-// Represents the entire program through compilation
-typedef struct program {
-    List* structDependencyGraph;
-    Map* includes;
-    List* verbatims;
-    struct CFG* callGraph;
-} Program;
-
-bool isDebug;
-
-char* getRelPath(char*);
-char* pathToFilename(char* path);
+char* Main_GetRelPath(char*);
+char* Main_PathToFilename(char* path);
 
 #endif

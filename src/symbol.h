@@ -14,7 +14,7 @@ typedef enum symbolType {
     SYMBOL_PACKAGE,
     SYMBOL_MODULE,
     SYMBOL_FUNCTION,
-    SYMBOL_TYPE, // typedef or struct def
+    SYMBOL_TYPE,
     SYMBOL_BLOCK,
     SYMBOL_VARIABLE
 } SymbolType;
@@ -52,13 +52,14 @@ typedef struct symbolNode {
     bool visited; // Used for traversal
 } SymbolNode;
 
+#define RESTRICTED_SYMBOL ((struct symbolNode*)-1)
 struct symbolNode* rejectingSymbol; // When symbol_find fails, this is the symbol that rejected it
 
 struct symbolNode* Symbol_Create(char* name, SymbolType symbolType, struct symbolNode* parent, struct position pos);
 struct symbolNode* Symbol_Find(const char* symbolName, const struct symbolNode* scope);
 struct symbolNode* Symbol_TypeAncestor(struct symbolNode* scope, SymbolType type);
 void Symbol_Print(SymbolNode* root, char* prefix, char* childrenPrefix);
-void unVisitSymbolTree(SymbolNode* node);
+void Symbol_UnvisitTree(SymbolNode* node);
 struct symbolNode* Symbol_MostRecentNonBlock(struct symbolNode* scope);
 struct symbolNode* Symbol_Root(const struct symbolNode* scope);
 

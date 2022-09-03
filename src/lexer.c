@@ -5,6 +5,7 @@
 #include "../util/debug.h"
 #include "../util/list.h"
 #include "./position.h"
+#include "./program.h"
 #include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
@@ -112,7 +113,7 @@ static bool cNameClash(char* str)
 }
 
 // Shifts the string one character, sets first character to '_'
-static bool prependWithUnderscore(char* str)
+static void prependWithUnderscore(char* str)
 {
     int len = strlen(str);
     for (int i = len; i > 0; i--) {
@@ -127,7 +128,7 @@ Token* Lexer_GetNextToken(FILE* in)
     int nextChar;
     bool inComment = false;
     struct token* token = (struct token*)calloc(1, sizeof(struct token));
-    token->pos.filename = filename;
+    token->pos.filename = program->filename;
     token->pos.start_line = line;
     token->pos.end_line = line;
     token->pos.start_span = span;

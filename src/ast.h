@@ -99,7 +99,7 @@ enum astType {
     // Types
     AST_VOID,
     AST_ADDR,
-    AST_PARAMLIST,
+    AST_PRODUCT,
     AST_ARRAY,
     AST_ENUM,
     AST_UNION,
@@ -146,17 +146,17 @@ typedef struct astNode_arrayLiteral {
 } astNode_arrayLiteral;
 
 typedef struct astNode_enumLiteral {
-    int tag;
+    int64_t tag;
     struct astNode* expr;
 } astNode_enumLiteral;
 
 typedef struct astNode_taggedUnop {
-    int tag;
+    int64_t tag;
     struct astNode* expr;
 } astNode_taggedUnop;
 
 typedef struct astNode_taggedBinop {
-    int tag;
+    int64_t tag;
     struct astNode* left;
     struct astNode* right;
 } astNode_taggedBinop;
@@ -232,13 +232,13 @@ typedef struct astNode_mapping {
 typedef struct astNode_fieldMapping {
     List* exprs;
     struct astNode* expr;
-    int tag;
+    int64_t tag;
 } astNode_fieldMapping;
 
-// for parameter lists, modules, structs, arrays, enums, a lot!
-typedef struct astNode_paramlist {
+// for product type literals, modules, arrays, enums, a lot!
+typedef struct astNode_product {
     List* defines;
-} astNode_paramlist;
+} astNode_product;
 
 typedef struct astNode_enum {
     List* defines;
@@ -298,7 +298,7 @@ typedef struct astNode {
         astNode_case _case;
         astNode_mapping mapping;
         astNode_fieldMapping fieldMapping;
-        astNode_paramlist paramlist;
+        astNode_product product;
         astNode_enum _enum;
         astNode_function function;
         astNode_extern _extern;
@@ -337,13 +337,13 @@ int AST_TypeRepr(char* str, ASTNode* type);
 char* AST_GetString(enum astType type);
 void AST_Print(ASTNode* root, char* prefix, char* childrenPrefix);
 
-ASTNode* getArrayDataType(ASTNode* type);
-int getArrayLength(ASTNode* type);
-ASTNode* getArrayLengthAST(ASTNode* type);
-ASTNode* getArrayDataTypeAddr(ASTNode* type);
-BinopConstructor getBinopConstructor(enum astType astType);
-ASTNode* createArrayTypeNode(ASTNode* baseType, int length, struct position pos);
-ASTNode* createMaybeType(ASTNode* somethingBaseType);
+ASTNode* AST_GetArrayDataType(ASTNode* type);
+int64_t AST_GetArrayLength(ASTNode* type);
+ASTNode* AST_GetArrayLengthAST(ASTNode* type);
+ASTNode* AST_GetArrayDataTypeAddr(ASTNode* type);
+BinopConstructor AST_GetBinopConstructor(enum astType astType);
+ASTNode* AST_CreateArrayTypeNode(ASTNode* baseType, int length, struct position pos);
+ASTNode* AST_CreateMaybeType(ASTNode* somethingBaseType);
 
 void AST_Init();
 
@@ -356,7 +356,7 @@ ASTNode* AST_Create_real(double data, struct symbolNode* scope, struct position 
 ASTNode* AST_Create_arglist(struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_namedArg(char* name, struct astNode* expr, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_nothing(struct symbolNode* scope, struct position pos);
-ASTNode* AST_Create_enumLiteral(int tag, struct astNode* expr, struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_enumLiteral(int64_t tag, struct astNode* expr, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_arrayLiteral(struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_string(char* data, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_undef(struct symbolNode* scope, struct position pos);
@@ -426,7 +426,7 @@ ASTNode* AST_Create_defer(struct astNode* expr, struct symbolNode* scope, struct
 ASTNode* AST_Create_errdefer(struct astNode* expr, struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_void(struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_addr(struct astNode* type, struct symbolNode* scope, struct position pos);
-ASTNode* AST_Create_paramlist(struct symbolNode* scope, struct position pos);
+ASTNode* AST_Create_product(struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_array(struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_enum(struct symbolNode* scope, struct position pos);
 ASTNode* AST_Create_union(struct astNode* left, struct astNode* right, struct symbolNode* scope, struct position pos);

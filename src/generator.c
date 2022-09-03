@@ -4,16 +4,16 @@
 #include "generator.h"
 #include "../util/debug.h"
 #include "../util/list.h"
+#include "./errors.h"
 #include "./ir.h"
 #include "./main.h"
 #include "./parse.h"
 #include "./position.h"
+#include "./program.h"
 #include "./validator.h"
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-
-Program program;
 
 static void generateDefine(FILE* out, SymbolNode* var, bool param, bool field);
 static void generateEnum(FILE* out, DGraph* graphNode);
@@ -57,10 +57,10 @@ static void generateDebug(FILE* out)
 
     fprintf(out, "char* tagGetFieldName(int tag) {\n");
     fprintf(out, "	switch(tag) {\n");
-    forall(elem, tagIDs->keyList)
+    forall(elem, program->tagIDs->keyList)
     {
         char* fieldName = elem->data;
-        List* idList = Map_Get(tagIDs, fieldName);
+        List* idList = Map_Get(program->tagIDs, fieldName);
         for (int i = 0; i < idList->size; i++) {
             int64_t data = (int64_t)List_Get(idList, i);
             fprintf(out, "\tcase %d:\n", (int)data);
@@ -84,16 +84,16 @@ static void stackTracePush(FILE* out, char* list)
 // Prints out the ordinal of a given struct type
 static void printStructOrd(FILE* out, ASTNode* type)
 {
-    struct listElem* elem = List_Begin(program.structDependencyGraph);
     int i = 1;
-    bool found = false;
-    for (; !found && elem != List_End(program.structDependencyGraph); elem = List_Next(elem), i++) {
+    forall(elem, program->typeDependencyGraph)
+    {
         DGraph* node = (DGraph*)elem->data;
         ASTNode* child = node->typeDef;
         if (isSubtype(child, type)) {
             fprintf(out, "struct_%s", myItoa(i));
-            found = true;
+            break;
         }
+        i++;
     }
 }
 
@@ -141,7 +141,7 @@ static void printType(FILE* out, ASTNode* type)
         fprintf(out, "*");
         break;
     }
-    case AST_PARAMLIST:
+    case AST_PRODUCT:
     case AST_ARRAY:
     case AST_ENUM: {
         fprintf(out, "struct ");
@@ -176,7 +176,7 @@ static void printPath(FILE* out, SymbolNode* symbol)
     }
     // Everything else
     else if (symbol->parent && (symbol->parent->symbolType != SYMBOL_TYPE || symbol->symbolType == SYMBOL_FUNCTION) && symbol->parent->parent && !symbol->isExtern) {
-        if (symbol->parent->symbolType != SYMBOL_VARIABLE) { // Done so that fields in anon structs collected by variable types don't have their variable names appended
+        if (symbol->parent->symbolType != SYMBOL_VARIABLE) { // Done so that fields in product/enum types collected by variable types don't have their variable names appended
             // Done so that inner functions print correctly (i think)
             if (symbol->symbolType == SYMBOL_VARIABLE || (symbol->parent->parent->symbolType != SYMBOL_BLOCK && symbol->parent->symbolType != SYMBOL_FUNCTION)) {
                 printPath(out, symbol->parent);
@@ -193,15 +193,15 @@ static void printPath(FILE* out, SymbolNode* symbol)
 }
 
 // Prints out the definitions of a product type
-static void generateParamList(FILE* out, ASTNode* parameters)
+static void generateProductParamlist(FILE* out, ASTNode* parameters)
 {
     // For each parameter in the procedure's parameter list, print it out
-    forall(elem, parameters->paramlist.defines)
+    forall(elem, parameters->product.defines)
     {
         ASTNode* define = elem->data;
         SymbolNode* var = define->define.symbol;
         generateDefine(out, var, true, false);
-        if (elem != List_End(parameters->paramlist.defines)->prev) {
+        if (elem != List_End(parameters->product.defines)->prev) {
             fprintf(out, ", ");
         }
     }
@@ -224,7 +224,7 @@ static void generateDefine(FILE* out, SymbolNode* var, bool param, bool field)
     if (functionPtr) {
         fprintf(out, ") (");
         ASTNode* params = var->type->function.domainType;
-        generateParamList(out, params);
+        generateProductParamlist(out, params);
         fprintf(out, ")");
     }
     if (var->isVararg) {
@@ -236,7 +236,7 @@ static void generateDefine(FILE* out, SymbolNode* var, bool param, bool field)
 }
 
 // Prints out a struct from a dependency graph node in such a way that all dependencies are defined
-static void generateStruct(FILE* out, DGraph* graphNode)
+static void generateProduct(FILE* out, DGraph* graphNode)
 {
     if (graphNode->visited) {
         return;
@@ -251,7 +251,7 @@ static void generateStruct(FILE* out, DGraph* graphNode)
         if (child->typeDef->astType == AST_ENUM) {
             generateEnum(out, child);
         } else {
-            generateStruct(out, child);
+            generateProduct(out, child);
         }
     }
 
@@ -259,7 +259,7 @@ static void generateStruct(FILE* out, DGraph* graphNode)
     fprintf(out, "struct struct_%d {\n", graphNode->id + 1);
 
     // For each parameter in the procedure's parameter list, print it out
-    forall(elem, _struct->paramlist.defines)
+    forall(elem, _struct->product.defines)
     {
         ASTNode* define = elem->data;
         SymbolNode* var = define->define.symbol;
@@ -288,7 +288,7 @@ static void generateEnum(FILE* out, DGraph* graphNode)
         if (child->typeDef->astType == AST_ENUM) {
             generateEnum(out, child);
         } else {
-            generateStruct(out, child);
+            generateProduct(out, child);
         }
     }
 
@@ -326,7 +326,7 @@ static void generateEnum(FILE* out, DGraph* graphNode)
 }
 
 // Takes a list of dependency nodes that are either sum or product types, prints them out
-static void generateStructDefinitions(FILE* out, List* depenGraph)
+static void generateProductDefinitions(FILE* out, List* depenGraph)
 {
     fprintf(out, "/* Struct definitions */\n");
     forall(elem, depenGraph)
@@ -335,7 +335,7 @@ static void generateStructDefinitions(FILE* out, List* depenGraph)
         if (graphNode->typeDef->astType == AST_ENUM) {
             generateEnum(out, graphNode);
         } else {
-            generateStruct(out, graphNode);
+            generateProduct(out, graphNode);
         }
     }
 }
@@ -365,7 +365,7 @@ static void generateForwardFunctions(FILE* out, CFG* callGraphNode)
     ASTNode* functionType = symbol->type;
     ASTNode* params = functionType->function.domainType;
     ASTNode* returns = functionType->function.codomainType;
-    if (returns->astType != AST_PARAMLIST) {
+    if (returns->astType != AST_PRODUCT) {
         printType(out, functionType);
     } else {
         printType(out, returns);
@@ -373,7 +373,7 @@ static void generateForwardFunctions(FILE* out, CFG* callGraphNode)
     fprintf(out, " ");
     printPath(out, symbol);
     fprintf(out, "(");
-    generateParamList(out, params);
+    generateProductParamlist(out, params);
     fprintf(out, ");\n");
 
     forall(elem, callGraphNode->leaves)
@@ -404,7 +404,7 @@ static void printVarDef(FILE* out, SymbolVersion* version)
     if (functionPtr) {
         fprintf(out, ") (");
         ASTNode* params = version->type->function.domainType;
-        generateParamList(out, params);
+        generateProductParamlist(out, params);
         fprintf(out, ")");
     }
     fprintf(out, ";\n");
@@ -503,13 +503,14 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
     }
     case IR_LOAD_REAL: {
         printVarAssign(out, ir->dest);
-        fprintf(out, "%f;\n", ir->doubleData);
+        fprintf(out, "%f;\n", ir->realData);
         break;
     }
     case IR_LOAD_ARGLIST:
     case IR_SLICE: {
         printVarAssign(out, ir->dest);
         fprintf(out, "(");
+        ASSERT(ir->dest != NULL);
         printType(out, ir->dest->type);
         fprintf(out, ") {");
         forall(elem, ir->listData)
@@ -527,6 +528,7 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
     case IR_LOAD_ARRAY_LITERAL: {
         printVarAssign(out, ir->dest);
         fprintf(out, "(");
+        ASSERT(ir->dest != NULL);
         printType(out, ir->dest->type);
         fprintf(out, ") {%d, (", ir->listData->size);
         printType(out, ((SymbolVersion*)List_Get(ir->listData, 0))->type);
@@ -556,11 +558,13 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
     case IR_LOAD_STRING: {
         printVarAssign(out, ir->dest);
         fprintf(out, "(");
+        ASSERT(ir->dest != NULL);
         printType(out, ir->dest->type);
         fprintf(out, ") {%d, \"%s\"};\n", strlen(ir->strData), ir->strData);
         break;
     }
     case IR_COPY: {
+        ASSERT(ir->dest != NULL && ir->dest->type != NULL);
         if (ir->dest->type->astType != AST_VOID) {
             printVarAssign(out, ir->dest);
             printVar(out, ir->src1);
@@ -735,7 +739,7 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
     }
     case IR_SIZEOF: {
         printVarAssign(out, ir->dest);
-        fprintf(out, "\sizeof(");
+        fprintf(out, "sizeof(");
         printType(out, ir->fromType);
         fprintf(out, ");\n");
         break;
@@ -821,6 +825,7 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
         fprintf(out, "\t");
         SymbolVersion* lastLen = NULL;
         int dim = 0;
+        ASSERT(ir->dest != NULL);
         ASTNode* arrType = ir->dest->type;
         forall(elem, ir->listData)
         {
@@ -839,7 +844,7 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
 
             fprintf(out, "(");
             printType(out, arrType);
-            arrType = getArrayDataType(arrType);
+            arrType = AST_GetArrayDataType(arrType);
             fprintf(out, ") ");
             fprintf(out, "{");
             printVar(out, len);
@@ -905,6 +910,7 @@ static void generateIR(FILE* out, CFG* cfg, IR* ir)
         fprintf(out, "\"");
         printPos(out, ir->pos);
         fprintf(out, "\";\n");
+        ASSERT(ir->dest != NULL && ir->dest->type != NULL);
         if (ir->dest->type->astType != AST_VOID) {
             printVarAssign(out, ir->dest);
         } else {
@@ -978,7 +984,7 @@ static void generatePhi(FILE* out, List* argsList, BasicBlock* to, bool extraTab
 // Prints the copies of the function's arguments to the functions root basic-block's phi parameters
 static void generatePhiFunction(FILE* out, CFG* cfg)
 {
-    forall(elem, cfg->symbol->type->function.domainType->paramlist.defines)
+    forall(elem, cfg->symbol->type->function.domainType->product.defines)
     {
         ASTNode* define = elem->data;
         SymbolNode* symbol = define->define.symbol;
@@ -1054,7 +1060,7 @@ static void generateFunctionDefinitions(FILE* out, CFG* callGraphNode)
     ASTNode* functionType = symbol->type;
     ASTNode* params = functionType->function.domainType;
     ASTNode* returns = functionType->function.codomainType;
-    if (returns->astType != AST_PARAMLIST) {
+    if (returns->astType != AST_PRODUCT) {
         printType(out, functionType);
     } else {
         printType(out, returns);
@@ -1062,7 +1068,7 @@ static void generateFunctionDefinitions(FILE* out, CFG* callGraphNode)
     fprintf(out, " ");
     printPath(out, symbol);
     fprintf(out, "(");
-    generateParamList(out, params);
+    generateProductParamlist(out, params);
     fprintf(out, ")\n{\n");
     if (callGraphNode->symbol->type->function.codomainType->astType != AST_VOID) {
         fprintf(out, "\t");
@@ -1151,29 +1157,27 @@ static void generateMainFunction(FILE* out, CFG* callGraph)
 
     fprintf(out, "\tfree(args.data);\n");
 
-    fprintf(out, "\tif (errorTrace.length > 0) {\n\t\tfprintf(stderr, \"error: %%s\\n\", tagGetFieldName(retval.tag));\n\t}\n\tstackTracePrint(&errorTrace);\n\treturn retval.tag != %d;\n", getTag("success", VOID_TYPE));
+    fprintf(out, "\tif (errorTrace.length > 0) {\n\t\tfprintf(stderr, \"error: %%s\\n\", tagGetFieldName(retval.tag));\n\t}\n\tstackTracePrint(&errorTrace);\n\treturn retval.tag != %d;\n", (int)getTag("success", VOID_TYPE));
 
     fprintf(out, "}\n");
 }
 
 // Prints out the Orng program
-void Generator_Generate(FILE* out, struct program _program)
+void Generator_Generate(FILE* out)
 {
-    program = _program;
-
-    srand(time(0));
+    srand((int)time(0));
     int randID = rand();
     fprintf(out, "/* Code generated using the Orng compiler http://josephs-projects.com */\n");
     fprintf(out, "\n#ifndef ORNG_%s\n#define ORNG_%s\n#define _CRT_SECURE_NO_WARNINGS\n\n", myItoa(randID), myItoa(randID));
-    generateIncludes(out, program.includes);
+    generateIncludes(out, program->includes);
     generateDebug(out);
-    generateStructDefinitions(out, program.structDependencyGraph);
-    generateVerbatims(out, program.verbatims);
+    generateProductDefinitions(out, program->typeDependencyGraph);
+    generateVerbatims(out, program->verbatims);
     fprintf(out, "/* Function definitions */\n");
-    generateForwardFunctions(out, program.callGraph);
+    generateForwardFunctions(out, program->callGraph);
     fprintf(out, "\n");
-    generateFunctionDefinitions(out, program.callGraph);
-    generateMainFunction(out, program.callGraph);
+    generateFunctionDefinitions(out, program->callGraph);
+    generateMainFunction(out, program->callGraph);
 
     fprintf(out, "#endif\n");
 }

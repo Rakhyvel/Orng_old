@@ -8,99 +8,21 @@
 #include "./ir.h"
 #include "./main.h"
 #include "./position.h"
+#include "./program.h"
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
 
-// Maps field names to set of types available for that field
-const Map* tagTypes = NULL; // Map(name:String, Set(type))
-// Maps field names to set of ids that correspond with field type
-const Map* tagIDs = NULL; // Map(name:String, List(tag:Int))
-// Set of DGraph nodes for unique product and sum types
-static const List* structDepenGraph = NULL;
-// Map used as a Set of filenames to include for the Orng program
-static const Map* includes = NULL;
-// List of verbatim code. TODO: Remove verbatims
-static const List* verbatims = NULL;
-// The main function of the program, found after traversal
-static const SymbolNode* mainFunction = NULL;
-// The call graph, built from the functions reachable by the main function
-static const CFG* callGraph = NULL;
 // Whether to use structural type equivalence or not. True during validation phase, false during generation phase
 bool structuralTypeEquiv = false;
 
 static ASTNode* evaluateType(ASTNode* type, bool keepExternTypes);
-bool isSubtype(ASTNode* a, ASTNode* b);
 static void symbolTypeCheck(SymbolNode* var);
 static ASTNode* getType(ASTNode* node, bool keepExternTypes);
 static ASTNode* validateAST(ASTNode* node, ASTNode* coerceType);
 static void validateType(ASTNode* node, bool collectThisType);
 
-// Returns the tag ID for a field name/type pair, panics on error
-int getTag(char* fieldName, ASTNode* fieldType)
-{
-    List* set = Map_Get(tagTypes, fieldName);
-    if (!set) {
-        PANIC("NO!");
-    }
-    int i = 0;
-    forall(elem, set)
-    {
-        ASTNode* type = elem->data;
-        // Types are completely equal
-        if (isSubtype(type, fieldType) && isSubtype(fieldType, type)) {
-            break;
-        }
-        i++;
-    }
-    List* ids = Map_Get(tagIDs, fieldName);
-    int64_t tag = (int64_t)List_Get(ids, i);
-    return tag;
-}
-
-// Returns the tag ID for a field name from within a sum type
-int getTagEnum(char* fieldName, ASTNode* enumType)
-{
-    forall(elem, enumType->_enum.defines)
-    {
-        ASTNode* define = elem->data;
-        SymbolNode* var = define->define.symbol;
-        if (!strcmp(var->name, fieldName)) {
-            return getTag(fieldName, var->type);
-        }
-    }
-    PANIC("couldn't find tag enum");
-}
-
-// Returns the type of a field given a tag from a sum type
-ASTNode* getTypeEnum(int tag, ASTNode* enumType)
-{
-    forall(elem, enumType->_enum.defines)
-    {
-        ASTNode* define = elem->data;
-        SymbolNode* var = define->define.symbol;
-        if (getTag(var->name, var->type) == tag) {
-            return var->type;
-        }
-    }
-    PANIC("couldn't find tag enum");
-}
-
-// Determines whether a sum type contains a field name/type pair
-bool enumContainsField(ASTNode* enumType, char* fieldName, ASTNode* fieldType)
-{
-    forall(elem, enumType->_enum.defines)
-    {
-        ASTNode* define = elem->data;
-        SymbolNode* var = define->define.symbol;
-        if (!strcmp(var->name, fieldName) && isSubtype(var->type, fieldType)) {
-            return true;
-        }
-    }
-    return false;
-}
-
-// Given two sun types, adds all the definitions from the right type to the left type. Field names may collide if types are equal, though fields will not be duplicated.
+// Given two sum types, adds all the definitions from the right type to the left type. Field names may collide if types are equal, though fields will not be duplicated.
 static void unionEnums(ASTNode* left, ASTNode* right)
 {
     forall(elem, right->_enum.defines)
@@ -140,7 +62,7 @@ static SymbolNode* getDotSymbol(ASTNode* type)
         } else if (newLeft->astType == AST_IDENT) {
             leftSymbol = Symbol_Find(newLeft->ident.data, type->scope);
             ASTNode* prevNewLeftType = newLeft;
-            if (leftSymbol == 0 || leftSymbol == -1) {
+            if (leftSymbol == NULL || leftSymbol == RESTRICTED_SYMBOL) {
                 newLeft = NULL;
                 resolved = true;
             } else {
@@ -169,8 +91,8 @@ static SymbolNode* getDotSymbol(ASTNode* type)
                 resolved = true;
             }
         }
-        // Resolved, will iterate through paramlist
-        else if (newLeft->astType == AST_PARAMLIST || newLeft->astType == AST_ARRAY || newLeft->astType == AST_STRING || newLeft->astType == AST_ENUM) {
+        // Resolved, will iterate through product
+        else if (newLeft->astType == AST_PRODUCT || newLeft->astType == AST_ARRAY || newLeft->astType == AST_STRING || newLeft->astType == AST_ENUM) {
             resolved = true;
         }
         // newLeft is in the first child
@@ -185,14 +107,14 @@ static SymbolNode* getDotSymbol(ASTNode* type)
         }
         // newLeft is in the first child's type
         else if (newLeft->astType == AST_INDEX) {
-            ASTNode* arrayType = getType(newLeft->binop.left,  false);
+            ASTNode* arrayType = getType(newLeft->binop.left, false);
             if (arrayType->astType == AST_ADDR) {
                 arrayType = arrayType->binop.left;
             }
             if (arrayType->astType != AST_ARRAY) {
-                error(type->pos, "indexing on a non-array type");
+                error(type->pos, "indexing on non-array type");
             }
-            ASTNode* dataDefine = List_Get(arrayType->paramlist.defines, 1);
+            ASTNode* dataDefine = List_Get(arrayType->product.defines, 1);
             SymbolNode* dataSymbol = dataDefine->define.symbol;
             ASTNode* dataAddrType = dataSymbol->type;
             newLeft = dataAddrType->binop.left;
@@ -204,7 +126,7 @@ static SymbolNode* getDotSymbol(ASTNode* type)
         }
         // newLeft is the type of the array data
         else if (newLeft->astType == AST_ARRAY) {
-            ASTNode* define = List_Get(newLeft->paramlist.defines, 1);
+            ASTNode* define = List_Get(newLeft->product.defines, 1);
             SymbolNode* var = define->define.symbol;
             if (var->symbolType == SYMBOL_VARIABLE) {
                 newLeft = var->type;
@@ -217,20 +139,21 @@ static SymbolNode* getDotSymbol(ASTNode* type)
             newLeft = getType(newLeft, false);
             resolved = false;
         } else { // unreachable, likely not an L value
-            error(left->pos, "left side of dot expression is not an l value");
+            error(left->pos, "left side of dot expression is not l value");
             return NULL;
         }
     }
 
     SymbolNode* rightSymbol = NULL;
     if (!newLeft) {
-        error(left->pos, "left side could not be resolved to a container");
+        ASSERT(left != NULL);
+        error(left->pos, "left side could not be resolved to container");
     } else if (newLeft->astType == AST_STRING) {
         return NULL;
-    } else if (newLeft->astType == AST_PARAMLIST || newLeft->astType == AST_ARRAY || newLeft->astType == AST_ENUM) {
-        // Search paramlists' defines for a symbol that matches
-        ListElem* elem = List_Begin(newLeft->paramlist.defines);
-        for (; rightSymbol == NULL && elem != List_End(newLeft->paramlist.defines); elem = elem->next) {
+    } else if (newLeft->astType == AST_PRODUCT || newLeft->astType == AST_ARRAY || newLeft->astType == AST_ENUM) {
+        // Search products' defines for a symbol that matches
+        ListElem* elem = List_Begin(newLeft->product.defines);
+        for (; rightSymbol == NULL && elem != List_End(newLeft->product.defines); elem = elem->next) {
             ASTNode* define = elem->data;
             SymbolNode* attr = define->define.symbol;
             if (!strcmp(attr->name, right->ident.data)) {
@@ -239,13 +162,13 @@ static SymbolNode* getDotSymbol(ASTNode* type)
             }
         }
         if (rightSymbol == NULL) {
-            notMemberOfExpression(right->pos, right->ident.data, newLeft);
+            notMemberOfExpressionError(right->pos, right->ident.data, newLeft);
         }
     } else { // ERROR! NOT A PARAM LIST NOR ENUM!
         // Search symbol for a symbol that matches
         rightSymbol = Map_Get(leftSymbol->children, right->ident.data);
         if (rightSymbol == NULL) {
-            notMemberOfExpression(right->pos, right->ident.data, newLeft);
+            notMemberOfExpressionError(right->pos, right->ident.data, newLeft);
         }
     }
     type->dot.symbol = rightSymbol;
@@ -257,8 +180,8 @@ static ASTNode* resolveDotTypes(ASTNode* node, bool keepExternTypes)
 {
     if (node->astType == AST_DOT) {
         SymbolNode* dotSymbol = getDotSymbol(node);
-        if (dotSymbol == 0 || dotSymbol == -1) {
-            error(node->pos, "dot expression doesn't resolve to a symbol");
+        if (dotSymbol == NULL || dotSymbol == RESTRICTED_SYMBOL) {
+            error(node->pos, "dot expression doesn't resolve to symbol");
         } else if (keepExternTypes && dotSymbol->isExtern) {
             return AST_Create_extern(dotSymbol, dotSymbol, dotSymbol->pos);
         } else {
@@ -276,9 +199,9 @@ static ASTNode* evaluateType(ASTNode* type, bool keepExternTypes)
     ASTNode* expanded = type;
     while (expanded->astType == AST_IDENT) {
         SymbolNode* var = Symbol_Find(expanded->ident.data, expanded->scope);
-        if (var != 0 && var != -1) {
+        if (var != NULL && var != RESTRICTED_SYMBOL) {
             if (var->symbolType != SYMBOL_TYPE) {
-                ASTNode* varType = getType(var->def,  false);
+                ASTNode* varType = getType(var->def, false);
                 if (varType->astType != AST_IDENT || strcmp(varType->ident.data, "Type")) {
                     error2(type->pos, var->pos, "symbol '%s' is not a type", var->name);
                 }
@@ -301,18 +224,19 @@ static ASTNode* evaluateType(ASTNode* type, bool keepExternTypes)
         }
         loopCounter++;
     }
+
     if (expanded->astType == AST_ADDR) {
         expanded = AST_Create_addr(evaluateType(expanded->unop.expr, true), expanded->scope, expanded->pos);
-    } else if (expanded->astType == AST_PARAMLIST || expanded->astType == AST_ARRAY) {
-        ListElem* elem = List_Begin(expanded->paramlist.defines);
-        for (; elem != List_End(expanded->paramlist.defines); elem = elem->next) {
+    } else if (expanded->astType == AST_PRODUCT || expanded->astType == AST_ARRAY) {
+        forall(elem, expanded->product.defines)
+        {
             ASTNode* define = elem->data;
             SymbolNode* symbol = define->define.symbol;
             Validator_ValidateSymbol(symbol);
         }
     } else if (expanded->astType == AST_ENUM) {
-        ListElem* elem = List_Begin(expanded->_enum.defines);
-        for (; elem != List_End(expanded->_enum.defines); elem = elem->next) {
+        forall(elem, expanded->_enum.defines)
+        {
             ASTNode* define = elem->data;
             SymbolNode* symbol = define->define.symbol;
             Validator_ValidateSymbol(symbol);
@@ -496,7 +420,7 @@ bool isSubtype(ASTNode* a, ASTNode* b)
     bool retval = true;
     if (bExpand->astType == AST_INFER_ERROR && aExpand->astType != AST_INFER_ERROR) {
         retval = false;
-    } else if (aExpand->astType != bExpand->astType && aExpand != AST_FUNCTION) {
+    } else if (aExpand->astType != bExpand->astType && aExpand->astType != AST_FUNCTION) {
         retval = false;
     } else {
         switch (aExpand->astType) {
@@ -528,15 +452,15 @@ bool isSubtype(ASTNode* a, ASTNode* b)
             }
             break;
         }
-        case AST_PARAMLIST: {
-            if (aExpand->paramlist.defines->size != bExpand->paramlist.defines->size) {
+        case AST_PRODUCT: {
+            if (aExpand->product.defines->size != bExpand->product.defines->size) {
                 retval = false;
                 break;
             }
-            ListElem* aElem = List_Begin(aExpand->paramlist.defines);
-            ListElem* bElem = List_Begin(bExpand->paramlist.defines);
+            ListElem* aElem = List_Begin(aExpand->product.defines);
+            ListElem* bElem = List_Begin(bExpand->product.defines);
             bool allEquiv = true;
-            for (; aElem != List_End(aExpand->paramlist.defines); aElem = aElem->next, bElem = bElem->next) {
+            for (; aElem != List_End(aExpand->product.defines); aElem = aElem->next, bElem = bElem->next) {
                 ASTNode* aDefine = aElem->data;
                 SymbolNode* aSymbol = aDefine->define.symbol;
                 ASTNode* aType = aSymbol->type;
@@ -553,15 +477,15 @@ bool isSubtype(ASTNode* a, ASTNode* b)
             break;
         }
         case AST_ARRAY: {
-            if (aExpand->paramlist.defines->size != bExpand->paramlist.defines->size) {
+            if (aExpand->product.defines->size != bExpand->product.defines->size) {
                 retval = false;
                 break;
             }
-            ListElem* aElem = List_Begin(aExpand->paramlist.defines);
-            ListElem* bElem = List_Begin(bExpand->paramlist.defines);
+            ListElem* aElem = List_Begin(aExpand->product.defines);
+            ListElem* bElem = List_Begin(bExpand->product.defines);
             bool allEquiv = true;
             // For each parameter in the function's parameter list, print it out
-            for (; aElem != List_End(aExpand->paramlist.defines); aElem = aElem->next, bElem = bElem->next) {
+            for (; aElem != List_End(aExpand->product.defines); aElem = aElem->next, bElem = bElem->next) {
                 ASTNode* aDefine = aElem->data;
                 SymbolNode* aSymbol = aDefine->define.symbol;
                 ASTNode* aType = aSymbol->type;
@@ -646,7 +570,7 @@ static ASTNode* tryCoerceToEnum(ASTNode* enumType, ASTNode* member)
             return NULL;
         }
     } else {
-        ASTNode* memberType = getType(member,  false);
+        ASTNode* memberType = getType(member, false);
         forall(elem, expandedEnumType->_enum.defines)
         {
             ASTNode* define = elem->data;
@@ -688,7 +612,7 @@ static void namedArgsMatch(ASTNode* expr, ASTNode* args, ASTNode* params)
         List_Pop(args->arglist.args);
     }
 
-    if (expr && expr->astType == AST_DOT && params->paramlist.defines->size > 0) {
+    if (expr && expr->astType == AST_DOT && params->product.defines->size > 0) {
         SymbolNode* var = expr->dot.symbol;
         if (expr->dot.left->astType == AST_DEREF // Implies pointer
             && var->parent && var->parent->symbolType == SYMBOL_TYPE) {
@@ -699,14 +623,14 @@ static void namedArgsMatch(ASTNode* expr, ASTNode* args, ASTNode* params)
         }
     }
 
-    forall(elem, params->paramlist.defines)
+    forall(elem, params->product.defines)
     {
         ASTNode* define = elem->data;
         SymbolNode* symbol = define->define.symbol;
         symbolTypeCheck(symbol);
         ASTNode* argExpr = Map_Get(argNames, symbol->name);
         if (argExpr) {
-            ASTNode* argType = getType(argExpr,  false);
+            ASTNode* argType = getType(argExpr, false);
             if (!isSubtype(argType, symbol->type)) {
                 ASTNode* coerced = NULL;
                 if (coerced = tryCoerceToEnum(symbol->type, argExpr)) {
@@ -735,7 +659,7 @@ static void namedArgsMatch(ASTNode* expr, ASTNode* args, ASTNode* params)
 // Given a calling expression (for method calls), a positional arglist, and a parameterlist, determines if the arguments match the parameters
 static void positionalArgsMatch(ASTNode* expr, ASTNode* args, ASTNode* params)
 {
-    if (expr && expr->astType == AST_DOT && params->paramlist.defines->size > 0) {
+    if (expr && expr->astType == AST_DOT && params->product.defines->size > 0) {
         SymbolNode* var = expr->dot.symbol;
         if (expr->dot.left->astType == AST_DEREF // Implies pointer
             && var->parent && var->parent->symbolType == SYMBOL_TYPE) {
@@ -747,15 +671,15 @@ static void positionalArgsMatch(ASTNode* expr, ASTNode* args, ASTNode* params)
     }
 
     // arguments are correct arity
-    ListElem* paramElem = List_Begin(params->paramlist.defines);
+    ListElem* paramElem = List_Begin(params->product.defines);
     bool isVararg = false;
-    for (; paramElem != List_End(params->paramlist.defines) && !isVararg; paramElem = paramElem->next) {
+    for (; paramElem != List_End(params->product.defines) && !isVararg; paramElem = paramElem->next) {
         ASTNode* define = paramElem->data;
         SymbolNode* paramSymbol = define->define.symbol;
         isVararg = paramSymbol->isVararg;
     }
 
-    if (!isVararg && params->paramlist.defines->size < args->arglist.args->size) {
+    if (!isVararg && params->product.defines->size < args->arglist.args->size) {
         if (expr && expr->astType == AST_IDENT) {
             SymbolNode* var = Symbol_Find(expr->ident.data, expr->scope);
             error2(args->pos, var->pos, "argument list with too many arguments");
@@ -768,10 +692,10 @@ static void positionalArgsMatch(ASTNode* expr, ASTNode* args, ASTNode* params)
     }
 
     // arguments are correct type
-    paramElem = List_Begin(params->paramlist.defines);
-    ListElem* argElem = List_Begin(args->paramlist.defines);
+    paramElem = List_Begin(params->product.defines);
+    ListElem* argElem = List_Begin(args->product.defines);
     isVararg = false;
-    for (; paramElem != List_End(params->paramlist.defines) && argElem != List_End(args->arglist.args) && !isVararg; paramElem = paramElem->next, argElem = argElem->next) {
+    for (; paramElem != List_End(params->product.defines) && argElem != List_End(args->arglist.args) && !isVararg; paramElem = paramElem->next, argElem = argElem->next) {
         ASTNode* paramDefine = paramElem->data;
         SymbolNode* paramSymbol = paramDefine->define.symbol;
         symbolTypeCheck(paramSymbol);
@@ -798,8 +722,8 @@ static void positionalArgsMatch(ASTNode* expr, ASTNode* args, ASTNode* params)
             argElem->data = arg;
         }
     }
-    if (paramElem != List_End(params->paramlist.defines)) {
-        for (; paramElem != List_End(params->paramlist.defines); paramElem = paramElem->next) {
+    if (paramElem != List_End(params->product.defines)) {
+        for (; paramElem != List_End(params->product.defines); paramElem = paramElem->next) {
             ASTNode* paramDefine = paramElem->data;
             SymbolNode* paramSymbol = paramDefine->define.symbol;
             ASTNode* paramDef = paramSymbol->def;
@@ -823,7 +747,7 @@ static void positionalArgsMatch(ASTNode* expr, ASTNode* args, ASTNode* params)
 // Given a calling expression (for method calls), an arglist, and a parameterlist, determines if the arguments match the parameters
 static void argsMatchParams(ASTNode* expr, ASTNode* args, ASTNode* params)
 {
-    if ((args->astType != AST_ARGLIST && args->astType != AST_PAREN) || (params->astType != AST_PARAMLIST && params->astType != AST_VOID)) {
+    if ((args->astType != AST_ARGLIST && args->astType != AST_PAREN) || (params->astType != AST_PRODUCT && params->astType != AST_VOID)) {
         incompatibleTypesError(args->pos, getType(args, false), params);
     }
 
@@ -861,7 +785,7 @@ static void symbolTypeCheck(SymbolNode* var)
                 var->type->isConst = true;
             }
             if (var->type->astType == AST_UNDEF) {
-                error(var->pos, "cannot infer type of symbol '%s', try using a cast", var->name);
+                error(var->pos, "cannot infer type of symbol '%s'", var->name);
             }
         } else {
             bool typesEquivalent = isSubtype(defType, var->type);
@@ -903,9 +827,10 @@ static ASTNode* getType(ASTNode* node, bool keepExternTypes)
         SymbolNode* var = Symbol_Find(node->ident.data, node->scope);
         if (var == 0) {
             restrictedOrUndefError(node->pos, (Position) { NULL, 0 }, node->ident.data);
-        } else if (var == -1) {
+        } else if (var == RESTRICTED_SYMBOL) {
             restrictedOrUndefError(node->pos, rejectingSymbol->pos, node->ident.data);
         }
+        ASSERT(var->type != NULL);
         if (var->type->astType == AST_UNDEF) {
             symbolTypeCheck(var);
         }
@@ -988,9 +913,9 @@ static ASTNode* getType(ASTNode* node, bool keepExternTypes)
         break;
     }
     case AST_ARRAY_LITERAL: {
-        ASTNode* firstElem = List_Begin(node->arrayLiteral.members)->data;
+        ASTNode* firstElem = List_Get(node->arrayLiteral.members, 0);
         ASTNode* firstType = getType(firstElem, keepExternTypes);
-        type = createArrayTypeNode(firstType, node->arrayLiteral.members->size, node->pos);
+        type = AST_CreateArrayTypeNode(firstType, node->arrayLiteral.members->size, node->pos);
         type->isConst = true;
         break;
     }
@@ -1034,11 +959,11 @@ static ASTNode* getType(ASTNode* node, bool keepExternTypes)
     }
     case AST_TRY: {
         ASTNode* left = node->taggedUnop.expr;
-        ASTNode* leftType = getType(left,  false);
+        ASTNode* leftType = getType(left, false);
 
         ASTNode* innerType = NULL;
-        ListElem* elem = List_Begin(leftType->_enum.defines);
-        for (; elem != List_End(leftType->_enum.defines); elem = elem->next) {
+        forall(elem, leftType->_enum.defines)
+        {
             ASTNode* define = elem->data;
             if (!strcmp(define->define.symbol->name, "success")) {
                 innerType = define->define.symbol->type;
@@ -1055,8 +980,8 @@ static ASTNode* getType(ASTNode* node, bool keepExternTypes)
         ASTNode* rightType = getType(right, false);
 
         ASTNode* innerType = NULL;
-        ListElem* elem = List_Begin(leftType->_enum.defines);
-        for (; elem != List_End(leftType->_enum.defines); elem = elem->next) {
+        forall(elem, leftType->_enum.defines)
+        {
             ASTNode* define = elem->data;
             if (!strcmp(define->define.symbol->name, "success")) {
                 innerType = define->define.symbol->type;
@@ -1070,11 +995,11 @@ static ASTNode* getType(ASTNode* node, bool keepExternTypes)
         ASTNode* left = node->taggedBinop.left;
         ASTNode* leftType = getType(left, false);
         ASTNode* right = node->taggedBinop.right;
-        ASTNode* rightType = getType(right,  false);
+        ASTNode* rightType = getType(right, false);
 
         ASTNode* innerType = NULL;
-        ListElem* elem = List_Begin(leftType->_enum.defines);
-        for (; elem != List_End(leftType->_enum.defines); elem = elem->next) {
+        forall(elem, leftType->_enum.defines)
+        {
             ASTNode* define = elem->data;
             if (!strcmp(define->define.symbol->name, "something")) {
                 innerType = define->define.symbol->type;
@@ -1092,15 +1017,15 @@ static ASTNode* getType(ASTNode* node, bool keepExternTypes)
         break;
     }
     case AST_INDEX: {
-        ASTNode* arrType = getType(node->binop.left,  keepExternTypes);
+        ASTNode* arrType = getType(node->binop.left, keepExternTypes);
         if (arrType->astType == AST_ARRAY) {
-            ASTNode* define = List_Get(arrType->paramlist.defines, 1);
+            ASTNode* define = List_Get(arrType->product.defines, 1);
             SymbolNode* arrSymbol = define->define.symbol;
             type = evaluateType(arrSymbol->type->unop.expr, keepExternTypes);
         } else if (arrType->astType == AST_ADDR) {
             ASTNode* innerType = arrType->unop.expr;
             if (innerType->astType == AST_ARRAY) {
-                ASTNode* define = List_Get(innerType->paramlist.defines, 1);
+                ASTNode* define = List_Get(innerType->product.defines, 1);
                 SymbolNode* arrSymbol = define->define.symbol;
                 type = evaluateType(arrSymbol->type->unop.expr, keepExternTypes);
             } else {
@@ -1111,15 +1036,15 @@ static ASTNode* getType(ASTNode* node, bool keepExternTypes)
     }
     case AST_SLICE: {
         ASTNode* left = node->slice.arrayExpr;
-        ASTNode* leftType = getType(left,  false);
-        if (leftType->astType != AST_PARAMLIST && leftType->astType != AST_ARRAY) {
-            expectedArray(left->pos, leftType);
+        ASTNode* leftType = getType(left, false);
+        if (leftType->astType != AST_PRODUCT && leftType->astType != AST_ARRAY) {
+            expectedArrayError(left->pos, leftType);
         }
-        ASTNode* dataDefine = List_Get(leftType->paramlist.defines, 1);
+        ASTNode* dataDefine = List_Get(leftType->product.defines, 1);
         SymbolNode* dataSymbol = dataDefine->define.symbol;
         ASTNode* dataType = dataSymbol->type;
         ASTNode* actualType = dataType->unop.expr;
-        type = createArrayTypeNode(actualType, -1, node->pos);
+        type = AST_CreateArrayTypeNode(actualType, -1, node->pos);
         break;
     }
     case AST_DOT: {
@@ -1127,10 +1052,10 @@ static ASTNode* getType(ASTNode* node, bool keepExternTypes)
         ASTNode* right = node->binop.right;
         ASTNode* leftType = getType(left, keepExternTypes); // need to know the type of the left side of dot
         leftType = evaluateType(resolveDotTypes(leftType, false), keepExternTypes);
-        ASTNode* paramlist = NULL;
+        ASTNode* product = NULL;
 
         bool resolved = false;
-        if (leftType->astType == AST_IDENT && (!strcmp(leftType->ident.data, "Module") || !strcmp(leftType->ident.data, "Package") || !strcmp(leftType->ident.data, "Enum"))) {
+        if (leftType->astType == AST_IDENT && (!strcmp(leftType->ident.data, "Module") || !strcmp(leftType->ident.data, "Package"))) {
             SymbolNode* leftSymbol = NULL;
             if (left->astType == AST_IDENT) {
                 leftSymbol = Symbol_Find(left->ident.data, left->scope);
@@ -1139,13 +1064,13 @@ static ASTNode* getType(ASTNode* node, bool keepExternTypes)
             } else {
                 ASSERT(0);
             }
-            if (leftSymbol->def->astType == AST_PARAMLIST || leftSymbol->def->astType == AST_VOID) {
-                paramlist = leftSymbol->def;
+            if (leftSymbol->def->astType == AST_PRODUCT || leftSymbol->def->astType == AST_VOID) {
+                product = leftSymbol->def;
             } else if (leftSymbol->def->astType == AST_DOT) {
                 SymbolNode* dotSymbol = getDotSymbol(leftSymbol->def);
-                paramlist = dotSymbol->def;
+                product = dotSymbol->def;
             } else {
-                error(leftSymbol->pos, "leftSymbol def ast type was %s, is that right?", AST_GetString(leftSymbol->def->astType));
+                error(leftSymbol->pos, "leftSymbol def ast type was %s", AST_GetString(leftSymbol->def->astType));
             }
         } else if (leftType->astType == AST_IDENT && !strcmp(leftType->ident.data, "Type")) {
             SymbolNode* leftSymbol = NULL;
@@ -1156,31 +1081,31 @@ static ASTNode* getType(ASTNode* node, bool keepExternTypes)
             } else {
                 ASSERT(0);
             }
-            paramlist = leftSymbol->def;
+            product = leftSymbol->def;
         } else if (leftType->astType == AST_ADDR) {
-            paramlist = evaluateType(leftType->unop.expr, keepExternTypes);
-        } else if (leftType->astType == AST_PARAMLIST || leftType->astType == AST_ARRAY) {
-            paramlist = leftType;
+            product = evaluateType(leftType->unop.expr, keepExternTypes);
+        } else if (leftType->astType == AST_PRODUCT || leftType->astType == AST_ARRAY) {
+            product = leftType;
         } else if (leftType->astType == AST_EXTERN) {
             SymbolNode* leftSymbol = leftType->_extern.symbol;
-            paramlist = leftSymbol->def;
+            product = leftSymbol->def;
         } else if (leftType->astType == AST_ENUM) {
-            paramlist = leftType;
+            product = leftType;
         } else {
             error(left->pos, "left side of dot must be container");
         }
-        if (paramlist->astType == AST_EXTERN) {
-            SymbolNode* var = paramlist->_extern.symbol;
-            paramlist = var->def;
+        if (product->astType == AST_EXTERN) {
+            SymbolNode* var = product->_extern.symbol;
+            product = var->def;
         }
 
-        if (paramlist->astType == AST_ADDR) { // done to weed out dots on double addresses, does this work?
+        if (product->astType == AST_ADDR) { // done to weed out dots on double addresses, does this work?
             error(left->pos, "left side of dot must be container");
         }
 
-        ListElem* elem = List_Begin(paramlist->paramlist.defines);
+        ListElem* elem = List_Begin(product->product.defines);
         SymbolNode* attr = NULL;
-        for (; type == NULL && elem != List_End(paramlist->paramlist.defines); elem = elem->next) {
+        for (; type == NULL && elem != List_End(product->product.defines); elem = elem->next) {
             ASTNode* define = elem->data;
             attr = define->define.symbol;
             if (!strcmp(attr->name, right->ident.data)) {
@@ -1189,7 +1114,7 @@ static ASTNode* getType(ASTNode* node, bool keepExternTypes)
             }
         }
         if (type == NULL) {
-            notMemberOfExpression(right->pos, right->ident.data, paramlist);
+            notMemberOfExpressionError(right->pos, right->ident.data, product);
         }
         break;
     }
@@ -1213,7 +1138,7 @@ static ASTNode* getType(ASTNode* node, bool keepExternTypes)
     case AST_BLOCK: {
         ASTNode* lastNode = List_Get(node->block.children, node->block.children->size - 1);
         if (lastNode != NULL) {
-            type = getType(validateAST(lastNode, NULL),  false);
+            type = getType(validateAST(lastNode, NULL), false);
         } else {
             type = UNDEF_TYPE;
         }
@@ -1223,7 +1148,7 @@ static ASTNode* getType(ASTNode* node, bool keepExternTypes)
         if (node->_if.elseBlock->astType != AST_UNDEF) {
             ASTNode* body = node->_if.bodyBlock;
             ASTNode* elseBody = node->_if.elseBlock;
-            ASTNode* bodyType = getType(body,  false);
+            ASTNode* bodyType = getType(body, false);
             ASTNode* elseBodyType = getType(elseBody, false);
             bool tempPermissiveness = structuralTypeEquiv;
             structuralTypeEquiv = true;
@@ -1247,7 +1172,7 @@ static ASTNode* getType(ASTNode* node, bool keepExternTypes)
             break;
         } else {
             ASTNode* firstCase = List_Get(node->_case.mappings, 0);
-            ASTNode* firstCaseType = getType(firstCase,  false);
+            ASTNode* firstCaseType = getType(firstCase, false);
             if (firstCaseType->astType == AST_ENUM) {
                 type = AST_Create_enum(node->scope, node->pos);
                 unionEnums(type, firstCaseType);
@@ -1282,12 +1207,12 @@ static ASTNode* getType(ASTNode* node, bool keepExternTypes)
         break;
     }
     case AST_ADDR: {
-        ASTNode* innerType = getType(node->unop.expr,  keepExternTypes);
+        ASTNode* innerType = getType(node->unop.expr, keepExternTypes);
         ASTNode* addrType = AST_Create_addr(innerType, node->scope, (Position) { 0, 0, 0, 0 });
         type = addrType;
         break;
     }
-    case AST_PARAMLIST:
+    case AST_PRODUCT:
     case AST_ARRAY:
     case AST_ENUM:
     case AST_FUNCTION: {
@@ -1320,39 +1245,39 @@ static void validateLValue(ASTNode* node)
         if (child->astType != AST_ADDR) {
             validateLValue(child);
         }
-        ASTNode* childType = getType(child,  false);
+        ASTNode* childType = getType(child, false);
         if (childType->astType != AST_ADDR) {
             ASSERT(0);
         }
         ASTNode* underlyingType = childType->unop.expr;
 
         if (underlyingType->isConst) {
-            error(node->pos, "address expression is constant");
+            error(node->pos, "compile-time constant address expression");
         }
         break;
     }
     case AST_INDEX: {
         ASTNode* child = node->binop.left;
         validateLValue(child);
-        ASTNode* childType = getType(child,  false);
+        ASTNode* childType = getType(child, false);
         if (childType->astType != AST_ARRAY && childType->astType != AST_ADDR) {
             ASSERT(0);
         }
         if (childType->astType == AST_ADDR) {
             childType = childType->unop.expr;
         }
-        ASTNode* dataType = getArrayDataType(childType);
+        ASTNode* dataType = AST_GetArrayDataType(childType);
         if (dataType->isConst) {
-            error(node->pos, "array data type is constant");
+            error(node->pos, "compile-time constant array data type");
         }
         break;
     }
     case AST_DOT: {
         SymbolNode* var = getDotSymbol(node);
-        if (var == 0 || var == 1) {
-            error(node->pos, "dot expression does not resolve to a symbol");
+        if (var == NULL || var == RESTRICTED_SYMBOL) {
+            error(node->pos, "dot expression does not resolve to symbol");
         } else if (var->type->isConst) {
-            error(node->pos, "symbol '%s' is constant", var->name);
+            error(node->pos, "compile-time constant symbol '%s'", var->name);
         }
         break;
     }
@@ -1362,7 +1287,7 @@ static void validateLValue(ASTNode* node)
         break;
     }
     default:
-        error(node->pos, "left side of assignment is not assignable");
+        error(node->pos, "left side of assignment not assignable");
     }
 }
 
@@ -1402,11 +1327,11 @@ static int getTypeSize(ASTNode* type)
     case AST_ADDR: {
         return 8;
     }
-    case AST_PARAMLIST:
+    case AST_PRODUCT:
     case AST_ARRAY: {
         int prevAlign = 0;
         int size = 0;
-        forall(elem, type->paramlist.defines)
+        forall(elem, type->product.defines)
         {
             ASTNode* memberDefine = elem->data;
             SymbolNode* memberSymbol = memberDefine->define.symbol;
@@ -1438,9 +1363,11 @@ static int getTypeSize(ASTNode* type)
     case AST_DOT:
     case AST_UNDEF: {
         error(type->pos, "idk how to calculate this size yet");
+        return -1;
     }
     default: {
         error(type->pos, "not a type");
+        return -1;
     }
     }
 }
@@ -1454,7 +1381,7 @@ static ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
 
     ASSERT(node != NULL);
     if (node->isValid) {
-        return;
+        return node;
     }
     node->isValid = true;
 
@@ -1465,7 +1392,7 @@ static ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
         SymbolNode* var = Symbol_Find(node->ident.data, node->scope);
         if (var == NULL) {
             restrictedOrUndefError(node->pos, (Position) { NULL, 0 }, node->ident.data);
-        } else if (var == -1) {
+        } else if (var == RESTRICTED_SYMBOL) {
             restrictedOrUndefError(node->pos, rejectingSymbol->pos, node->ident.data);
         } else if (!var->type->isConst && !var->isDeclared) {
             error2(node->pos, var->pos, "symbol '%s' referenced before declaration", var->name);
@@ -1528,17 +1455,17 @@ static ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
     }
     case AST_ARRAY_LITERAL: {
         if (node->arrayLiteral.members->size <= 0) {
-            error(node->pos, "array literal is empty");
+            error(node->pos, "empty array literal");
         }
 
         List* validMembers = List_Create();
         ASTNode* dataType = NULL;
         if (coerceType && coerceType->astType != AST_UNDEF) {
-            ASTNode* dataDefine = List_Get(coerceType->paramlist.defines, 1);
+            ASTNode* dataDefine = List_Get(coerceType->product.defines, 1);
             SymbolNode* dataSymbol = dataDefine->define.symbol;
             dataType = dataSymbol->type->unop.expr;
         } else {
-            dataType = getType(List_Get(node->arrayLiteral.members, 0), false, false);
+            dataType = getType(List_Get(node->arrayLiteral.members, 0), false);
         }
 
         forall(elem, node->arrayLiteral.members)
@@ -1561,7 +1488,7 @@ static ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
     case AST_ASSIGN: {
         // right type <= left type
         ASTNode* left = validateAST(node->binop.left, NULL);
-        ASTNode* leftType = getType(left,  true);
+        ASTNode* leftType = getType(left, true);
         ASTNode* right = validateAST(node->binop.right, leftType);
         ASTNode* rightType = getType(right, true);
         if (!isSubtype(rightType, leftType)) {
@@ -1617,7 +1544,7 @@ static ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
         ASTNode* left = validateAST(node->binop.left, NULL);
         ASTNode* right = validateAST(node->binop.right, NULL);
         ASTNode* leftType = getType(left, false);
-        ASTNode* rightType = getType(right,  false);
+        ASTNode* rightType = getType(right, false);
 
         node->binop.left = left;
         node->binop.right = right;
@@ -1635,8 +1562,8 @@ static ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
             break;
         } else if (!isSubtype(rightType, leftType)) {
             incompatibleTypesError(node->pos, leftType, rightType);
-        } else if (leftType->astType == AST_PARAMLIST || leftType->astType == AST_ARRAY || rightType->astType == AST_PARAMLIST || rightType->astType == AST_ARRAY) {
-            error(node->pos, "comparison on struct type"); // TODO: allow struct comparisons
+        } else if (leftType->astType == AST_PRODUCT || leftType->astType == AST_ARRAY || rightType->astType == AST_PRODUCT || rightType->astType == AST_ARRAY) {
+            error(node->pos, "comparison on product type"); // TODO: allow struct comparisons
         } else {
             retval = node;
             break;
@@ -1699,9 +1626,9 @@ static ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
     case AST_DEREF: {
         // child type is scalar
         ASTNode* left = validateAST(node->unop.expr, NULL);
-        ASTNode* leftType = getType(left,  false);
+        ASTNode* leftType = getType(left, false);
         if (leftType->astType != AST_ADDR) {
-            error(node->pos, "type mismatch, expected address");
+            expectedAddrError(node->pos, leftType);
         }
         node->unop.expr = left;
         retval = node;
@@ -1715,12 +1642,12 @@ static ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
         errorHandled = oldErrorHandled;
 
         if (exprType->astType != AST_ENUM) {
-            error(validExpr->pos, "left side of catch must be error enum type");
+            expectedEnumError(validExpr->pos, exprType);
         }
 
         ASTNode* innerType = NULL;
-        ListElem* elem = List_Begin(exprType->_enum.defines);
-        for (; elem != List_End(exprType->_enum.defines); elem = elem->next) {
+        forall(elem, exprType->_enum.defines)
+        {
             ASTNode* define = elem->data;
             if (!strcmp(define->define.symbol->name, "success")) {
                 innerType = define->define.symbol->type;
@@ -1729,7 +1656,7 @@ static ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
         }
 
         if (!innerType) {
-            error(validExpr->pos, "left side of catch must be error enum type");
+            expectedErrorEnumError(validExpr->pos, exprType);
         }
 
         // return must be in function
@@ -1769,19 +1696,19 @@ static ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
         bool oldErrorHandled = errorHandled;
         errorHandled = true;
         ASTNode* left = validateAST(node->taggedBinop.left, NULL);
-        ASTNode* leftType = getType(left,  false);
+        ASTNode* leftType = getType(left, false);
         errorHandled = oldErrorHandled;
 
         ASTNode* right = validateAST(node->taggedBinop.right, NULL);
         ASTNode* rightType = getType(right, false);
 
         if (leftType->astType != AST_ENUM) {
-            error(left->pos, "left side of catch must be error enum type");
+            expectedEnumError(left->pos, leftType);
         }
 
         ASTNode* innerType = NULL;
-        ListElem* elem = List_Begin(leftType->_enum.defines);
-        for (; elem != List_End(leftType->_enum.defines); elem = elem->next) {
+        forall(elem, leftType->_enum.defines)
+        {
             ASTNode* define = elem->data;
             if (!strcmp(define->define.symbol->name, "success")) {
                 innerType = define->define.symbol->type;
@@ -1790,7 +1717,7 @@ static ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
         }
 
         if (!innerType) {
-            error(left->pos, "left side of catch must be error enum type");
+            expectedErrorEnumError(left->pos, leftType);
         }
 
         if (rightType->astType != AST_UNDEF && !isSubtype(rightType, innerType)) {
@@ -1810,12 +1737,12 @@ static ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
         ASTNode* rightType = getType(right, false);
 
         if (leftType->astType != AST_ENUM) {
-            error(left->pos, "left side of orelse must be maybe enum type");
+            expectedEnumError(left->pos, leftType);
         }
 
         ASTNode* innerType = NULL;
-        ListElem* elem = List_Begin(leftType->_enum.defines);
-        for (; elem != List_End(leftType->_enum.defines); elem = elem->next) {
+        forall(elem, leftType->_enum.defines)
+        {
             ASTNode* define = elem->data;
             if (!strcmp(define->define.symbol->name, "something")) {
                 innerType = define->define.symbol->type;
@@ -1824,7 +1751,7 @@ static ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
         }
 
         if (!innerType) {
-            error(left->pos, "left side of orelse must be maybe enum type");
+            expectedMaybeEnumError(left->pos, leftType);
         }
 
         if (rightType->astType != AST_UNDEF && !isSubtype(rightType, innerType)) {
@@ -1846,7 +1773,7 @@ static ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
         expr->type = exprType;
         node->call.fnType = exprType;
         if (exprType->astType != AST_FUNCTION) {
-            error(node->pos, "call is not to function");
+            expectedFunctionError(node->pos, exprType);
         }
         argsMatchParams(expr, node->call.right, exprType->function.domainType);
         node->call.right->astType = AST_ARGLIST;
@@ -1859,7 +1786,7 @@ static ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
         left->type = validateAST(left, NULL)->type;
         ASTNode* leftType = getType(left, false);
         if (leftType->astType != AST_ADDR && leftType->astType != AST_ARRAY) {
-            expectedArray(node->binop.left->pos, leftType);
+            expectedArrayError(node->binop.left->pos, leftType);
         }
 
         node->binop.left = left;
@@ -1871,7 +1798,7 @@ static ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
         ASTNode* validArrExpr = validateAST(node->slice.arrayExpr, NULL);
         ASTNode* leftType = getType(validArrExpr, false);
         if (leftType->astType != AST_ADDR && leftType->astType != AST_ARRAY) {
-            expectedArray(node->slice.arrayExpr->pos, leftType);
+            expectedArrayError(node->slice.arrayExpr->pos, leftType);
         }
 
         node->slice.arrayExpr = validArrExpr;
@@ -1901,7 +1828,7 @@ static ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
         }
 
         ASTNode* leftType = getType(left, false);
-        ASTNode* dotType = getType(node,  true);
+        ASTNode* dotType = getType(node, true);
 
         getDotSymbol(node); // TODO: comptime collapse
         if (left->astType == AST_ENUM) {
@@ -1932,7 +1859,7 @@ static ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
         validateType(cast, true);
 
         // cannot cast between function addr and data addr
-        ASTNode* exprType = getType(expr,  false);
+        ASTNode* exprType = getType(expr, false);
         if (cast->isConst && !exprType->isConst) {
             error(node->pos, "cast from variable type to constant type");
         }
@@ -1949,9 +1876,9 @@ static ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
             error(node->pos, "cast from function address to data address");
         }
 
-        if (expr->astType == AST_ARGLIST || cast->astType == AST_PARAMLIST || cast->astType == AST_ARRAY) {
-            if (cast->astType != AST_PARAMLIST && cast->astType != AST_ARRAY) {
-                error(node->pos, "cast from arglist to non-arglist type");
+        if (expr->astType == AST_ARGLIST || cast->astType == AST_PRODUCT || cast->astType == AST_ARRAY) {
+            if (cast->astType != AST_PRODUCT && cast->astType != AST_ARRAY) {
+                error(node->pos, "cast from product type to non-product type");
             } else {
                 expr->type = cast;
                 argsMatchParams(NULL, expr, cast);
@@ -1969,11 +1896,11 @@ static ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
 
         ASTNode* type = node->binop.left;
         if (type->astType == AST_ARRAY) {
-            ASTNode* lengthDefine = List_Get(type->paramlist.defines, 0);
+            ASTNode* lengthDefine = List_Get(type->product.defines, 0);
             SymbolNode* lengthSymbol = lengthDefine->define.symbol;
             ASTNode* lengthCode = lengthSymbol->def;
             if (lengthCode->astType == AST_UNDEF) {
-                error(lengthCode->pos, "array size is missing");
+                error(lengthCode->pos, "missing array size");
             }
         }
 
@@ -1984,11 +1911,11 @@ static ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
             if (!isSubtype(initType, type)) {
                 typeMismatchError(node->pos, type, initType);
             }
-            ASTNode* lengthDefine = List_Get(type->paramlist.defines, 0);
+            ASTNode* lengthDefine = List_Get(type->product.defines, 0);
             SymbolNode* lengthSymbol = lengthDefine->define.symbol;
             ASTNode* lengthCode = lengthSymbol->def;
             if (lengthCode->astType != AST_INT) {
-                error(node->pos, "cannot use initializer, array size is not known at compile time");
+                error(node->pos, "cannot use initializer, non-compile-time constant array size");
             }
         } else if (validInit->astType == AST_ARGLIST || validInit->astType == AST_PAREN) {
             validInit->astType = AST_ARGLIST;
@@ -2001,7 +1928,7 @@ static ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
     }
     case AST_FREE: {
         ASTNode* validChild = validateAST(node->unop.expr, NULL);
-        ASTNode* childType = getType(validChild,  false);
+        ASTNode* childType = getType(validChild, false);
         if (childType->astType != AST_ADDR && childType->astType != AST_ARRAY) {
             char actualStr[255];
             AST_TypeRepr(actualStr, childType);
@@ -2028,7 +1955,7 @@ static ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
 
         validateLValue(left);
 
-        BinopConstructor constructor = getBinopConstructor(node->astType);
+        BinopConstructor constructor = AST_GetBinopConstructor(node->astType);
         retval = AST_Create_assign(left, constructor(left, right, node->scope, node->pos), node->scope, node->pos);
         validateAST(retval, NULL); // To give it a type
         break;
@@ -2043,14 +1970,14 @@ static ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
         left->type = validateAST(left, INT64_TYPE)->type;
         ASTNode* right = validateAST(node->binop.right, INT64_TYPE);
         ASTNode* leftType = getType(left, false);
-        ASTNode* rightType = getType(right,  false);
+        ASTNode* rightType = getType(right, false);
         if (!isSubtype(rightType, leftType)) {
             incompatibleTypesError(node->pos, leftType, rightType);
         }
 
         validateLValue(left);
 
-        BinopConstructor constructor = getBinopConstructor(node->astType);
+        BinopConstructor constructor = AST_GetBinopConstructor(node->astType);
         retval = AST_Create_assign(left, constructor(left, right, node->scope, node->pos), node->scope, node->pos);
         validateAST(retval, NULL); // To give it a type
         break;
@@ -2064,28 +1991,27 @@ static ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
         left->type = validateAST(left, REAL64_TYPE)->type;
         ASTNode* right = validateAST(node->binop.right, REAL64_TYPE);
         ASTNode* leftType = getType(left, false);
-        ASTNode* rightType = getType(right,  false);
+        ASTNode* rightType = getType(right, false);
         if (!isSubtype(rightType, leftType)) {
             incompatibleTypesError(node->pos, leftType, rightType);
         }
 
         validateLValue(left);
 
-        BinopConstructor constructor = getBinopConstructor(node->astType);
+        BinopConstructor constructor = AST_GetBinopConstructor(node->astType);
         retval = AST_Create_assign(left, constructor(left, right, node->scope, node->pos), node->scope, node->pos);
         validateAST(retval, NULL); // To give it a type
         break;
     }
     case AST_DEFINE: {
         SymbolNode* var = node->define.symbol;
-        var->isDeclared = true;
-        /// var type is not Type or Enum
         if (var->type->astType != AST_IDENT || strcmp(var->type->ident.data, "Type")) {
             symbolTypeCheck(var);
         } else if (!strcmp(var->type->ident.data, "Type")) {
             var->def = evaluateType(var->def, true);
             validateType(var->def, true);
         }
+        var->isDeclared = true;
         retval = node;
         break;
     }
@@ -2158,7 +2084,7 @@ static ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
         bool oldErrorHandled = errorHandled;
         errorHandled = true;
         ASTNode* validExpr = validateAST(node->_case.expr, NULL);
-        ASTNode* elementType = getType(validExpr,  false);
+        ASTNode* elementType = getType(validExpr, false);
         errorHandled = oldErrorHandled;
 
         List* validMappings = List_Create();
@@ -2170,8 +2096,8 @@ static ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
 
         // only one 'else' mapping
         int elseCaseCount = 0;
-        ListElem* elem = List_Begin(validMappings);
-        for (; elem != List_End(validMappings); elem = elem->next) {
+        forall(elem, validMappings)
+        {
             ASTNode* mapping = elem->data;
             if (mapping->mapping.exprs->size == 0) {
                 elseCaseCount++;
@@ -2191,10 +2117,10 @@ static ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
         ASTNode* validExpr = validateAST(node->_case.expr, NULL); // TODO: what goes here?
 
         // switch expression must be a enum set
-        ASTNode* elementType = getType(validExpr,  false);
+        ASTNode* elementType = getType(validExpr, false);
         bool isEnumCase = false;
         if (elementType->astType != AST_ENUM) {
-            error(node->pos, "must be a enum type");
+            expectedEnumError(validExpr->pos, elementType);
         }
 
         List* validMappings = List_Create();
@@ -2221,8 +2147,8 @@ static ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
 
         // only one 'else' mapping
         int elseCaseCount = 0;
-        ListElem* elem = List_Begin(validMappings);
-        for (; elem != List_End(validMappings); elem = elem->next) {
+        forall(elem, validMappings)
+        {
             ASTNode* mapping = elem->data;
             if (mapping->mapping.exprs->size == 0) {
                 elseCaseCount++;
@@ -2324,10 +2250,10 @@ static ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
         retval = node;
         break;
     }
-    case AST_PARAMLIST:
+    case AST_PRODUCT:
     case AST_ARRAY: {
-        ListElem* elem = List_Begin(node->paramlist.defines);
-        for (; elem != List_End(node->paramlist.defines); elem = elem->next) {
+        forall(elem, node->product.defines)
+        {
             ASTNode* define = elem->data;
             validateAST(define, NULL);
         }
@@ -2336,8 +2262,8 @@ static ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
     }
     case AST_ENUM:
     case AST_INFER_ERROR: {
-        ListElem* elem = List_Begin(node->_enum.defines);
-        for (; elem != List_End(node->_enum.defines); elem = elem->next) {
+        forall(elem, node->_enum.defines)
+        {
             ASTNode* define = elem->data;
             validateAST(define, NULL);
         }
@@ -2366,91 +2292,6 @@ static ASTNode* validateAST(ASTNode* node, ASTNode* coerceType)
     return retval;
 }
 
-// Registers the field name/type pair if it is unique
-static void putTag(char* fieldName, ASTNode* fieldType)
-{
-    static int tagID = 0;
-    List* typeSet = Map_Get(tagTypes, fieldName);
-    List* typeList = Map_Get(tagIDs, fieldName);
-    if (!typeSet && !typeList) {
-        typeSet = List_Create();
-        Map_Put(tagTypes, fieldName, typeSet);
-
-        typeList = List_Create();
-        Map_Put(tagIDs, fieldName, typeList);
-    }
-
-    // Add the type to the set using type equality, not equivalence
-    bool typeSetContainsType = false;
-    forall(elem2, typeSet) // Find if the type is in the typeSet
-    {
-        ASTNode* type = elem2->data;
-        if (isSubtype(fieldType, type) && isSubtype(type, fieldType)) {
-            typeSetContainsType = true;
-            break;
-        }
-    }
-    if (!typeSetContainsType) {
-        int tag = tagID;
-        tagID += 1;
-        List_Append(typeList, tag);
-        List_Append(typeSet, fieldType);
-    }
-}
-
-// Adds a struct to the dependency graph if it is unique, with all dependencies
-static struct graph* addGraphNode(List* depenGraph, ASTNode* structType)
-{
-    // Check if type is enum, if so, collect tags
-    if (structType->astType == AST_ENUM || structType->astType == AST_INFER_ERROR) {
-        forall(elem, structType->_enum.defines)
-        {
-            ASTNode* define = elem->data;
-            SymbolNode* symbol = define->define.symbol;
-            // Check if there is a set created in the map, if not create it
-            putTag(symbol->name, symbol->type);
-        }
-    }
-
-    // Check list to see if any graph node has paramlist type
-    // If does, return that graph node
-    // If not, create new grpahnode, append to list of dependencies, return new graph node
-    bool oldTypePermissiveness = structuralTypeEquiv;
-    structuralTypeEquiv = false;
-    ListElem* elem = List_Begin(depenGraph);
-    for (; elem != List_End(depenGraph); elem = elem->next) {
-        DGraph* graphNode = elem->data;
-        if (isSubtype(graphNode->typeDef, structType)) {
-            return graphNode;
-        }
-    }
-    structuralTypeEquiv = oldTypePermissiveness;
-
-    DGraph* graphNode = calloc(1, sizeof(DGraph));
-    graphNode->typeDef = structType;
-    graphNode->visited = false;
-    graphNode->id = depenGraph->size;
-    graphNode->dependencies = List_Create();
-    List_Append(depenGraph, graphNode);
-
-    return graphNode;
-}
-
-// Checks that a dependency graph doesn't have loops in it
-static void validateNoLoops(DGraph* graphNode)
-{
-    graphNode->visited = true;
-    ListElem* elem = List_Begin(graphNode->dependencies);
-    for (; elem != List_End(graphNode->dependencies); elem = elem->next) {
-        DGraph* child = elem->data;
-        if (child->visited) {
-            error(child->typeDef->pos, "loop detected");
-        }
-        validateNoLoops(child);
-    }
-    graphNode->visited = false;
-}
-
 // Validates that a type AST is correctly formed. 'collectThisType' is whether to add type to the dependency graph or not
 static void validateType(ASTNode* node, bool collectThisType)
 {
@@ -2470,7 +2311,6 @@ static void validateType(ASTNode* node, bool collectThisType)
             strcmp(node->ident.data, "Type") && //
             strcmp(node->ident.data, "Package") && //
             strcmp(node->ident.data, "Module") && //
-            strcmp(node->ident.data, "Enum") && //
             strcmp(node->ident.data, "Int8") && //
             strcmp(node->ident.data, "Int16") && //
             strcmp(node->ident.data, "Int32") && //
@@ -2480,19 +2320,20 @@ static void validateType(ASTNode* node, bool collectThisType)
             SymbolNode* var = Symbol_Find(node->ident.data, node->scope);
             if (var == NULL) {
                 restrictedOrUndefError(node->pos, (Position) { NULL, 0 }, node->ident.data);
-            } else if (var == -1) {
+            } else if (var == RESTRICTED_SYMBOL) {
                 restrictedOrUndefError(node->pos, rejectingSymbol->pos, node->ident.data);
             } else if (var->symbolType != SYMBOL_TYPE) {
-                error(node->pos, "symbol '%s' is not a type 2", node->ident.data);
+                error(node->pos, "cannot resolve symbol '%s' as type", node->ident.data);
+
             }
         }
         break;
     }
     case AST_DOT: {
         validateAST(node, NULL);
-        ASTNode* dotType = getType(node,  false);
-        if (dotType->astType != AST_IDENT || !(!strcmp(dotType->ident.data, "Type") || !strcmp(dotType->ident.data, "Enum"))) {
-            error(node->pos, "symbol '%s' is not a type 3", node->dot.right->ident.data);
+        ASTNode* dotType = getType(node, false);
+        if (dotType->astType != AST_IDENT || !(!strcmp(dotType->ident.data, "Type"))) {
+            error(node->pos, "symbol '%s' is not a type", node->dot.right->ident.data);
         }
         SymbolNode* var = getDotSymbol(node);
         break;
@@ -2505,18 +2346,18 @@ static void validateType(ASTNode* node, bool collectThisType)
         validateType(node->unop.expr, collectThisType);
         break;
     }
-    case AST_PARAMLIST: {
+    case AST_PRODUCT: {
         validateAST(node, NULL);
         break;
     }
     case AST_ARRAY: {
-        ASTNode* typeDefine = List_Get(node->paramlist.defines, 1);
-        ASTNode* lengthDefine = List_Get(node->paramlist.defines, 0);
+        ASTNode* typeDefine = List_Get(node->product.defines, 1);
+        ASTNode* lengthDefine = List_Get(node->product.defines, 0);
         SymbolNode* type = typeDefine->define.symbol;
         SymbolNode* length = lengthDefine->define.symbol;
         validateType(type->type, collectThisType);
         length->def = validateAST(length->def, NULL);
-        ASTNode* lengthType = getType(length->def,  false);
+        ASTNode* lengthType = getType(length->def, false);
         if (lengthType->astType != AST_UNDEF && !isSubtype(lengthType, INT64_TYPE)) {
             typeMismatchError(node->pos, INT32_TYPE, lengthType);
         }
@@ -2547,18 +2388,18 @@ static void validateType(ASTNode* node, bool collectThisType)
     }
     node->isValid = true;
 
-    // Collect structs
-    if (collectThisType && (node->astType == AST_PARAMLIST || node->astType == AST_ARRAY || node->astType == AST_ENUM || node->astType == AST_INFER_ERROR) && node->paramlist.defines->size > 0) {
-        DGraph* graphNode = addGraphNode(structDepenGraph, node);
+    // Collect product and enum types
+    if (collectThisType && (node->astType == AST_PRODUCT || node->astType == AST_ARRAY || node->astType == AST_ENUM || node->astType == AST_INFER_ERROR) && node->product.defines->size > 0) {
+        DGraph* graphNode = addGraphNode(program->typeDependencyGraph, node);
 
         // go through fields, if field is a parameter list, add to dependencies
-        ListElem* paramElem = List_Begin(node->paramlist.defines);
-        for (; paramElem != List_End(node->paramlist.defines); paramElem = paramElem->next) {
+        forall(paramElem, node->product.defines)
+        {
             ASTNode* fieldDefine = paramElem->data;
             SymbolNode* fieldVar = fieldDefine->define.symbol;
             ASTNode* fieldType = evaluateType(fieldVar->type, true);
-            if (fieldType->astType == AST_PARAMLIST || fieldType->astType == AST_ARRAY || fieldType->astType == AST_ENUM || fieldType->astType == AST_INFER_ERROR) {
-                DGraph* dependency = addGraphNode(structDepenGraph, fieldType);
+            if (fieldType->astType == AST_PRODUCT || fieldType->astType == AST_ARRAY || fieldType->astType == AST_ENUM || fieldType->astType == AST_INFER_ERROR) {
+                DGraph* dependency = addGraphNode(program->typeDependencyGraph, fieldType);
                 List_Append(graphNode->dependencies, dependency);
             }
         }
@@ -2570,9 +2411,8 @@ static void validateType(ASTNode* node, bool collectThisType)
 // Figures out which symbols are allowed through the given symbol's restriction
 static void resolveRestrictions(SymbolNode* symbol)
 {
-    List* allowedIdentifiers = symbol->restrictionExpr;
-    ListElem* e = List_Begin(allowedIdentifiers);
-    for (; e != List_End(allowedIdentifiers); e = e->next) {
+    forall(e, symbol->restrictionExpr)
+    {
         ASTNode* expr = e->data;
         SymbolNode* var = NULL;
         if (expr->astType == AST_IDENT) {
@@ -2590,9 +2430,8 @@ static void resolveRestrictions(SymbolNode* symbol)
         List_Append(symbol->restrictions, var);
     }
 
-    List* children = symbol->children->keyList;
-    ListElem* elem = List_Begin(children);
-    for (; elem != List_End(children); elem = elem->next) {
+    forall(elem, symbol->children->keyList)
+    {
         SymbolNode* child = Map_Get(symbol->children, elem->data);
         resolveRestrictions(child);
     }
@@ -2608,8 +2447,8 @@ static bool allReturnPath(ASTNode* node)
     } else if (node->astType == AST_IF && node->_if.elseBlock->astType != AST_UNDEF) {
         return allReturnPath(node->_if.bodyBlock) && allReturnPath(node->_if.elseBlock);
     } else if (node->astType == AST_BLOCK) {
-        ListElem* elem = List_Begin(node->block.children);
-        for (; elem != List_End(node->block.children); elem = elem->next) {
+        forall(elem, node->block.children)
+        {
             if (allReturnPath(elem->data)) {
                 return true;
             }
@@ -2619,7 +2458,7 @@ static bool allReturnPath(ASTNode* node)
 }
 
 // Validates that a symbol is correct
-Program Validator_ValidateSymbol(SymbolNode* symbol)
+void Validator_ValidateSymbol(SymbolNode* symbol)
 {
     ASSERT(symbol != NULL);
 
@@ -2627,21 +2466,6 @@ Program Validator_ValidateSymbol(SymbolNode* symbol)
         return;
     } else {
         symbol->visited = true;
-    }
-
-    // Done first pass through
-    if (structDepenGraph == NULL) {
-        structDepenGraph = List_Create();
-        includes = Map_Create();
-        verbatims = List_Create();
-        tagTypes = Map_Create();
-        tagIDs = Map_Create();
-
-        validateType(CONST_STRING_TYPE, true);
-        validateType(STRING_ARR_TYPE, true);
-        validateType(MAYBE_VOID_TYPE, true);
-        structuralTypeEquiv = true;
-        resolveRestrictions(symbol);
     }
 
     // Move inner functions up to module level
@@ -2662,7 +2486,7 @@ Program Validator_ValidateSymbol(SymbolNode* symbol)
 
     if (symbol->parent && symbol->parent->symbolType != SYMBOL_TYPE) {
         SymbolNode* collision = Symbol_Find(symbol->name, symbol->parent->parent);
-        if (symbol->name[0] && collision != 0 && collision != -1) {
+        if (symbol->name[0] && collision != NULL && collision != RESTRICTED_SYMBOL) {
             error2(symbol->pos, collision->pos, "symbol '%s' is shadowed", symbol->name);
         }
     }
@@ -2670,36 +2494,42 @@ Program Validator_ValidateSymbol(SymbolNode* symbol)
     List* children = symbol->children->keyList;
     switch (symbol->symbolType) {
     case SYMBOL_PROGRAM: {
-        ListElem* elem = List_Begin(children);
-        for (; elem != List_End(children); elem = elem->next) {
+        validateType(CONST_STRING_TYPE, true);
+        validateType(STRING_ARR_TYPE, true);
+        validateType(MAYBE_VOID_TYPE, true);
+        structuralTypeEquiv = true;
+        resolveRestrictions(symbol);
+        forall(elem, children)
+        {
             SymbolNode* child = Map_Get(symbol->children, elem->data);
             Validator_ValidateSymbol(child);
             if (child->symbolType != SYMBOL_PACKAGE) {
                 typeMismatchError(child->type->pos, PACKAGE_TYPE, child->type);
             }
         }
-        if (mainFunction) {
-            callGraph = createCFG(mainFunction, NULL);
+        if (program->mainFunction) {
+            program->callGraph = IR_CreateCFG(program->mainFunction, NULL);
         } else {
             gen_error("no main function defined");
         }
         structuralTypeEquiv = false;
-        unVisitSymbolTree(symbol);
+        Symbol_UnvisitTree(symbol);
         break;
     }
     case SYMBOL_PACKAGE: {
+        ASSERT(symbol->type != NULL);
         if (!symbol->type->isConst) {
-            error(symbol->pos, "package '%s' is not constant", symbol->name);
+            error(symbol->pos, "non-compile-time constant package '%s", symbol->name);
         }
-        ListElem* elem = List_Begin(children);
-        for (; elem != List_End(children); elem = elem->next) {
+        forall(elem, children)
+        {
             SymbolNode* child = Map_Get(symbol->children, elem->data);
             Validator_ValidateSymbol(child);
             if (!child->type->isConst) {
-                error(child->pos, "immediate child symbol '%s' of package '%s' is not constant", child->name, symbol->name);
+                error(child->pos, "non-compile-time constant child symbol '%s' of package '%s'", child->name, symbol->name);
             }
         }
-        if (symbol->def->astType != AST_PARAMLIST && symbol->def->astType != AST_VOID) {
+        if (symbol->def->astType != AST_PRODUCT && symbol->def->astType != AST_VOID) {
             error(symbol->pos, "expected parameter list");
         }
         validateAST(symbol->def, NULL);
@@ -2708,35 +2538,35 @@ Program Validator_ValidateSymbol(SymbolNode* symbol)
         SymbolNode* verbatimSymbol = Map_Get(symbol->children, "verbatim");
         if (includesSymbol) {
             if (includesSymbol->def->astType != AST_ARRAY_LITERAL) {
-                error(includesSymbol->pos, "includes array must be a string array");
+                error(includesSymbol->pos, "includes array must be string array literal");
             }
-            ListElem* e = List_Begin(includesSymbol->def->arrayLiteral.members);
-            for (; e != List_End(includesSymbol->def->arrayLiteral.members); e = e->next) {
+            forall(e, includesSymbol->def->arrayLiteral.members)
+            {
                 ASTNode* stringLiteral = e->data;
                 if (!isSubtype(stringLiteral->type, STRING_TYPE)) {
                     typeMismatchError(stringLiteral->pos, STRING_TYPE, stringLiteral->type);
                 }
-                Map_Put(includes, stringLiteral->string.data, 1);
+                Map_Put(program->includes, stringLiteral->string.data, (void*)1);
             }
         }
         if (verbatimSymbol) {
             if (verbatimSymbol->def->astType != AST_ARRAY_LITERAL) {
                 error(verbatimSymbol->pos, "verbatim array must be a string array");
             }
-            ListElem* e = List_Begin(verbatimSymbol->def->arrayLiteral.members);
-            for (; e != List_End(verbatimSymbol->def->arrayLiteral.members); e = e->next) {
+            forall(e, verbatimSymbol->def->arrayLiteral.members)
+            {
                 ASTNode* stringLiteral = e->data;
                 if (!isSubtype(stringLiteral->type, STRING_TYPE)) {
                     typeMismatchError(stringLiteral->pos, STRING_TYPE, stringLiteral->type);
                 }
-                List_Append(verbatims, stringLiteral->string.data);
+                List_Append(program->verbatims, stringLiteral->string.data);
             }
         }
         break;
     }
     case SYMBOL_FUNCTION: {
-        ListElem* elem = List_Begin(children);
-        for (; elem != List_End(children); elem = elem->next) {
+        forall(elem, children)
+        {
             SymbolNode* child = Map_Get(symbol->children, elem->data);
             Validator_ValidateSymbol(child);
         }
@@ -2749,74 +2579,67 @@ Program Validator_ValidateSymbol(SymbolNode* symbol)
         }
         if (symbol->type->function.codomainType->astType == AST_INFER_ERROR) {
             symbol->type->function.codomainType->astType = AST_ENUM;
-            addGraphNode(structDepenGraph, symbol->type->function.codomainType);
+            addGraphNode(program->typeDependencyGraph, symbol->type->function.codomainType);
         }
 
         if (!symbol->isExtern && retType->astType != AST_VOID && !allReturnPath(symbol->def)) {
-            error(symbol->pos, "not all paths return a value in '%s'", symbol->name);
+            error(symbol->pos, "value not returned from all paths in function '%s'", symbol->name);
         }
         if (!strcmp(symbol->name, "main")) {
             if (symbol->type->function.codomainType->astType == AST_ENUM && enumContainsField(symbol->type->function.codomainType, "success", VOID_TYPE)) {
-                if (mainFunction) {
-                    error2(symbol->pos, mainFunction->pos, "multiple main function definitions");
+                if (program->mainFunction) {
+                    error2(symbol->pos, program->mainFunction->pos, "multiple main function definitions");
                 } else {
-                    mainFunction = symbol;
+                    program->mainFunction = symbol;
                 }
             }
         }
         break;
     }
-    case SYMBOL_VARIABLE:
-        ListElem* elem = List_Begin(children);
-        for (; elem != List_End(children); elem = elem->next) {
+    case SYMBOL_BLOCK:
+    case SYMBOL_VARIABLE: {
+        forall(elem, children)
+        {
             SymbolNode* child = Map_Get(symbol->children, elem->data);
             Validator_ValidateSymbol(child);
         }
         break;
+    }
     case SYMBOL_TYPE: {
+        ASSERT(symbol->type != NULL);
         if (!symbol->type->isConst) {
-            error(symbol->pos, "type '%s' is not constant", symbol->name);
+            error(symbol->pos, "non-compile-time constant type '%s'", symbol->name);
         }
         // validate valid type def
         validateType(symbol->def, true);
-        // if def ast type is param list then for all define in paramlist children, define symbol is not extern
-        if (symbol->def->astType == AST_PARAMLIST || symbol->def->astType == AST_ENUM) {
-            forall(elem, symbol->def->paramlist.defines)
+        // if def ast type is param list then for all define in product children, assert define symbol is not extern
+        if (symbol->def->astType == AST_PRODUCT || symbol->def->astType == AST_ENUM) {
+            forall(elem, symbol->def->product.defines)
             {
                 ASTNode* define = elem->data;
                 SymbolNode* var = define->define.symbol;
                 if (var && var->isExtern) {
-                    error(var->type->pos, "struct field is marked external");
+                    error(var->type->pos, "external field declared");
                 }
             }
         }
         break;
     }
     case SYMBOL_MODULE: {
+        ASSERT(symbol->type != NULL);
         if (!symbol->type->isConst) {
-            error(symbol->pos, "module '%s' is not constant", symbol->name);
+            error(symbol->pos, "non-compile-time constant module '%s'", symbol->name);
         }
-        ListElem* elem = List_Begin(children);
-        for (; elem != List_End(children); elem = elem->next) {
+        forall(elem, children)
+        {
             SymbolNode* child = Map_Get(symbol->children, elem->data);
             Validator_ValidateSymbol(child);
+        }
+        if (symbol->def->astType != AST_PRODUCT && symbol->def->astType != AST_VOID) {
+            error(symbol->pos, "expected product type literal");
         }
         validateAST(symbol->def, NULL);
         break;
     }
-    case SYMBOL_BLOCK: { // Always validated as defs or as children of other block ASTs
-        ListElem* elem = List_Begin(children);
-        for (; elem != List_End(children); elem = elem->next) {
-            SymbolNode* child = Map_Get(symbol->children, elem->data);
-            Validator_ValidateSymbol(child);
-        }
-        for (elem = List_Begin(symbol->defers); elem != List_End(symbol->defers); elem = elem->next) {
-            ASTNode* child = elem->data;
-            //validateAST(child, NULL);
-        }
-        break;
     }
-    }
-
-    return (Program) { structDepenGraph, includes, verbatims, callGraph };
 }

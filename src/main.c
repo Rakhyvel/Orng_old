@@ -17,6 +17,7 @@ COMPILER PIPELINE:
 #include "./ir.h"
 #include "./lexer.h"
 #include "./parse.h"
+#include "./program.h"
 #include "./symbol.h"
 #include "./tinydir.h"
 #include "./validator.h"
@@ -26,23 +27,9 @@ COMPILER PIPELINE:
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#include <windows.h>
-
-#include <io.h> // For access().
-#include <sys/stat.h> // For stat().
-#include <sys/types.h> // For stat().
-
-// The path to the orng/dependencies folder
-char* packagesPath;
-// The filename of the current input file
-char* filename;
-// Whether the compiler is in debug mode
-bool isDebug = true;
-// Maps filenames to lists of lines
-Map* files;
 
 // Given an absolute path, returns pointer of substring in the form packageName/fileName
-char* getRelPath(char* absPath)
+char* Main_GetRelPath(char* absPath)
 {
     char* recentSlash = absPath - 1;
     char* secondRecentSlash = absPath - 1;
@@ -56,7 +43,7 @@ char* getRelPath(char* absPath)
 }
 
 // Takes in a path, returns a pointer to the substring of just the filename
-char* pathToFilename(char* path)
+char* Main_PathToFilename(char* path)
 {
     char* recentSlash = path - 1;
     for (int i = 0; path[i]; i++) {
@@ -65,54 +52,6 @@ char* pathToFilename(char* path)
         }
     }
     return recentSlash + 1;
-}
-
-// Gets the user directory. Wors on Windows and on UNIX
-static char* getUserDirectory()
-{
-#ifdef _WIN32
-    char* userDir = NULL;
-    size_t sz = 0;
-    if (_dupenv_s(&userDir, &sz, "USERPROFILE") || userDir == NULL) {
-        gen_error("user profile environment variable not defined\n");
-    }
-    return userDir;
-#else
-    return getenv("HOME");
-#endif
-}
-
-// Takes in a parent absolute directory, and a sub directory path. Creates the subdirectory if it does not exist in absolute directory. Returns the concatonated path name
-static char* createIfNotExist(char* parentAbsDir, char* subDirPath)
-{
-    int userDirLen = strlen(parentAbsDir);
-    int subDirLen = userDirLen + strlen(subDirPath) + 1;
-    char* subDir = calloc(subDirLen, sizeof(char));
-    if (!subDir) {
-        gen_error("mem error");
-        return;
-    }
-    strcpy_s(subDir, subDirLen, parentAbsDir);
-    strcat_s(subDir, subDirLen, subDirPath);
-
-    bool exists = false;
-    if (_access(subDir, 0) == 0) {
-        struct stat status;
-        stat(subDir, &status);
-        exists = (status.st_mode & S_IFDIR) != 0;
-    } else {
-        exists = false;
-    }
-
-    if (!exists) {
-#ifdef _WIN32
-        _mkdir(subDir);
-#else
-        mkdir(subDir, 0700);
-#endif
-    }
-
-    return subDir;
 }
 
 // Reads in a file and puts the filename/list of lines relation in the files map
@@ -127,6 +66,9 @@ static void readLines(FILE* in)
             lineCapacity = 80;
             List_Append(lines, line);
             line = calloc(lineCapacity, sizeof(char));
+            if (!line) {
+                gen_error("memory error");
+            }
         } else {
             if (lineLength >= lineCapacity - 1) {
                 lineCapacity *= 2;
@@ -134,24 +76,24 @@ static void readLines(FILE* in)
                 if (newLine) {
                     line = newLine;
                 } else {
-                    fprintf(stderr, "fatal: memory error\n");
-                    exit(1);
+                    gen_error("memory error");
                 }
             }
+            ASSERT(line != NULL);
             line[lineLength++] = nextChar;
             line[lineLength + 1] = '\0';
         }
     }
     List_Append(lines, line);
 
-    Map_Put(files, filename, lines);
+    Map_Put(program->files, program->filename, lines);
 }
 
 // Reads a file, updates file map, parses file and returns the define AST node
-static ASTNode* readFile(char* _filename, SymbolNode* program)
+static ASTNode* readFile(char* _filename, SymbolNode* rootSymbol)
 {
     FILE* in;
-    filename = _filename;
+    program->filename = _filename;
     line = 1;
     span = 1;
 
@@ -172,7 +114,7 @@ static ASTNode* readFile(char* _filename, SymbolNode* program)
         perror(_filename);
         exit(1);
     }
-    ASTNode* retval = Parser_Parse(in, program);
+    ASTNode* retval = Parser_Parse(in, rootSymbol);
 
     if (fclose(in)) {
         perror(_filename);
@@ -222,26 +164,25 @@ static char* wCharToChar(wchar_t* orig)
 }
 
 // Reads in package, constructs package dependency graph, reads in file of package
-static SymbolNode* readPackage(char* packagePath, SymbolNode* program)
+static SymbolNode* readPackage(char* packagePath, SymbolNode* rootSymbol)
 {
     // Create manifest filename
     int manifestFilenameLen = strlen(packagePath) + 50;
     char* manifestFilename = calloc(manifestFilenameLen, sizeof(char));
     if (!manifestFilename) {
         gen_error("mem err");
-        return -1;
     }
-    char* packageName = pathToFilename(packagePath);
+    char* packageName = Main_PathToFilename(packagePath);
     strcpy_s(manifestFilename, manifestFilenameLen, packagePath);
     strcat_s(manifestFilename, manifestFilenameLen, "\\");
     strcat_s(manifestFilename, manifestFilenameLen, packageName);
     strcat_s(manifestFilename, manifestFilenameLen, ".pkg.orng");
 
     // Read in & parse package manifest file
-    ASTNode* packageAST = readFile(manifestFilename, program);
+    ASTNode* packageAST = readFile(manifestFilename, rootSymbol);
     SymbolNode* packageSymbol = packageAST->define.symbol;
 
-    char* relPath = getRelPath(manifestFilename);
+    char* relPath = Main_GetRelPath(manifestFilename);
     char end = isSubStr(relPath, packageSymbol->name);
     if (end != '\\' && end != '/') {
         error(packageAST->pos, "package symbol differs from package directory");
@@ -255,17 +196,17 @@ static SymbolNode* readPackage(char* packagePath, SymbolNode* program)
         }
         char* packageName = packageAST->ident.data;
         SymbolNode* depenPackage;
-        if ((depenPackage = Map_Get(program->children, packageName)) != NULL) {
+        if ((depenPackage = Map_Get(rootSymbol->children, packageName)) != NULL) {
             if (!depenPackage->visited) {
                 error2(packageSymbol->pos, depenPackage->pos, "cycle between packages '%s' and '%s'", packageSymbol->name, packageName);
             }
         } else {
             char absolutePackageName[255];
             memset(absolutePackageName, 0, 255);
-            strcat_s(absolutePackageName, 255, packagesPath);
+            strcat_s(absolutePackageName, 255, program->packagesPath);
             strcat_s(absolutePackageName, 255, "\\");
             strcat_s(absolutePackageName, 255, packageName);
-            readPackage(absolutePackageName, program);
+            readPackage(absolutePackageName, rootSymbol);
         }
     }
     packageSymbol->visited = true;
@@ -287,10 +228,10 @@ static SymbolNode* readPackage(char* packagePath, SymbolNode* program)
         if (strstr(filename, ".orng") && !strstr(filename, ".pkg.orng")) {
             ASTNode* def = readFile(filename, packageSymbol);
             SymbolNode* var = def->define.symbol;
-            if (isSubStr(pathToFilename(filename), var->name) != '.') {
-                error(def->pos, "module symbol differs from module file name");
+            if (isSubStr(Main_PathToFilename(filename), var->name) != '.') {
+                error(def->pos, "symbol name differs from containing file name");
             }
-            List_Append(packageSymbol->def->paramlist.defines, def);
+            List_Append(packageSymbol->def->product.defines, def);
         }
 
         if (tinydir_next(&dir) == -1) {
@@ -314,21 +255,16 @@ int main(int argc, char** argv)
         gen_error("expected project directory as command line argument");
     }
 
-    // Create orange directories if they don't exist
-    char* userDir = getUserDirectory();
-    createIfNotExist(userDir, "\\orange");
-    packagesPath = createIfNotExist(userDir, "\\orange\\packages");
-
-    // Read in manifest
     AST_Init();
-    files = Map_Create();
-    SymbolNode* program = Symbol_Create("program", SYMBOL_PROGRAM, NULL, (Position) { NULL, 0, 0, 0 });
-    SymbolNode* outPackage = readPackage(argv[1], program);
-    unVisitSymbolTree(program);
+    Program_Init();
 
-    Program programStruct = Validator_Validate(program);
+    SymbolNode* rootSymbol = Symbol_Create("program", SYMBOL_PROGRAM, NULL, (Position) { NULL, 0, 0, 0 });
+    SymbolNode* outPackage = readPackage(argv[1], rootSymbol);
+    Symbol_UnvisitTree(rootSymbol);
 
-	char outFilename[255];
+    Validator_ValidateSymbol(rootSymbol);
+
+    char outFilename[255];
     memset(outFilename, 0, 255);
     strcat_s(outFilename, 255, argv[1]);
     strcat_s(outFilename, 255, "\\");
@@ -347,7 +283,7 @@ int main(int argc, char** argv)
         exit(1);
     }
 
-    Generator_Generate(out, programStruct);
+    Generator_Generate(out);
 
     if (fclose(out)) {
         perror(outFilename);

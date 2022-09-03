@@ -9,7 +9,7 @@
     - [Addresses](#addresses)
     - [Product Types](#product-types)
     - [Arrays](#arrays)
-    - [Sum Types](#sum-types)
+    - [Enum Types](#enum-types)
     - [Functions](#functions)
   - [Value Operators](#value-operators)
     - [Operator Assignment](#operator-assignment)
@@ -42,7 +42,7 @@ myModule::Module = (
 )
 ```
 
-## Variable Declarations, Definitions, and Scope
+## Variable Definitions
 Variables are defined using their name, type, and an initializing definition.
 ```
 x:Int = 4
@@ -57,7 +57,46 @@ Declarations can omit the initializing value, and the default value will be give
 -- Variable x is of type Int, given default value of 0
 x:Int
 ```
-Variables cannot be shadowed.
+Non-compile-time constant variables must be declared before being used.
+```
+{
+    std.system.println("%d", x) -- Error! x isn't defined yet!
+    x:Int = 4                   -- x is defined here
+}
+```
+## Symbol Tree and Scope
+Variables, functions, modules, packages, blocks and the entire program itself can all be abstracted to an idea of a 'symbol'. A symbol is a node in a symbol tree, with the `program` symbol as the root.
+
+Symbols can 'see' other symbols if they are siblings in the symbol tree, or if they are siblings of any of the symbol's ancestors.
+```
+This is a diagram of an Orng program. It is not Orng code.
+program
++---packageA
+|   +---moduleB
+|   |   +---functionC
+|   |   |   +---varD
+|   |   |   \---varE
+|   |   +---functionF
+|   |   \---constantG
+|   \---moduleH
+|   |   +---functionI
+|   |   +---functionJ
+|   |   \---constantK
+\---packageL
+    +---moduleM
+    |   +---functionN
+    |   +---functionO
+    |   \---constantP
+    \---moduleQ
+        +---functionR
+        +---functionS
+        \---constantT
+```
+In the tree above, `varD` can see only the symbols: `varE`, `functionC`, `functionF`, `constantG`, `moduleB`, `moduleH`, `packageA`, `packageL`, and `program`. 
+
+### Containers
+Modules, packages, product types, and sum types form containers which contain other symbols. When a symbol is contained in a container it is called a field. Fields can be accessed by using the `.` operator. All fields in Orng are considered public.
+
 ### External Declaration Modifiers
 External variables are variables that do not yet exist, but will during link-time. Variable declarations can be marked as external with the `?` modifier. If no square brackets follow the `?`, the name of the variable will be used when interfacing with external code.
 
@@ -96,6 +135,12 @@ myModule -[std, sdl, apricot]::Module = (
     -- Can only use std, sdl, and apricot from parent scope in this module
 )
 ```
+You may only use identifiers in restriction lists.
+```
+myFunction-[std.println]::()->() = { -- Error! Package restriction list must be identifiers only
+    std.println("Hello, World!")
+}
+```
 
 ## Types
 ### Primitive Types
@@ -128,8 +173,9 @@ Types can be marked as compile-time constant with the `:` prefix token. This mea
 x::Int = 4
 y::Real = 4.5 + 4 -- This will be collapsed to be the compile-time constant value
 ```
-Functions that return a compile-time constant must have all compile-time constant parameters. Whenever they are called, their result is evaluated at compile-time. fdf
+Functions that return a compile-time constant must have all compile-time constant parameters. Whenever they are called, their result is evaluated at compile-time.
 ```
+TODO
 ```
 ### Addresses
 Address types represent the address of data in the computer's main memory. They are constructed using the prefix `&` token.
@@ -152,7 +198,7 @@ Complex::Type = (
 )
 ```
 
-Compile-time constant fields do not necessarily need definitions so long as the product type is not coerced to a module. Compile-time constant fields are not generated, but are inherit to the type itself and are taken into account when checking for type equivelance.
+Compile-time constant fields do not necessarily need definitions so long as the product type is not coerced to a module.
 
 Product types can be compared for equality and inequality. Two product type values are equal when all their corresponding fields are equal, and are inequal when one or more corresponding fields are inequal.
 ```
@@ -167,6 +213,28 @@ z:Complex = (1, 3)
 x == y  -- true
 x == z  -- false
 ```
+
+Product types may not form cycles with their fields' types.
+```
+A::Type = (
+    b:B
+)
+B::Type = (
+    a:A -- Error! Cycle detected, B contains A, which contains B, which contains A, etc...
+)
+
+-- Solution
+A::Type = (
+    b:&B
+)
+B::Type = (
+    a:&A -- Valid, B only contains an address of an A, no cycle
+)
+```
+
+Product types cannot be cast to non-product types, and vice versa.
+
+Product type fields may not be marked as external.
 
 The default value of a product type is the default value of all fields.
 
@@ -274,6 +342,14 @@ myArrLength:Int = myArr.length
 myArrData:&Real = myArr.data
 ```
 
+Arrays can be indexed using the postfix [] operator. The first element in an array is at index 0. Array indices cannot be negative and cannot exceed the length of the array.
+```
+arr:[10]Int
+x:Int = arr[4]   -- Valid
+y:Int = arr[-1]  -- Error! Negative array index
+z:Int = arr[100] -- Error! Array index exceeds array length
+```
+
 The default value of an array is the an array with no length, and a data address of 0.
 
 For two arrays `A` and `B`, then `A <: B` when:
@@ -281,6 +357,7 @@ For two arrays `A` and `B`, then `A <: B` when:
 * If `B` has a defined length, the length of `B` is equal as an integer to the length of `B` as an integer.
 
 #### Array Literals
+Array literals cannot be empty.
 TODO
 
 #### Slices
@@ -296,7 +373,13 @@ firstFive := myArr[..5]
 lastFive := myArr[5..]
 copyArr := myArr[..]
 ```
-It is not illegal to use bounds that exceed the length of the original array, or bounds that are below 0. However, the upper-bound must be greater than or equal to the lower-bound.
+It is not illegal to use bounds that exceed the length of the original array, or bounds that are below 0. However, the upper-bound must be greater than the lower-bound.
+```
+main::(args:[]String)->!() = {
+    arr := [0, 1, 2, 3, 4]
+    arr[4..0] -- Error! Invalid array slice
+}
+```
 #### Strings
 Strings in Orng are arrays of characters. They can be constructed using double quotes. Strings literals are not null terminated by default. You can use the '\0' character at the end to add a null terminator when working with external C code.
 ```
@@ -306,8 +389,8 @@ myCharArr:String = myStr
 myStrZ:[]Char = "Hello, World!\0"
 myCharArrZ:String = myStrZ
 ```
-### Sum Types
-Orng has support for tagged unions/heterogenous enums, called sum types in Orng. They can be constructed with a list of definitions delimited by either a comma or a newline, and surrounded by angle brackets. For sum-type field definitions only, if the type is omitted, the void type is infered. Sum types enclose a new type scope. Multiple fields may have the same type.
+### Enum Types
+Orng has support for tagged unions, called enum types in Orng. They can be constructed with a list of definitions delimited by either a comma or a newline, and surrounded by angle brackets. For enum-type field definitions only, if the type is omitted, the void type is infered. Enum types enclose a new type scope. Multiple fields may have the same type.
 ```
 -- With explicit void types
 CardSuit1::Type = <
@@ -325,7 +408,7 @@ CardSuit2::Type = <
     spades
 >
 ```
-Sum types can have heterogenous field types.
+Enum types can have heterogenous field types.
 ```
 IntOrBool::Type = <
     int:Int
@@ -333,7 +416,7 @@ IntOrBool::Type = <
 >
 ```
 
-Two sum types are equal when they have the same field name and type.
+Two enum types are equal when they have the same field name and type.
 ```
 IntOrBool::Type = <
     int:Int
@@ -352,11 +435,23 @@ x == y      -- true, even through x.int == y.int is false
 x == z      -- false
 ```
 
-The default value for a sum type is the default value for the type of the first field in the sum type.
+Enum types may not form cycles of field type dependency.
+```
+A::Type = <b:B>
+B::Type = <a:A> -- Error! B contains an A, which contains a B, which contains an A, etc...
 
-Given two sum types `A` and `B`, `A <: B` when all definitions in `A` have a corresponding definition in `B` with the same field name and type that is equivalent. Order does not matter.
-#### Sum Type Literals
-Sum type values can be constructed using sum type literals with the field and type surrounded in angle brackets. The default value for the type is given.
+-- Solution
+A::Type = <b:&B>
+B::Type = <a:&A> -- Valid, B contains only an address to an A, no cycles.
+```
+
+Enum fields may not be marked as external.
+
+The default value for a enum type is the default value for the type of the first field in the enum type.
+
+Given two enum types `A` and `B`, `A <: B` when all definitions in `A` have a corresponding definition in `B` with the same field name and type that is equivalent. Order does not matter.
+#### Enum Type Literals
+Enum type values can be constructed using enum type literals with the field and type surrounded in angle brackets. The default value for the type is given.
 ```
 IntOrBool::Type = <
     int:Int
@@ -367,7 +462,7 @@ x:IntOrBool = <int:Int>
 x:IntOrBool = <bool:Bool>
 ```
 
-Sum literals for fields with void type can omit the type.
+Enum literals for fields with void type can omit the type.
 ```
 CardSuit::Type = <
     hearts
@@ -379,7 +474,7 @@ CardSuit::Type = <
 myCardSuit:CardSuit = <hearts>
 ```
 
-Sum literals can also be created using the dot operator on a sum literal type.
+Enum literals can also be created using the dot operator on a enum literal type.
 ```
 IntOrBool::Type = <
     int:Int
@@ -389,8 +484,8 @@ IntOrBool::Type = <
 x:IntOrBool = IntOrBool.int
 y:IntOrBool = IntOrBool.bool
 ```
-#### Sum Type Coercion
-Non-sum type values may be coerced up to a sum-type in cases of declaration and assignment when there is a field with that type. If there are multiple fields with the type, the first one that matches will be used.
+#### Enum Type Coercion
+Non-enum type values may be coerced up to a enum-type in cases of declaration and assignment when there is a field with that type. If there are multiple fields with the type, the first one that matches will be used.
 ```
 IntOrBool::Type = <
     int:Int
@@ -399,7 +494,7 @@ IntOrBool::Type = <
 
 x:IntOrBool = false -- Will be coerced to <bool:Bool>
 ```
-Sub-sum type values will be coerced up to a super-sum type.
+Sub-enum type values will be coerced up to a super-enum type.
 ```
 -- Super type
 IntOrBoolOrChar::Type = <
@@ -414,7 +509,7 @@ IntOrBool::Type = <
 >
 x:IntOrBoolOrChar = IntOrBool.int -- Subtype, will be coerced up
 ```
-The data of a sum-type can be accessed using the dot operator and the field name. Will panic in debug mode if the field is not active.
+The data of a enum-type can be accessed using the dot operator and the field name. Will panic in debug mode if the field is not active.
 ```
 IntOrBool::Type = <
     int:Int
@@ -425,7 +520,7 @@ y:Int = x.int + 8
 -- x.bool causes panic in debug mode, field is not active at this point
 ```
 #### Union Operator
-Sum types can be unioned together using the `||` operator. Field names may conflict so long as the types are *equal* (that is, equivalent both ways). The fields of the left sum type will be the first fields in the resulting type, followed by the fields of the right side that are not already included in the left type.
+Enum types can be unioned together to create a new enum type using the `||` operator. Field names may conflict so long as the types are *equal* (that is, equivalent both ways). The fields of the left enum type will be the first fields in the resulting type, followed by the fields of the right side that are not already included in the left type.
 ```
 IntOrBool::Type = <
     int:Int
@@ -444,8 +539,8 @@ IntOrBoolOrChar1::Type = <
 >
 IntOrBoolOrChar2::Type = IntOrBool || IntOrChar
 ```
-#### Maybe Sum Types
-Maybe types represent the idea that data may exist, or may not. They are constructed using the prefix `?` type operator. The resulting sum type has two fields, a field called `nothing` with a void type, and a field called `something` with the base type.
+#### Maybe Enum Types
+Maybe types represent the idea that data may exist, or may not. They are constructed using the prefix `?` type operator. The resulting enum type has two fields, a field called `nothing` with a void type, and a field called `something` with the base type.
 ```
 -- The following two types are equivalent
 MaybeInt1::Type = <nothing, something:Int>
@@ -460,8 +555,8 @@ The postfix `?` value operator is equivalent to doing `.something`, and is used 
 x:?Int = 5
 y:Int  = x?
 ```
-#### Error Sum Types
-Error sum types capture the idea that a process can either fail in some way, or be successful. Error types can be constructed with the `!` binary operator, where the left is a sum type of possible errors, and the right type is the successful type. The binary `!` type operator is equivalent to a sum type union.
+#### Error Enum Types
+Error enum types capture the idea that a process can either fail in some way, or be successful. Error types can be constructed with the `!` binary operator, where the left is a enum type of possible errors, and the right type is the successful type. The binary `!` type operator is equivalent to a enum type union.
 ```
 SomeErrors::Type = <error1, error2, error3>
 
@@ -469,7 +564,7 @@ SomeErrors::Type = <error1, error2, error3>
 ErrorProneInt1::Type = SomeErrors!Int
 ErrorProneInt2::Type = <success:Int> || SomeErrors
 ```
-The left side of the `!` operator can be left out in the case of a function codomain type. The error set will be infered from any sum literals not found in the base type returned from the function definition.
+The left side of the `!` operator can be left out in the case of a function codomain type. The error set will be infered from any enum literals not found in the base type returned from the function definition.
 ```
 SomeErrors::Type = <error1, error2, error3>
 
@@ -490,7 +585,11 @@ add::(x:Int, y:Int)->Int = x + y
 sub::(x:Int, y:Int)->Int = x - y
 left::(x:Int, y:Int)->Int = x
 ```
+Functions must return a value for all control paths, unless the function is `()` codomain type.
+
 Compile-time constant function typed values are generated out as proper functions. Non-compile-time constant function typed values act as function pointers.
+
+Function data types may not be cast to non-function data types, and vice versa.
 
 Two function typed values are equal when the address of the function they point to is the same.
 ```
@@ -572,7 +671,7 @@ Below is a list of operators in order of lowest precedence to highest.
 | &a           |  -                                                          | &`typeof` a                                                | Address-of                                                                        |
 | *a           | `typeof` a <: &T                                            | T                                                          | Dereference                                                                       |
 | `sizeof` T   | `typeof` T <: Type                                          | Int64                                                      | Size of type in bytes                                                             |
-| `try` a      | a is a sum type with a .success field                       | `typeof` a                                                 | if `a` is successful, `a.success`, else returns `a` from function as error        |
+| `try` a      | a is a enum type with a .success field                       | `typeof` a                                                 | if `a` is successful, `a.success`, else returns `a` from function as error        |
 | `typeof` a   | -                                                           | Type                                                       | Compile-time type of expression                                                   |
 | a `catch` b  | `typeof` b <: `typeof` a                                    | if `typeof` a <: `typeof` b {`typeof` b} else {`typeof` a} | if `a` is successful, `a.success`, else `b`                                       |
 | a `orelse` b | `typeof` b <: `typeof` a                                    | if `typeof` a <: `typeof` b {`typeof` b} else {`typeof` a} | if `a != nothing`, `a.success`, else `b`                                          |
@@ -616,8 +715,22 @@ All comparison operators except `!=` can be chained together.
 -- is equivalent to: (0 < x) && (x > -4) && (5 == y)
 ```
 
+### Division by Zero
+Division by the integer 0, or the real number 0.0 is not allowed. Will emit a run-time error on debug mode.
+
 ### L-Values
-TODO
+Compile-time constants cannot be reassigned.
+```
+x::Int = 4
+x = 5       -- Error! x is a compile-time constant
+
+y:[3]:Char = ['a', 'b', 'c']
+y[1] = 'd'  -- Error! y is address of compile-time constants
+
+Vec::Type = (x::Int, y::Int)
+pos:Vec = (3, 4)
+pos.x = 4   -- Error! pos.x is a compile-time constant
+```
 
 
 ## Control Flow and Allocations
@@ -755,7 +868,7 @@ case x {
     2, 3, 4 => std.system.println("x was 2, 3, or 4")
 }
 ```
-Case expressions can have `else` mappings, which are only ran if none of the mapping arguments matched. Else mappings can be place in any order.
+Case expressions can have *one* `else` mapping, which is only ran if none of the mapping arguments matched. Else mappings can be placed in any order.
 ```
 x:Char = 'a'
 case x {
@@ -796,7 +909,7 @@ abs::(x:Real)->Real =
         return -x
     }
 ```
-Return values are coerced to sum types
+Return values are coerced to enum types
 ```
 IntOrChar::Type = <int:Int, char:Char>
 
@@ -853,6 +966,7 @@ The `defer` keyword appends control flow to be executed after the block exits. D
     defer std.system.println("ran third")
 }
 ```
+Defer expressions cannot contain `return`, `break`, or `continue` statements.
 ### New
 The `new` keyword is used to allocate space in the computer's main memory. The space reserved is enough for the type given. The default value of the type is then assigned.
 ```
@@ -869,8 +983,35 @@ free x
 ## Program Structure
 Conceptually, all Orng programs have one root symbol representing the program as a whole. This program symbol has all primitive type definitions, all packages given to the compiler, and all packages found using package closure. 
 ### Packages
-Packages are defined in a folder using `.pkg.orng` file extenstion. They must be a `:Package` type, and have a product literal as their definition. Packages have the modules in their folder as children, and also any definitions defined in the package itself. Package children must be compile-time constant.
+Packages are defined in a folder using `.pkg.orng` file extenstion. They must have the same name as the folder they are in. They must be a `:Package` type, and have a product literal as their definition. Packages have the modules in their folder as children, and also any definitions defined in the package itself. Package children must be compile-time constant.
 
 Packages can mark other packages as dependencies by putting them in the symbol restriction. They will then be loaded from the Orng/dependencies folder.
+
+Package children must have the same name as their file, without the `.orng`. 
+```
+-- In file a.orng
+b::Module = () -- Error! symbol name differs from containing file name
+```
+
+Files may only define one outer symbol.
+```
+-- In file a.orng
+a::Module = (
+    -- Valid, inside module a
+    b::Module = ()
+)
+
+c::Module = () -- Error! both a and c are defined in a.orng, can only be one thing defined per file!
+```
+
+#### Includes
+Packages may define a string array field called `includes`, which contains a list of header files to include in the output C file. Include strings are only generated once, so it is okay for two packages to include the same header file. Includes surrounded by < > will not be surrounded in quotes in the output C file.
+```
+-- In file myPackage/myPackage.pkg.orng
+myPackage::Package = (
+    somePackageConstant::Int = 4
+    include ::= ["<stdio.h>", "main.h"] -- Outputs #include <stdio.h> and #include "main.h"
+)
+```
 ### Modules
 Modules are singleton collections of compile-time constants. They contain the functions, types, and constants of a program.

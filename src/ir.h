@@ -93,7 +93,7 @@ typedef struct IR {
 	// Data used by IRs
     union {
         int64_t intData;
-        double doubleData;
+        double realData;
         char* strData;
         struct IR* branch;
         List* listData;
@@ -151,6 +151,6 @@ typedef struct CFG {
     bool visited; // For graph traversal
 } CFG;
 
-List* createCFG(struct symbolNode* functionSymbol, CFG* caller);
+CFG* IR_CreateCFG(struct symbolNode* functionSymbol, CFG* caller);
 
 #endif
