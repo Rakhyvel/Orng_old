@@ -22,8 +22,6 @@ const char* Token_GetString(_TokenType type)
         return "TOKEN_HEX";
     case TOKEN_BIN:
         return "TOKEN_BIN";
-    case TOKEN_REAL:
-        return "TOKEN_REAL";
     case TOKEN_NEWLINE:
         return "TOKEN_NEWLINE";
     case TOKEN_COLON:
@@ -342,8 +340,6 @@ const char* Token_GetErrorMsgRepr(_TokenType type)
         return "hexadecimal literal";
     case TOKEN_BIN:
         return "binary literal";
-    case TOKEN_REAL:
-        return "real number literal";
     case TOKEN_NEWLINE:
         return "end of line";
     case TOKEN_EOF:

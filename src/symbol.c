@@ -37,6 +37,7 @@ struct symbolNode* Symbol_Create(char* name, SymbolType symbolType, struct symbo
             SymbolNode* nonblock = Symbol_MostRecentNonBlock(parent);
             SymbolNode* collision = Map_Get(parent->children, name);
             error2(pos, collision->pos, "symbol '%s' already defined in '%s'", name, nonblock->name);
+            return NULL;
         }
     }
 

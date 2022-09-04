@@ -159,6 +159,7 @@ void validateNoLoops(DGraph* graphNode)
         DGraph* child = elem->data;
         if (child->visited) {
             error(child->typeDef->pos, "loop detected");
+            return;
         }
         validateNoLoops(child);
     }
@@ -173,6 +174,7 @@ static char* getUserDirectory()
     size_t sz = 0;
     if (_dupenv_s(&userDir, &sz, "USERPROFILE") || userDir == NULL) {
         gen_error("user profile environment variable not defined\n");
+        return NULL;
     }
     return userDir;
 #else

@@ -125,7 +125,7 @@ void printPos(FILE* out, struct position pos)
 }
 
 // Prints out an error message, with a filename and line number
-NO_RETURN void error(struct position pos, const char* message, ...)
+void error(struct position pos, const char* message, ...)
 {
     va_list args;
     fprintf(stderr, "error: ");
@@ -136,13 +136,10 @@ NO_RETURN void error(struct position pos, const char* message, ...)
     fprintf(stderr, "\n");
 
     printPos(stderr, pos);
-
-    system("pause");
-    exit(1);
 }
 
 // Prints out an error message with two positions
-NO_RETURN void error2(Position pos1, Position pos2, const char* message, ...)
+void error2(Position pos1, Position pos2, const char* message, ...)
 {
     va_list args;
     fprintf(stderr, "error: ");
@@ -154,9 +151,6 @@ NO_RETURN void error2(Position pos1, Position pos2, const char* message, ...)
 
     printPos(stderr, pos1);
     printPos(stderr, pos2);
-
-    system("pause");
-    exit(1);
 }
 
 // Prints out an error message with three positions
@@ -173,13 +167,10 @@ void error3(Position pos1, Position pos2, Position pos3, const char* message, ..
     printPos(stderr, pos1);
     printPos(stderr, pos2);
     printPos(stderr, pos3);
-
-    system("pause");
-    exit(1);
 }
 
 // prints out a general error message about the program with no position given
-NO_RETURN void gen_error(const char* message, ...)
+void gen_error(const char* message, ...)
 {
     va_list args;
     fprintf(stderr, "error: ");
@@ -187,13 +178,10 @@ NO_RETURN void gen_error(const char* message, ...)
     vfprintf(stderr, message, args);
     va_end(args);
     fprintf(stderr, "\n");
-
-    system("pause");
-    exit(1);
 }
 
 // Prints out a message about two types being mismatched
-NO_RETURN void typeMismatchError(struct position pos, struct astNode* expectedType, struct astNode* actualType)
+void typeMismatchError(struct position pos, struct astNode* expectedType, struct astNode* actualType)
 {
     char expectedStr[255];
     char actualStr[255];
@@ -203,7 +191,7 @@ NO_RETURN void typeMismatchError(struct position pos, struct astNode* expectedTy
 }
 
 // Prints out a message about two types being mismatched, with two positions
-NO_RETURN void typeMismatchError2(struct position pos, struct position pos2, struct astNode* expectedType, struct astNode* actualType)
+void typeMismatchError2(struct position pos, struct position pos2, struct astNode* expectedType, struct astNode* actualType)
 {
     char expectedStr[255];
     char actualStr[255];
@@ -213,7 +201,7 @@ NO_RETURN void typeMismatchError2(struct position pos, struct position pos2, str
 }
 
 // Prints a message about incompatible types
-NO_RETURN void incompatibleTypesError(struct position pos, struct astNode* leftType, struct astNode* rightType)
+void incompatibleTypesError(struct position pos, struct astNode* leftType, struct astNode* rightType)
 {
     char leftStr[255];
     char rightStr[255];
@@ -223,7 +211,7 @@ NO_RETURN void incompatibleTypesError(struct position pos, struct astNode* leftT
 }
 
 // Prints a message about restriction or an undefined symbol
-NO_RETURN void restrictedOrUndefError(struct position pos1, struct position pos2, char* symbolName)
+void restrictedOrUndefError(struct position pos1, struct position pos2, char* symbolName)
 {
     if (pos2.start_line != 0) {
         error2(pos1, pos2, "symbol '%s' is undefined or not allowed through restriction", symbolName);
@@ -233,7 +221,7 @@ NO_RETURN void restrictedOrUndefError(struct position pos1, struct position pos2
 }
 
 // Prints out a message about expecting an array type
-NO_RETURN void expectedArrayError(struct position pos, struct astNode* actualType)
+void expectedArrayError(struct position pos, struct astNode* actualType)
 {
     char actualStr[255];
     AST_TypeRepr(actualStr, actualType->originalType);
@@ -241,7 +229,7 @@ NO_RETURN void expectedArrayError(struct position pos, struct astNode* actualTyp
 }
 
 // Prints out a message about expecting an address type
-NO_RETURN void expectedAddrError(struct position pos, struct astNode* actualType)
+void expectedAddrError(struct position pos, struct astNode* actualType)
 {
     char actualStr[255];
     AST_TypeRepr(actualStr, actualType->originalType);
@@ -249,7 +237,7 @@ NO_RETURN void expectedAddrError(struct position pos, struct astNode* actualType
 }
 
 // Prints out a message about expecting an enum type
-NO_RETURN void expectedEnumError(struct position pos, struct astNode* actualType)
+void expectedEnumError(struct position pos, struct astNode* actualType)
 {
     char actualStr[255];
     AST_TypeRepr(actualStr, actualType->originalType);
@@ -257,7 +245,7 @@ NO_RETURN void expectedEnumError(struct position pos, struct astNode* actualType
 }
 
 // Prints out a message about expecting an enum type
-NO_RETURN void expectedErrorEnumError(struct position pos, struct astNode* actualType)
+void expectedErrorEnumError(struct position pos, struct astNode* actualType)
 {
     char actualStr[255];
     AST_TypeRepr(actualStr, actualType->originalType);
@@ -265,7 +253,7 @@ NO_RETURN void expectedErrorEnumError(struct position pos, struct astNode* actua
 }
 
 // Prints out a message about expecting an enum type
-NO_RETURN void expectedMaybeEnumError(struct position pos, struct astNode* actualType)
+void expectedMaybeEnumError(struct position pos, struct astNode* actualType)
 {
     char actualStr[255];
     AST_TypeRepr(actualStr, actualType->originalType);
@@ -273,7 +261,7 @@ NO_RETURN void expectedMaybeEnumError(struct position pos, struct astNode* actua
 }
 
 // Prints out a message about expecting a function type
-NO_RETURN void expectedFunctionError(struct position pos, struct astNode* actualType)
+void expectedFunctionError(struct position pos, struct astNode* actualType)
 {
     char actualStr[255];
     AST_TypeRepr(actualStr, actualType->originalType);
@@ -281,7 +269,7 @@ NO_RETURN void expectedFunctionError(struct position pos, struct astNode* actual
 }
 
 // Prints out a message about expecting a type type
-NO_RETURN void expectedTypeError(struct position pos, struct astNode* actualType)
+void expectedTypeError(struct position pos, struct astNode* actualType)
 {
     char actualStr[255];
     AST_TypeRepr(actualStr, actualType->originalType);
@@ -289,7 +277,7 @@ NO_RETURN void expectedTypeError(struct position pos, struct astNode* actualType
 }
 
 // Prints out a message about a field not being in a given expression
-NO_RETURN void notMemberOfExpressionError(struct position pos, char* fieldName, struct astNode* product)
+void notMemberOfExpressionError(struct position pos, char* fieldName, struct astNode* product)
 {
     char actualStr[255];
     AST_TypeRepr(actualStr, product->originalType);

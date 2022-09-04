@@ -187,11 +187,7 @@ Token* Lexer_GetNextToken(FILE* in)
             } else if (length >= 3 && token->data[0] == '0' && token->data[1] == 'b') {
                 token->type = TOKEN_BIN;
             } else if (isdigit(token->data[0])) {
-                if (strContains(token->data, '.')) {
-                    token->type = TOKEN_REAL;
-                } else {
-                    token->type = TOKEN_INT;
-                }
+                token->type = TOKEN_INT;
             } else {
                 token->type = TOKEN_IDENT;
                 if (cNameClash(token->data)) {
