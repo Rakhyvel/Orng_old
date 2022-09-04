@@ -136,6 +136,9 @@ void error(struct position pos, const char* message, ...)
     fprintf(stderr, "\n");
 
     printPos(stderr, pos);
+
+	system("pause");
+    exit(1);
 }
 
 // Prints out an error message with two positions
@@ -151,6 +154,8 @@ void error2(Position pos1, Position pos2, const char* message, ...)
 
     printPos(stderr, pos1);
     printPos(stderr, pos2);
+    system("pause");
+    exit(1);
 }
 
 // Prints out an error message with three positions
@@ -167,10 +172,12 @@ void error3(Position pos1, Position pos2, Position pos3, const char* message, ..
     printPos(stderr, pos1);
     printPos(stderr, pos2);
     printPos(stderr, pos3);
+    system("pause");
+    exit(1);
 }
 
 // prints out a general error message about the program with no position given
-void gen_error(const char* message, ...)
+void compilerError(const char* message, ...)
 {
     va_list args;
     fprintf(stderr, "error: ");
@@ -178,6 +185,8 @@ void gen_error(const char* message, ...)
     vfprintf(stderr, message, args);
     va_end(args);
     fprintf(stderr, "\n");
+    system("pause");
+    exit(1);
 }
 
 // Prints out a message about two types being mismatched

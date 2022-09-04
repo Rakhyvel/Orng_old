@@ -266,9 +266,7 @@ static IR* createIR(ir_type type, SymbolVersion* dest, SymbolVersion* src1, Symb
 {
     static int id = 0;
     IR* retval = calloc(sizeof(IR), 1);
-    if (!retval) {
-        gen_error("out of memory");
-    }
+    ASSERT(retval != NULL);
     retval->irType = type;
     retval->pos = pos;
     retval->dest = dest;
@@ -3136,9 +3134,7 @@ CFG* IR_CreateCFG(struct symbolNode* functionSymbol, CFG* caller)
         return NULL;
     }
     CFG* cfg = calloc(sizeof(CFG), 1);
-    if (!cfg) {
-        gen_error("out of memory");
-    }
+    ASSERT(cfg != NULL);
 
     cfg->symbol = functionSymbol;
     cfg->tempSymbol = Symbol_Create("$", SYMBOL_VARIABLE, functionSymbol, (Position) { NULL, 0, 0, 0, 0 });
