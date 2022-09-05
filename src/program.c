@@ -138,9 +138,7 @@ struct graph* addGraphNode(List* depenGraph, ASTNode* type)
     structuralTypeEquiv = oldTypePermissiveness;
 
     DGraph* graphNode = calloc(1, sizeof(DGraph));
-    if (!graphNode) {
-        gen_error("memory error");
-    }
+    ASSERT(graphNode != NULL);
     graphNode->typeDef = type;
     graphNode->visited = false;
     graphNode->id = depenGraph->size;
@@ -173,7 +171,7 @@ static char* getUserDirectory()
     char* userDir = NULL;
     size_t sz = 0;
     if (_dupenv_s(&userDir, &sz, "USERPROFILE") || userDir == NULL) {
-        gen_error("user profile environment variable not defined\n");
+        compilerError("user profile environment variable not defined\n");
         return NULL;
     }
     return userDir;
@@ -188,9 +186,7 @@ static char* createIfNotExist(char* parentAbsDir, char* subDirPath)
     int userDirLen = strlen(parentAbsDir);
     int subDirLen = userDirLen + strlen(subDirPath) + 1;
     char* subDir = calloc(subDirLen, sizeof(char));
-    if (!subDir) {
-        gen_error("mem error");
-    }
+    ASSERT(subDir != NULL);
     strcpy_s(subDir, subDirLen, parentAbsDir);
     strcat_s(subDir, subDirLen, subDirPath);
 

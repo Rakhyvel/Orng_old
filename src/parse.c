@@ -31,9 +31,7 @@ static ASTNode* parseDefine(SymbolNode* scope);
 char* myItoa(int val)
 {
     char* buf = (char*)calloc(1, 32);
-    if (!buf) {
-        gen_error("memory error");
-    }
+    ASSERT(buf != NULL);
     int i = 30;
     for (; val && i; --i, val /= 10) {
         buf[i] = "0123456789"[val % 10];
@@ -176,9 +174,7 @@ static ASTNode* parseTypeAtom(SymbolNode* scope)
     ASTNode* child = NULL;
     if ((token = accept(TOKEN_IDENT)) != NULL) {
         char* text = malloc(sizeof(char) * 255);
-        if (!text) {
-            gen_error("memory error");
-        }
+        ASSERT(text != NULL);
         strncpy_s(text, 255, token->data, 254);
         child = AST_Create_ident(text, scope, token->pos);
     } else if ((token = accept(TOKEN_LPAREN)) != NULL) {
@@ -550,9 +546,7 @@ static ASTNode* parseFieldMapping(SymbolNode* scope)
     } else {
         expect(TOKEN_DOT);
         char* text = malloc(sizeof(char) * 255);
-        if (!text) {
-            gen_error("memory error");
-        }
+        ASSERT(text != NULL);
         if (token = accept(TOKEN_IDENT)) {
             strncpy_s(text, 255, token->data, 254);
         } else {
@@ -606,9 +600,7 @@ static ASTNode* parseFactor(SymbolNode* scope)
     struct token* token = NULL;
     if ((token = accept(TOKEN_IDENT)) != NULL) {
         char* text = malloc(sizeof(char) * 255);
-        if (!text) {
-            gen_error("memory error");
-        }
+        ASSERT(text != NULL);
         strncpy_s(text, 255, token->data, 254);
         child = AST_Create_ident(text, scope, token->pos);
     } else if ((token = accept(TOKEN_INT)) != NULL) {
@@ -638,9 +630,7 @@ static ASTNode* parseFactor(SymbolNode* scope)
         struct token* ident = expect(TOKEN_IDENT);
         expect(TOKEN_ASSIGN);
         char* text = malloc(sizeof(char) * 255);
-        if (!text) {
-            gen_error("memory error");
-        }
+        ASSERT(text != NULL);
         strncpy_s(text, 255, ident->data, 254);
         child = AST_Create_namedArg(text, parseExpr(scope), scope, token->pos);
     } else if ((token = accept(TOKEN_NOTHING)) != NULL) {
@@ -660,9 +650,7 @@ static ASTNode* parseFactor(SymbolNode* scope)
         }
     } else if ((token = accept(TOKEN_NEW)) != NULL) {
         char* str = calloc(255, 1);
-        if (!str) {
-            gen_error("memory error");
-        }
+        ASSERT(str != NULL);
         strcat_s(str, 255, myItoa(arrayUID++));
         strcat_s(str, 255, "arr");
         SymbolNode* dumbyScope = Symbol_Create(str, SYMBOL_VARIABLE, scope, token->pos);
@@ -740,9 +728,7 @@ static ASTNode* parsePostfix(SymbolNode* scope)
         } else if ((token = accept(TOKEN_DOT)) != NULL) {
             token = expect(TOKEN_IDENT);
             char* text = malloc(sizeof(char) * 255);
-            if (!text) {
-                gen_error("memory error");
-            }
+            ASSERT(text != NULL);
             strncpy_s(text, 255, token->data, 254);
             ASTNode* ident = AST_Create_ident(text, scope, token->pos);
             child = AST_Create_dot(child, ident, scope, token->pos);

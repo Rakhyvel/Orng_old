@@ -66,18 +66,12 @@ static void readLines(FILE* in)
             lineCapacity = 80;
             List_Append(lines, line);
             line = calloc(lineCapacity, sizeof(char));
-            if (!line) {
-                gen_error("memory error");
-            }
+            ASSERT(line != NULL);
         } else {
             if (lineLength >= lineCapacity - 1) {
                 lineCapacity *= 2;
-                char* newLine = realloc(line, lineCapacity * sizeof(char));
-                if (newLine) {
-                    line = newLine;
-                } else {
-                    gen_error("memory error");
-                }
+                line = realloc(line, lineCapacity * sizeof(char));
+                ASSERT(line != NULL);
             }
             ASSERT(line != NULL);
             line[lineLength++] = nextChar;
@@ -169,9 +163,7 @@ static SymbolNode* readPackage(char* packagePath, SymbolNode* rootSymbol)
     // Create manifest filename
     int manifestFilenameLen = strlen(packagePath) + 50;
     char* manifestFilename = calloc(manifestFilenameLen, sizeof(char));
-    if (!manifestFilename) {
-        gen_error("mem err");
-    }
+    ASSERT(manifestFilename != NULL);
     char* packageName = Main_PathToFilename(packagePath);
     strcpy_s(manifestFilename, manifestFilenameLen, packagePath);
     strcat_s(manifestFilename, manifestFilenameLen, "\\");
@@ -252,7 +244,7 @@ int main(int argc, char** argv)
 
     printf("started...\n");
     if (argc != 2) {
-        gen_error("expected project directory as command line argument");
+        compilerError("expected project directory as command line argument");
     }
 
     AST_Init();
