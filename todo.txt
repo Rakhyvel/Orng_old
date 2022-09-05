@@ -454,11 +454,12 @@ x cleanup!
 x cannot have an address to a compile-time constant
 x change case arrow to fat arrow
 x change slice syntax to use double dot instead of semi-colon
-- true error collection
+x true error collection
 	x rename gen_error to compiler_error,  NO_RETURN it
 - C code optimizations
 	- 'register' allocation
 		- For each distinct type, have a list of registers, allocate symbol versions to use them to cut down on the amount of symbol versions emitted
+		- Basic block's parameters and symbol versions are considered for lifetime, lifetimes across basic blocks not considered live
 	- subexpression elimination
 - struct method scope should be rebased to struct scope
 	(
@@ -474,12 +475,7 @@ x change slice syntax to use double dot instead of semi-colon
 	if myPos == yourPos {
 		-- do something
 	}
-- add assign expression <-, make = assign a statement
-	- To holisitically fix this long standing issue of assignment
-	- Maybe it's actually a type operator that overrides the default value of a type
-	- x := 4 <- 5 -- x will equal 5
-	- x := new Int <- 5 -- address of x will equal 5
-	- x := Node.header <- (.size=4, .text="Hello, World!")
+
 - cases should be able to operate on any types that have == and != defined
 	Col::Type = <A, B, C, D, E, F, G, H>
 	ChessSquare::Type = (col:Col, row:Int)
@@ -498,6 +494,13 @@ x change slice syntax to use double dot instead of semi-colon
 		<banana>	=> std.system.println("sometimes mushy...")
 	}
 - remove 'nothing' keyword, use <nothing> enum literal instead
+- add assign expression <-, make = assign a statement
+	- Maybe it's actually a type operator that overrides the default value of a type
+	- x := new Int <- 5 -- address of x will equal 5
+	- x := new Vector <- (3, 4)
+	- x := new [4]Int <- [2, 3, 4, 5]	-- Better than current system I think
+	- x := Node.header <- (.size=4, .text="Hello, World!")
+	- x := <something:Int<-3>			-- Kinda strange here
 - remove field cases, should compare with enum equality
 	x:?Int = 4
 	case x {
